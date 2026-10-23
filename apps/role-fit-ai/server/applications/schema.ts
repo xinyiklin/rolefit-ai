@@ -55,7 +55,7 @@ export class ApplicationsStorageError extends Error {
 
 export function sanitizeApplications(applications: unknown) {
   return (Array.isArray(applications) ? applications : [])
-    .map(sanitizeApplication)
+    .map((application) => sanitizeApplication(application))
     .filter(isPresent)
     .slice(0, MAX_APPLICATIONS);
 }
@@ -69,7 +69,7 @@ export function duplicateApplicationId(applications: { id: string }[]): string |
   return null;
 }
 
-const APPLICATION_SOURCES = ["LinkedIn", "Company site", "Referral", "Job board", "Recruiter", "Other"] as const;
+export const APPLICATION_SOURCES = ["LinkedIn", "Company site", "Referral", "Job board", "Recruiter", "Other"] as const;
 const SALARY_PERIODS = ["yr", "mo", "hr"] as const;
 // Per-stage AI-usage provenance: which model produced each pipeline stage's
 // output (job-analysis / resume-polish / cover-polish / application-answers). `source` is required and
@@ -313,28 +313,31 @@ function sanitizeAiUsage(raw: unknown) {
   return count ? out : undefined;
 }
 
-function sanitizeApplication(raw: unknown) {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+// `problems`, when given, collects why a record was refused (field path first).
+function sanitizeApplication(raw: unknown, problems?: string[]) {
+  const refuse = (problem: string) => {
+    problems?.push(problem);
+    return null;
+  };
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return refuse("application: must be an object");
   const r = raw as Record<string, unknown>;
-  if (hasOwnRetiredTrackerField(r)) return null;
+  if (hasOwnRetiredTrackerField(r)) return refuse(`${RETIRED_TRACKER_FIELDS.find((field) => Object.hasOwn(r, field))}: retired tracker field`);
   const rawId = sanitizeString(r.id, 80);
   const id = APPLICATION_ID_RE.test(rawId) ? rawId : "";
   const title = typeof r.title === "string" ? r.title.slice(0, 200) : "";
-  if (
-    !id ||
-    !title ||
-    !isCanonicalApplicationTimestamp(r.createdAt) ||
-    !isCanonicalApplicationTimestamp(r.updatedAt)
-  ) {
-    return null;
-  }
+  if (!id) return refuse("id: must match [A-Za-z0-9_-]{1,80}");
+  if (!title) return refuse("title: required");
+  if (!isCanonicalApplicationTimestamp(r.createdAt)) return refuse("createdAt: must be a canonical ISO timestamp");
+  if (!isCanonicalApplicationTimestamp(r.updatedAt)) return refuse("updatedAt: must be a canonical ISO timestamp");
 
-  if (!inList(APPLICATION_STATUSES, r.status)) return null;
+  if (!inList(APPLICATION_STATUSES, r.status)) return refuse(`status: must be one of ${APPLICATION_STATUSES.join(", ")}`);
   const status = r.status;
   const appliedAt = typeof r.appliedAt === "string" ? r.appliedAt : "";
-  if (status === "draft" && (appliedAt || r.resumeArtifacts || r.coverLetterArtifacts || r.attachments || r.resumeUsed || r.notApplyingAt)) return null;
+  if (status === "draft" && (appliedAt || r.resumeArtifacts || r.coverLetterArtifacts || r.attachments || r.resumeUsed || r.notApplyingAt)) {
+    return refuse("status: a draft cannot carry appliedAt, documents, attachments, resumeUsed, or notApplyingAt");
+  }
   const applicationAnswers = parseSavedApplicationAnswers(r.applicationAnswers, id);
-  if (applicationAnswers === null) return null;
+  if (applicationAnswers === null) return refuse("applicationAnswers: invalid answer list");
   const jobOnlySkipped = (status === "not_applying" && !appliedAt) || status === "draft";
   const notApplyingAt = status === "not_applying" && isCanonicalApplicationTimestamp(r.notApplyingAt)
     ? r.notApplyingAt
@@ -342,10 +345,12 @@ function sanitizeApplication(raw: unknown) {
   // Skipped is a dated decision, not a generic holding status. Every current
   // write supplies this timestamp, and the one legacy upgrade derives it from
   // the row's canonical revision before the sanitizer runs.
-  if (status === "not_applying" && !notApplyingAt) return null;
+  if (status === "not_applying" && !notApplyingAt) return refuse("notApplyingAt: a Skipped record needs a canonical ISO timestamp");
   // The scalar is the pre-list form. A record carrying both shapes (an outdated
   // tab's save) is rejected rather than silently resolved in favor of either.
-  if (r.notApplyingReason !== undefined && r.notApplyingReasons !== undefined) return null;
+  if (r.notApplyingReason !== undefined && r.notApplyingReasons !== undefined) {
+    return refuse("notApplyingReason: send only notApplyingReasons");
+  }
   const reasons = normalizeNotApplyingReasons(
     r.notApplyingReasons !== undefined ? r.notApplyingReasons : [r.notApplyingReason]
   );
@@ -356,14 +361,17 @@ function sanitizeApplication(raw: unknown) {
   const jobUrl = typeof r.jobUrl === "string" ? r.jobUrl.slice(0, 2_000) : "";
   const resumeArtifacts = jobOnlySkipped ? undefined : sanitizeDocumentArtifacts(r.resumeArtifacts);
   const coverLetterArtifacts = jobOnlySkipped ? undefined : sanitizeDocumentArtifacts(r.coverLetterArtifacts);
-  if (resumeArtifacts === null || coverLetterArtifacts === null) return null;
+  if (resumeArtifacts === null) return refuse("resumeArtifacts: invalid document metadata");
+  if (coverLetterArtifacts === null) return refuse("coverLetterArtifacts: invalid document metadata");
   // Refused whole rather than cut: a clipped tail is user text lost silently.
   const notes = typeof r.notes === "string" ? r.notes : "";
   const interviewTips = typeof r.interviewTips === "string" ? r.interviewTips : "";
-  if (notes.length > APPLICATION_NOTES_MAX_LENGTH || interviewTips.length > APPLICATION_NOTES_MAX_LENGTH) return null;
+  if (notes.length > APPLICATION_NOTES_MAX_LENGTH) return refuse(`notes: longer than ${APPLICATION_NOTES_MAX_LENGTH} characters`);
+  if (interviewTips.length > APPLICATION_NOTES_MAX_LENGTH) return refuse(`interviewTips: longer than ${APPLICATION_NOTES_MAX_LENGTH} characters`);
   // History starts at submission, so a Draft or job-only Skipped decision has none.
   const stageHistory = parseStageHistory(r.stageHistory);
-  if (stageHistory === null || (stageHistory && jobOnlySkipped)) return null;
+  if (stageHistory === null) return refuse("stageHistory: invalid entry, duplicate id, or too many entries");
+  if (stageHistory && jobOnlySkipped) return refuse("stageHistory: a Draft or job-only Skipped record has no history");
 
   return {
     id,
@@ -417,4 +425,41 @@ function sanitizeApplication(raw: unknown) {
         ? r.jobPostingGroupId
         : undefined
   };
+}
+
+// The strict form used by write paths that must not lose what a caller sent:
+// the sanitizer's own refusal reasons, or each supplied value it would drop,
+// clip, or normalize. Empty strings and lists may be stored as absent.
+export function strictApplicationIssues(raw: unknown) {
+  const problems: string[] = [];
+  const application = sanitizeApplication(raw, problems);
+  if (!application) return { application: null, issues: problems };
+  return { application, issues: storedValueDifferences(raw, application, "") };
+}
+
+function storedValueDifferences(sent: unknown, stored: unknown, path: string, issues: string[] = []) {
+  const isEmpty = sent === "" || (Array.isArray(sent) && sent.length === 0);
+  if (sent === null && stored !== null) {
+    issues.push(`${path}: null is not a value here; omit the field`);
+  } else if (stored === undefined) {
+    if (!isEmpty) issues.push(`${path}: dropped (not a stored field or not a valid value)`);
+  } else if (Array.isArray(sent)) {
+    if (!Array.isArray(stored) || stored.length !== sent.length) {
+      issues.push(`${path}: not stored as sent (an entry is invalid or duplicated)`);
+    } else {
+      sent.forEach((value, index) => storedValueDifferences(value, stored[index], `${path}[${index}]`, issues));
+    }
+  } else if (sent && typeof sent === "object") {
+    if (!stored || typeof stored !== "object" || Array.isArray(stored)) {
+      issues.push(`${path}: not stored as sent`);
+    } else {
+      for (const [key, value] of Object.entries(sent)) {
+        const child = path ? `${path}.${key}` : key;
+        storedValueDifferences(value, Object.hasOwn(stored, key) ? (stored as Record<string, unknown>)[key] : undefined, child, issues);
+      }
+    }
+  } else if (!Object.is(sent, stored)) {
+    issues.push(`${path}: not stored as sent (clipped, trimmed, or normalized)`);
+  }
+  return issues;
 }

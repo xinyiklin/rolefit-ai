@@ -34,3 +34,12 @@ export function applicationStatusTransitionAllowed(
   if (current === "draft") return STATUS_TRANSITIONS.draft.includes(next);
   return next !== "draft" && APPLICATION_STATUSES.includes(current) && APPLICATION_STATUSES.includes(next);
 }
+
+// A move the tracker's row stage menu offers. Ghosted means silence after
+// applying, so only a record that can be waiting on a reply (or is already
+// Ghosted) may move there. The server's status route uses the same rule.
+export function stageMenuMoveAllowed(current: ApplicationStatus, next: ApplicationStatus): boolean {
+  return current !== next
+    && applicationStatusTransitionAllowed(current, next)
+    && (next !== "ghosted" || STATUS_TRANSITIONS[current].includes(next));
+}

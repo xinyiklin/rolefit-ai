@@ -10,7 +10,8 @@ import {
   withEntryRemoved,
   withEntrySaved,
   stageHistoryFits,
-  withStageChange
+  withStageChange,
+  withStatusChange
 } from "../applicationStageHistory.ts";
 import { toDateInput, toIso, todayIso } from "../dateInput.ts";
 import { skipApplicationForSession } from "../notApplyingApplication.ts";
@@ -222,7 +223,13 @@ assert.equal(skipped.application.stageHistory, undefined, "a fresh job-only Skip
 // --- Wiring: every client write path that changes a submitted stage --------
 const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const hook = source("../../hooks/useApplications.ts");
-assert.match(hook, /status,\s*updatedAt: now,\s*stageHistory: withStageChange\(a, status, a\.stageHistory\)/, "row-menu stage moves record the change");
+assert.match(hook, /a\.id === id \? withStatusChange\(a, status, now\) : a/, "row-menu stage moves record the change");
+{
+  const submitted = record();
+  const moved = withStatusChange(submitted, "interviewing", rev2, rev2);
+  assert.equal(moved.updatedAt, rev2);
+  assert.deepEqual(moved.stageHistory, withStageChange(submitted, "interviewing", submitted.stageHistory, rev2).map((entry, index) => ({ ...entry, id: moved.stageHistory[index].id })), "the shared transform records the stage entry");
+}
 assert.match(hook, /mergeStageHistories\(canonical\.stageHistory, others\.map/, "duplicate merge unions history");
 assert.match(hook, /if \(stageHistory === null\) \{[\s\S]*?return false;/, "an over-limit merge is refused");
 assert.match(hook, /if \(!stageHistoryFits\(existing, status\)\) \{\s*setError\(STAGE_HISTORY_FULL_MESSAGE\);/, "a row-menu move on a full timeline is refused with a clear message");

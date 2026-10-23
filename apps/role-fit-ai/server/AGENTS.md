@@ -43,7 +43,17 @@ for provider, prompt, sanitizer, and review work.
   `routeSupport.ts` holds shared revision/rollback path mechanics.
   `documentService.ts` owns the strict document file + tracker metadata
   transaction; the focused document, attachment, and tracker route modules own
-  only their HTTP workflows. `documents.ts` owns per-file validation rules.
+  only their HTTP workflows. `commitService.ts` owns the atomic agent commit
+  (record + editable sources, folder removed if the tracker write fails) and
+  `statusService.ts` the server-side stage change, which shares the row menu's
+  `stageMenuMoveAllowed` and `withStatusChange`; `answerService.ts` owns
+  answer stamping for both the commit and the later-answers append, and
+  `eventService.ts` logs timeline entries through the Log buttons'
+  `withEntrySaved` (D094). The
+  commit validates through `strictApplicationIssues`, which reports the
+  sanitizer's refusal reasons and every sent value it would store differently;
+  keep new sanitizer refusals named through its `problems` list rather than
+  adding a second validator. `documents.ts` owns per-file validation rules.
   Each document slot stores either strict editable source or an explicitly
   uploaded PDF. Additional uploads are validated by extension + magic bytes
   and capped per application. Only the same original name (ignoring case, at

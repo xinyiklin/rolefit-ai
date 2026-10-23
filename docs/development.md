@@ -67,6 +67,7 @@ npm run build:rolefit:desktop  # companion TypeScript emit
 npm run build:rolefit:desktop:package  # minimal staged package runtime
 npm run package:rolefit:desktop        # unpacked native application
 npm run make:rolefit:desktop           # native installer/archive artifacts
+node apps/role-fit-ai/mcp/server.ts    # local stdio MCP server; not via npm, whose banner corrupts stdout
 
 npm run check             # every workspace check
 npm test                  # every workspace test/eval script

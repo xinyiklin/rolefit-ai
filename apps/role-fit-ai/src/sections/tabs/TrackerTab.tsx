@@ -28,10 +28,7 @@ import { TrackerInspector } from "../tracker/TrackerInspector";
 import { TrackerRowMenu, type RowMenuItem } from "../tracker/TrackerRowMenu";
 import { DuplicateReviewModal } from "../tracker/DuplicateReviewModal";
 import { postingGroupSizeByApplicationId } from "../../lib/applicationRelationships";
-import {
-  applicationStatusOptions,
-  applicationStatusTransitionAllowed
-} from "../../lib/applicationStatusTransitions";
+import { stageMenuMoveAllowed } from "../../lib/applicationStatusTransitions";
 import { noResponseCandidates, type NoResponseCandidate } from "../../lib/noResponse";
 
 export type TrackerView = "table" | "calendar";
@@ -551,12 +548,7 @@ export function TrackerTab({
               label: STATUS_LABEL[status],
               dotClass: `stage-dot stage-dot--${status}`,
               active: app.status === status,
-              // Ghosted means silence after applying, so only a record that can
-              // be waiting on a reply (or is already Ghosted) offers it.
-              disabled:
-                app.status === status
-                || !applicationStatusTransitionAllowed(app.status, status)
-                || (status === "ghosted" && !applicationStatusOptions(app.status).includes(status)),
+              disabled: !stageMenuMoveAllowed(app.status, status),
               onSelect: () => onUpdateStatus(app.id, status)
             });
           }

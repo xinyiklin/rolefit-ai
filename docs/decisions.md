@@ -615,6 +615,21 @@ later entry wins.
   builds (0.18.x included) reject a tracker or backup carrying `ghosted`, and
   reject the workspace preferences file for every user of this build, since it
   always writes the two new keys (confirmed by reading 0.18's code, not run).
+- 2026-10-23 [USER+CODE+TOOL] D094 ACTIVE: **Agents write the tracker only
+  through server routes.** `POST /api/applications/commit` stores one Applied or
+  Skipped record with its `.resume`/`.cover` sources atomically and refuses,
+  with field-path `issues`, any sent value the sanitizer would drop, clip, or
+  normalize (skip reasons that differ only in order are stored in canonical
+  order; the server stamps `savedAt` when absent and `applicationId` on full
+  answer revisions); `POST /api/applications/<id>/status` allows exactly the tracker
+  row menu's moves (`stageMenuMoveAllowed`) through the UI's own transform;
+  `POST /api/applications/<id>/answers` appends answers without touching saved
+  ones; `POST /api/applications/<id>/events` logs interviews, responses and
+  follow-ups through the Log buttons' transform. The local MCP server (`apps/role-fit-ai/mcp/`)
+  is a hand-written stdio client of those routes with no SDK dependency (user
+  choice: the SDK pulls in unused HTTP-server packages), never touches the
+  workspace (the tracker lock is in-process), and accepts only a loopback
+  `ROLEFIT_URL`. Hand-editing `applications.json` is unsupported.
 
 ### Extension
 

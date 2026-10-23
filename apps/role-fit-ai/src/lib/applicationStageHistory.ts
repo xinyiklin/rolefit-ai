@@ -1,4 +1,5 @@
-import type { Application, ApplicationStatus } from "../hooks/useApplications.ts";
+import type { ApplicationStatus } from "./applicationStatusTransitions.ts";
+import type { NotApplyingReason } from "./notApplying.ts";
 import {
   INTERVIEW_KIND_LABEL,
   STAGE_HISTORY_MAX_ENTRIES,
@@ -6,7 +7,14 @@ import {
 } from "../../shared/applicationStageHistoryContract.ts";
 import { todayIso } from "./dateInput.ts";
 
-type HistoryFacts = Pick<Application, "status" | "appliedAt" | "notApplyingAt" | "stageHistory">;
+// Plain record facts rather than the hook's Application type: the server's
+// status route imports this module.
+type HistoryFacts = {
+  status: ApplicationStatus;
+  appliedAt?: string;
+  notApplyingAt?: string;
+  stageHistory?: StageHistoryEntry[];
+};
 
 export const STAGE_HISTORY_FULL_MESSAGE =
   "This application's timeline is full. Remove a timeline entry, then try again.";
@@ -49,6 +57,34 @@ export function stageHistoryFits(
 ): boolean {
   const next = withStageChange(saved, nextStatus, [...(saved.stageHistory ?? []), ...added]);
   return (next?.length ?? 0) <= STAGE_HISTORY_MAX_ENTRIES;
+}
+
+type StatusFacts = HistoryFacts & {
+  updatedAt: string;
+  notApplyingReasons?: NotApplyingReason[];
+  notApplyingNote?: string;
+};
+
+// The record one stage change produces, shared by the tracker's stage menu and
+// the server's status route so both write the same dates and history.
+export function withStatusChange<T extends StatusFacts>(
+  application: T,
+  status: ApplicationStatus,
+  updatedAt: string,
+  at?: string
+): T {
+  return {
+    ...application,
+    status,
+    updatedAt,
+    stageHistory: withStageChange(application, status, application.stageHistory, at),
+    appliedAt: status === "draft"
+      ? undefined
+      : status !== "not_applying" && !application.appliedAt ? updatedAt : application.appliedAt,
+    notApplyingAt: status === "not_applying" ? updatedAt : undefined,
+    notApplyingReasons: status === "not_applying" ? application.notApplyingReasons : undefined,
+    notApplyingNote: status === "not_applying" ? application.notApplyingNote : undefined
+  };
 }
 
 type SavedHistory = { status: ApplicationStatus; stageHistory: StageHistoryEntry[] | undefined };
@@ -102,7 +138,7 @@ const localDay = (date: Date) => date.getFullYear() * 10_000 + (date.getMonth() 
 // Skipped anchor appears only for records saved before history recorded it.
 // Rounds number interviews by date; a future-dated interview is scheduled.
 export function deriveTimeline(
-  application: Pick<Application, "status" | "appliedAt" | "notApplyingAt" | "stageHistory">,
+  application: HistoryFacts,
   today = new Date()
 ): TimelineRow[] {
   const entries = application.stageHistory ?? [];
@@ -160,7 +196,7 @@ export function interviewLabel(row: InterviewRow): string {
 
 // The most recent interview that has happened and the soonest one scheduled.
 export function interviewMilestones(
-  application: Pick<Application, "status" | "appliedAt" | "notApplyingAt" | "stageHistory">,
+  application: HistoryFacts,
   today = new Date()
 ): { latest?: InterviewRow; next?: InterviewRow } {
   const interviews = deriveTimeline(application, today).filter((row): row is InterviewRow => row.kind === "interview");
