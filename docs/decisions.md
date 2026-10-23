@@ -756,9 +756,11 @@ and lives in the app ledger.
   (all combining separate facts); real applications pull both ways (the
   2026-10-04 holdout favored Opus 11–5). A user-directed, safety-first choice;
   the only fact-check judge is Astra, Sol's vendor.
-  - [USER] Deferred: a paired real-application rerun on the current prompt
-    (about 20 applications, blinded Astra + Opus, sides swapped); the user is
-    low on Codex usage.
+  - [USER+TOOL] The paired real-application rerun ran 2026-10-20 (Stage 2B),
+    over 20 applications with blinded Astra + Opus judges in both orders.
+    Neither arm made an unsupported edit. Judges split by family (Astra Sol
+    13–6, Opus Opus 15–1). The default stands pending the user's decision;
+    numbers are in `apps/role-fit-ai/docs/engineering/benchmarks.md`.
   - [CODE] Fixed 2026-10-10 (see that day). Was: a Claude-only user got a
     generic "check AI settings" Polish blocker instead of "add Codex";
     switching Resume Polish to Claude CLI seeded Sonnet 5.5 low rather than
@@ -776,6 +778,6 @@ and lives in the app ledger.
   default** (user-accepted). A paired run over the 39 synthetic cases failed
   the 2026-10-07 default-on bar on both Sol medium and Opus high; numbers are in
   `apps/role-fit-ai/docs/engineering/benchmarks.md`. Stage 2B (the paired
-  real-application rerun) needs the user's other machine and will run on the
-  Stage 4 prompt. [TOOL] Codex CLI 0.162.1 was installed on this machine
+  real-application rerun) ran 2026-10-20 on the current prompt (see D071).
+  [TOOL] Codex CLI 0.162.1 was installed on this machine
   (npm global); the Codex desktop app's bundled binaries are not on PATH.
