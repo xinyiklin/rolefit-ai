@@ -34,7 +34,7 @@ import {
   readOptionalApplicationFile,
   requireApplicationRevision,
   restoreApplicationFile,
-  restoreConflictHandled
+  workspaceGateHandled
 } from "./routeSupport.ts";
 
 export async function handleUploadApplicationAttachment(
@@ -160,7 +160,7 @@ export async function handleUploadApplicationAttachment(
     });
     sendJson(res, 200, result);
   } catch (error) {
-    if (restoreConflictHandled(error, res)) return;
+    if (workspaceGateHandled(error, res)) return;
     if (error instanceof ApplicationDocumentError) {
       sendJson(res, error.status, { error: error.message });
       return;
@@ -265,7 +265,7 @@ export async function handleApplicationAttachmentFile(
       });
       sendJson(res, 200, result);
     } catch (error) {
-      if (restoreConflictHandled(error, res)) return;
+      if (workspaceGateHandled(error, res)) return;
       if (error instanceof ApplicationDocumentError) {
         sendJson(res, error.status, { error: error.message });
         return;
@@ -317,7 +317,7 @@ export async function handleApplicationAttachmentFile(
     });
     res.end(data);
   } catch (error) {
-    if (restoreConflictHandled(error, res)) return;
+    if (workspaceGateHandled(error, res)) return;
     if (error instanceof ApplicationsStorageError) {
       sendJson(res, error.status, { error: error.message });
       return;

@@ -30,6 +30,7 @@ import {
   type ApplicationStatus
 } from "../lib/applicationStatusTransitions.ts";
 import { ghostedTimelineFullMessage, planGhostedMarks, type GhostedMark } from "../lib/ghostedMarks.ts";
+import { WORKSPACE_NEWER_CODE } from "../lib/workspaceBackupContract.ts";
 
 export type { NotApplyingReason } from "../lib/notApplying.ts";
 
@@ -267,6 +268,17 @@ function sameSavedAnswer(left: ApplicationAnswer, right: ApplicationAnswer): boo
 
 const MAX_SOURCE_URLS = 10;
 
+// A tracker read the server refused; `newer` marks a tracker saved by a newer RoleFit (D095).
+class TrackerReadError extends Error {
+  readonly newer: boolean;
+
+  constructor(message: string, code: unknown) {
+    super(message);
+    this.name = "TrackerReadError";
+    this.newer = code === WORKSPACE_NEWER_CODE;
+  }
+}
+
 class ApplicationConflictError extends Error {
   applications: Application[];
 
@@ -290,7 +302,7 @@ async function readTracker(knownRevision: string | null): Promise<TrackerRead> {
   );
   if (res.status === 304) return { notModified: true };
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? "Failed to load applications.");
+  if (!res.ok) throw new TrackerReadError(data.error ?? "Failed to load applications.", data.code);
   return {
     notModified: false,
     applications: Array.isArray(data.applications)
@@ -309,6 +321,14 @@ export function useApplications() {
   // one-shot import cannot run its duplicate gate against the mount-time [].
   const [hasLoadedApplications, setHasLoadedApplications] = useState(false);
   const [error, setError] = useState("");
+  const [workspaceNewer, setWorkspaceNewer] = useState(false);
+  // Read synchronously by a caller awaiting refresh(), before React re-renders.
+  const workspaceNewerRef = useRef(false);
+  const markWorkspaceNewer = useCallback((newer: boolean) => {
+    workspaceNewerRef.current = newer;
+    setWorkspaceNewer(newer);
+  }, []);
+  const isTrackerNewer = useCallback(() => workspaceNewerRef.current, []);
   const [storagePath, setStoragePath] = useState("");
   const [pendingWrites, setPendingWrites] = useState(0);
   // Synchronous source for optimistic mutations. Keeping mutation side effects
@@ -363,9 +383,11 @@ export function useApplications() {
         setStoragePath(read.path);
         conflictMessage.current = "";
         setError("");
+        markWorkspaceNewer(false);
       } catch (err) {
         if (!cancelled && readId === readVersion.current) {
           setError(err instanceof Error ? err.message : "Failed to load applications.");
+          if (err instanceof TrackerReadError && err.newer) markWorkspaceNewer(true);
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -403,6 +425,7 @@ export function useApplications() {
       const data = await res.json();
       if (!res.ok) {
         const message = typeof data.error === "string" ? data.error : "Save failed.";
+        if (data.code === WORKSPACE_NEWER_CODE) markWorkspaceNewer(true);
         if (res.status === 409 && Array.isArray(data.applications)) {
           const conflict = new ApplicationConflictError(message, data.applications);
           confirmedApplications.current = conflict.applications;
@@ -981,12 +1004,15 @@ export function useApplications() {
           setHasLoadedApplications(true);
           conflictMessage.current = "";
           setError("");
+          markWorkspaceNewer(false);
           return true;
         }
         return false;
       } catch (err) {
         if (readId === readVersion.current) {
           setError(err instanceof Error ? err.message : "Failed to load applications.");
+          // Only a successful read clears it; any other failure says nothing new.
+          if (err instanceof TrackerReadError && err.newer) markWorkspaceNewer(true);
         }
         return false;
       }
@@ -1004,6 +1030,8 @@ export function useApplications() {
     isLoading,
     hasLoadedApplications,
     error,
+    workspaceNewer,
+    isTrackerNewer,
     storagePath,
     pendingWrites,
     createApplication,

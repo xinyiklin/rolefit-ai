@@ -18,6 +18,7 @@ import {
   parsePortableWorkspacePreferences,
   parseStoredWorkspacePreferences,
   parseStoredWorkspaceRestoreMarker,
+  WorkspaceNewerError,
   type PortableWorkspacePreferences,
   type StoredWorkspacePreferences,
   type StoredWorkspaceRestoreMarker
@@ -33,6 +34,7 @@ function isMissingFile(error: unknown): boolean {
 export type StoredWorkspacePreferencesRead =
   | { status: "missing" }
   | { status: "invalid" }
+  | { status: "newer" }
   | { status: "ok"; value: StoredWorkspacePreferences };
 
 async function readPreferencesFile(path: string): Promise<{ status: "missing" } | { status: "ok"; raw: string } | { status: "invalid" }> {
@@ -58,8 +60,8 @@ async function readPreferencesRecord(workspaceDir: string): Promise<{ read: Stor
       read: { status: "ok", value: parseStoredWorkspacePreferences(JSON.parse(current.raw) as unknown) },
       revision: preferencesRevision(current.raw)
     };
-  } catch {
-    return { read: { status: "invalid" }, revision: null };
+  } catch (error) {
+    return { read: { status: error instanceof WorkspaceNewerError ? "newer" : "invalid" }, revision: null };
   }
 }
 
@@ -174,6 +176,7 @@ export async function persistWorkspacePreferences(
   return withWorkspaceLock(async () => {
     const { read: current, revision } = await readPreferencesRecord(workspaceDir);
     if (current.status === "invalid") throw new InvalidWorkspacePreferencesError();
+    if (current.status === "newer") throw new WorkspaceNewerError(WORKSPACE_PREFERENCES_FILE_NAME);
     if (baseRevision !== undefined && current.status === "ok" && revision !== baseRevision) {
       throw new StaleWorkspacePreferencesError();
     }
@@ -195,6 +198,7 @@ async function readPreferencesSnapshot(workspaceDir: string): Promise<Record<str
       : null;
   if (read.status === "missing") return { exists: false, restoreStamp };
   if (read.status === "invalid") return { exists: false, invalid: true, restoreStamp };
+  if (read.status === "newer") return { exists: false, newer: true, restoreStamp };
   return {
     exists: true,
     source: read.value.source,
@@ -252,6 +256,10 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, workspaceDi
     }
     if (error instanceof WorkspaceRestoreConflictError) {
       sendJson(res, 409, { error: error.message });
+      return;
+    }
+    if (error instanceof WorkspaceNewerError) {
+      sendJson(res, error.status, { error: error.message, code: error.code });
       return;
     }
     if (error instanceof InvalidWorkspacePreferencesError) {

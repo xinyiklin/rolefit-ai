@@ -19,6 +19,7 @@ import { DEFAULT_GHOSTED_AFTER_DAYS, normalizeGhostedAfterDays } from "../lib/gh
 import {
   WORKSPACE_PREFERENCES_APPLIED_EVENT,
   WORKSPACE_PREFERENCES_STATUS_EVENT,
+  workspacePreferencesStatus as currentWorkspacePreferencesStatus,
   type WorkspacePreferencesStatus
 } from "../lib/workspacePreferencesSync.ts";
 import { changedSettingKeys, rebaseSettings } from "../lib/workspacePreferencesRebase.ts";
@@ -75,7 +76,7 @@ export function useAiSettings() {
     saved.availabilityNotice ?? "unspecified"
   );
   const [availabilityDate, setAvailabilityDate] = useState(saved.availabilityDate ?? "");
-  const [workspacePreferencesStatus, setWorkspacePreferencesStatus] = useState<WorkspacePreferencesStatus>("idle");
+  const [workspacePreferencesStatus, setWorkspacePreferencesStatus] = useState<WorkspacePreferencesStatus>(currentWorkspacePreferencesStatus);
 
   // A different RoleFit client can update the canonical workspace record while
   // this tab is open. workspacePreferencesSync refreshes it on focus and emits
@@ -117,9 +118,11 @@ export function useAiSettings() {
     window.addEventListener(WORKSPACE_PREFERENCES_APPLIED_EVENT, adopt);
     const updateStatus = (event: Event) => {
       const status = (event as CustomEvent<WorkspacePreferencesStatus>).detail;
-      if (["idle", "saving", "saved", "error"].includes(status)) setWorkspacePreferencesStatus(status);
+      if (["idle", "saving", "saved", "error", "newer"].includes(status)) setWorkspacePreferencesStatus(status);
     };
     window.addEventListener(WORKSPACE_PREFERENCES_STATUS_EVENT, updateStatus);
+    // Catch a status published between the first render and this listener.
+    setWorkspacePreferencesStatus(currentWorkspacePreferencesStatus());
     return () => {
       window.removeEventListener(WORKSPACE_PREFERENCES_APPLIED_EVENT, adopt);
       window.removeEventListener(WORKSPACE_PREFERENCES_STATUS_EVENT, updateStatus);

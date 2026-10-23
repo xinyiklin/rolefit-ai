@@ -64,6 +64,7 @@ function createHarness(match, initialTargetText = targetText) {
   let activeTargetText = initialTargetText;
   let current = true;
   let refreshResult = true;
+  let trackerNewer = false;
   let refreshCalls = 0;
 
   globalThis.__duplicateHarness = {
@@ -94,6 +95,9 @@ function createHarness(match, initialTargetText = targetText) {
     setRefreshResult(next) {
       refreshResult = next;
     },
+    setTrackerNewer(next) {
+      trackerNewer = next;
+    },
     setTargetText(next) {
       activeTargetText = next;
     },
@@ -110,6 +114,7 @@ function createHarness(match, initialTargetText = targetText) {
           refreshCalls += 1;
           return refreshResult;
         },
+        isTrackerNewer: () => trackerNewer,
         onOpenExisting: async (id) => {
           opened.push(id);
           return true;
@@ -272,6 +277,12 @@ async function pendingGate(harness) {
     harness.render().confirmDuplicateBeforePolish(harness.isCurrent),
     /Applications could not be refreshed/,
     "pre-AI work fails closed when the tracker cannot be refreshed"
+  );
+  harness.setTrackerNewer(true);
+  await assert.rejects(
+    harness.render().confirmDuplicateBeforePolish(harness.isCurrent),
+    /Update RoleFit to check this posting/,
+    "a tracker saved by a newer RoleFit asks for an update, not a retry (D095)"
   );
 }
 

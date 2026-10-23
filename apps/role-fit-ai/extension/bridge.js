@@ -313,7 +313,9 @@ export async function analyzePosting(apiBase, pageData) {
   if (!response.ok) {
     const error = bridgeError(response.status === 429
       ? "RoleFit is busy. Wait a moment and try again."
-      : `RoleFit could not check this posting (${response.status}).`);
+      : response.status === 423
+        ? "Your applications were saved by a newer version of RoleFit. Update RoleFit to check postings."
+        : `RoleFit could not check this posting (${response.status}).`);
     error.status = response.status;
     throw error;
   }

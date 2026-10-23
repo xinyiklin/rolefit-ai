@@ -103,6 +103,8 @@ function compareBy(
 type TrackerTabProps = {
   applications: Application[];
   applicationsPath: string;
+  // Why the tracker never loaded, "" once it has; applicationsError is a later save failure.
+  loadError: string;
   applicationsError: string;
   pendingApplicationWrites: number;
   statusFilter: ApplicationActivityFilter;
@@ -337,6 +339,7 @@ function TrackerViewSelector({ value, onChange }: TrackerViewSelectorProps) {
 export function TrackerTab({
   applications,
   applicationsPath,
+  loadError,
   applicationsError,
   pendingApplicationWrites,
   statusFilter,
@@ -568,51 +571,69 @@ export function TrackerTab({
   const rangeStart = sorted.length === 0 ? 0 : pageStart + 1;
   const rangeEnd = Math.min(pageStart + pageSize, sorted.length);
 
+  const head = (
+    <header className="workspace-page__head">
+      <div className="workspace-page__title-row">
+        <h2 className="page-serif">Applications</h2>
+        {applicationsPath ? (
+          <span className="workspace-page__detail">{applicationsPath}</span>
+        ) : null}
+        {pendingApplicationWrites > 0 ? (
+          <span className="workspace-page__saving" role="status" aria-live="polite">
+            Saving {pendingApplicationWrites > 1 ? `${pendingApplicationWrites} changes` : "change"}…
+          </span>
+        ) : null}
+        <button
+          type="button"
+          className="ghost-button is-compact is-icon workspace-page__refresh"
+          onClick={async () => { setIsRefreshing(true); try { await onRefresh(); } finally { setIsRefreshing(false); } }}
+          disabled={isRefreshing}
+          title="Refresh applications"
+          aria-label="Refresh applications"
+        >
+          <RefreshCw size={14} className={isRefreshing ? "spin" : ""} aria-hidden="true" />
+        </button>
+      </div>
+      <div className="workspace-page__actions">
+        {/* The scan runs after first paint, so this slot reports the pass
+            rather than delaying the table behind it. */}
+        {isScanningDuplicates ? (
+          <span className="workspace-page__saving" role="status" aria-live="polite">
+            Checking duplicates…
+          </span>
+        ) : null}
+        {duplicateGroups.length > 0 ? (
+          <button
+            type="button"
+            className="secondary-button is-compact"
+            onClick={() => setIsDuplicateModalOpen(true)}
+          >
+            <Copy size={14} aria-hidden="true" />
+            Review duplicates · {duplicateGroups.length}
+          </button>
+        ) : null}
+      </div>
+    </header>
+  );
+
+  // A tracker that never loaded has no rows to show; an empty table would read
+  // as an empty tracker. Refresh stays in the header.
+  if (loadError) {
+    return (
+      <section className="workspace-page applications-page">
+        {head}
+        <div className="pipeline-alert" role="status">
+          <AlertCircle size={14} aria-hidden="true" />
+          <span>Could not load applications: {loadError}</span>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="workspace-page applications-page">
       {/* Page header */}
-      <header className="workspace-page__head">
-        <div className="workspace-page__title-row">
-          <h2 className="page-serif">Applications</h2>
-          {applicationsPath ? (
-            <span className="workspace-page__detail">{applicationsPath}</span>
-          ) : null}
-          {pendingApplicationWrites > 0 ? (
-            <span className="workspace-page__saving" role="status" aria-live="polite">
-              Saving {pendingApplicationWrites > 1 ? `${pendingApplicationWrites} changes` : "change"}…
-            </span>
-          ) : null}
-          <button
-            type="button"
-            className="ghost-button is-compact is-icon workspace-page__refresh"
-            onClick={async () => { setIsRefreshing(true); try { await onRefresh(); } finally { setIsRefreshing(false); } }}
-            disabled={isRefreshing}
-            title="Refresh applications"
-            aria-label="Refresh applications"
-          >
-            <RefreshCw size={14} className={isRefreshing ? "spin" : ""} aria-hidden="true" />
-          </button>
-        </div>
-        <div className="workspace-page__actions">
-          {/* The scan runs after first paint, so this slot reports the pass
-              rather than delaying the table behind it. */}
-          {isScanningDuplicates ? (
-            <span className="workspace-page__saving" role="status" aria-live="polite">
-              Checking duplicates…
-            </span>
-          ) : null}
-          {duplicateGroups.length > 0 ? (
-            <button
-              type="button"
-              className="secondary-button is-compact"
-              onClick={() => setIsDuplicateModalOpen(true)}
-            >
-              <Copy size={14} aria-hidden="true" />
-              Review duplicates · {duplicateGroups.length}
-            </button>
-          ) : null}
-        </div>
-      </header>
+      {head}
 
       {applicationsError ? (
         <div className="pipeline-alert" role="status">

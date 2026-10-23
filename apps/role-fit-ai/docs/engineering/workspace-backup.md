@@ -95,14 +95,79 @@ builds left after every page exit, names no edit and is discarded.
 
 Backup embeds valid preferences as the envelope's `preferences` field. A
 corrupt preferences file never blocks backing up resumes; the envelope simply
-omits `preferences`. The file itself is not a managed backup path and never
+omits `preferences`. Preferences saved by a newer RoleFit do block it (see
+[Schema versions and newer files](#schema-versions-and-newer-files)), since
+leaving them out would lose them on restore. The file itself is not a managed backup path and never
 appears in `files`. A client also never overwrites a corrupt canonical record
 from one browser cache; Settings reports the persistence error until the record
 is repaired or replaced by a validated restore.
 
 The workspace backup, workspace preferences, and restore-marker documents each
-have one live schema: version 1. Other schema versions and retired field names
-are rejected rather than migrated.
+have one live schema: version 1. Retired field names are rejected rather than
+migrated; a higher version is a newer file, described next.
+
+## Schema versions and newer files
+
+Every workspace file RoleFit owns carries a schema version (D095):
+`applications.json` (`schemaVersion`, current 1), `workspace-preferences.json`,
+the backup envelope, and `workspace-restore.json` (each current 1). Resume and
+cover-letter files are versioned by the engine's `.resume`/`.cover` contract
+and are outside this rule. A newer restore marker is only unreadable, as before:
+the browser falls back to the preferences' own restore stamp, and nothing
+locks.
+
+- **Older files migrate.** An `applications.json` without `schemaVersion` is
+  the unversioned legacy format, version 0. `server/applications/trackerVersion.ts`
+  holds one migration per version step. Reading a lower-version file runs only
+  the steps it needs, validates the result as strictly as a current file, and
+  rewrites the file once at the current version (if that rewrite fails, the
+  migrated records are still served and the next write stamps the version).
+  Version 0 to 1 applies the
+  lossless upgrades earlier builds made on every read: the retired
+  High/Medium/Low priority is removed; the retired `interested` stage becomes a
+  Skipped decision dated by its last revision, without sent-document metadata;
+  an exactly empty `appliedAt` is absent; a scalar `notApplyingReason` becomes a
+  one-item `notApplyingReasons` list; and a Fit result without `status` reads as
+  assessed. A version-1 file holding any of those shapes fails closed. Each
+  shape has a fixture in `server/applications/__evals__/fixtures/`. A versioned
+  tracker has no keys other than `schemaVersion`, `applications`, and an
+  optional string `savedAt`.
+  The preferences, backup, and restore-marker contracts have no older versions
+  yet.
+- **Newer files lock and are never parsed.** A file whose version is above what
+  the build supports is refused before anything else is read from it. The
+  server answers `423` with `code: "workspace-newer"` and a message to update
+  RoleFit, and never writes that file or anything that must stay consistent
+  with it. Locks are per file:
+  - a newer tracker refuses every tracker route (list, save, delete, commit,
+    status, answers, events, documents, and attachments, reads included), the
+    extension's duplicate check, and backup;
+  - newer preferences answer `GET` with `exists: false, newer: true`, refuse
+    `POST`, and refuse backup. The browser keeps its cache, and Settings says
+    changes stay in this browser;
+  - resume and cover-letter variants stay editable, since they cannot lose
+    tracker or preference data.
+
+  The Drafting Desk shows one notice naming the locked data once a tracker read
+  or write reports it (only a successful read clears it), and Apply and Skip are
+  blocked through the tracker readiness check. Preferences checked before the
+  app mounts keep their status for Settings to start from. The Applications view
+  says it could not load applications rather than showing an empty tracker, and
+  Prepare's duplicate check asks for an update instead of a retry. MCP tools pass on the server's
+  message; the extension shows its own update message for a `423`.
+- **Restore** refuses a newer envelope or a newer embedded tracker with the same
+  message and leaves the workspace untouched. Restoring an older backup over a
+  workspace that holds newer files is allowed: the newer workspace moves intact
+  to the restore safety directory, which is the way back after a downgrade.
+- **Future format changes.** Bump the file's version and add its migration with
+  a fixture. Any new or changed persisted setting bumps the preferences version.
+  The backup's embedded `preferences` carry no version of their own: envelope 1
+  means preferences 1, so a preferences bump also bumps the envelope. A lossy
+  migration must keep the pre-migration bytes before rewriting. Never make a
+  tracker format change that only adds top-level keys: builds from before
+  versioning (0.21 and older) ignore unknown top-level keys and drop them on
+  their next save. Those builds still report any newer record shape as corrupt
+  data; only builds with this contract show the update notice.
 
 Every completed restore also installs an internal `workspace-restore.json`
 generation marker. It is not portable backup content. The marker lets every

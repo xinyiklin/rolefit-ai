@@ -54,6 +54,8 @@ type UseDuplicateGuardArgs = {
   tracking: () => TrackingFacts;
   findDuplicatesForTarget: (target: DuplicateTarget) => DuplicateMatch<Application>[];
   refreshApplications: () => Promise<boolean>;
+  // Whether the last tracker read found a file saved by a newer RoleFit (D095).
+  isTrackerNewer: () => boolean;
   onOpenExisting: (applicationId: string, isCurrent: () => boolean) => Promise<boolean>;
   onRelationshipResolved: (relationship: JobPostingRelationship | null) => void;
 };
@@ -122,6 +124,7 @@ export function useDuplicateGuard({
   tracking,
   findDuplicatesForTarget,
   refreshApplications,
+  isTrackerNewer,
   onOpenExisting,
   onRelationshipResolved
 }: UseDuplicateGuardArgs) {
@@ -253,7 +256,9 @@ export function useDuplicateGuard({
     publishRelationship: boolean
   ): Promise<DuplicateGateResult> {
     if (!(await refreshApplications())) {
-      throw new Error("Applications could not be refreshed. Retry the action.");
+      throw new Error(isTrackerNewer()
+        ? "Update RoleFit to check this posting against your applications; they were saved by a newer version."
+        : "Applications could not be refreshed. Retry the action.");
     }
     if (!isCurrent()) return { proceed: false, note: null };
     const match = findDuplicatesForTarget(target)[0];

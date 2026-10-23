@@ -874,6 +874,17 @@ Good server verification covers:
   safety copy and stages `source: "restore"` preferences, restore refuses with
   409 while live tab presence is reported, and a corrupt preference record
   never blocks backing up resumes
+- workspace schema versions (D095): `tracker-version-probes.mjs` migrates every
+  unversioned fixture in `server/applications/__evals__/fixtures/`, rewrites it
+  once, survives a downgrade round trip, and refuses legacy shapes in a current
+  file and malformed versions; `workspace-newer-probes.mjs` sends each tracker
+  route an otherwise valid request (each succeeds alone on a current tracker)
+  and requires `423 workspace-newer` with every workspace byte unchanged on a
+  newer one, refuses newer preferences, backups, and restores, keeps locks per
+  file, and keeps a newer workspace intact when an older backup restores over
+  it. The browser, MCP, and extension surfaces are covered by
+  `workspace-preferences-sync-eval.mjs`, `mcp-probes.mjs`, and
+  `extension-analyze-errors.mjs`
 - routine AI logs remain shape-only and exclude model-authored target IDs,
   free-form error text, provider bodies, and private prompt content
 

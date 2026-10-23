@@ -11,6 +11,7 @@
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson } from "../http.ts";
+import { WorkspaceNewerError } from "../../src/lib/workspaceBackupContract.ts";
 import {
   readApplications,
   withApplicationsLock
@@ -393,7 +394,11 @@ export async function handleExtensionRoutes(
           evidence: Array.isArray(best.evidence) ? best.evidence.slice(0, 3) : []
         };
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof WorkspaceNewerError) {
+        sendJson(res, error.status, { error: error.message, code: error.code });
+        return;
+      }
       // A corrupt tracker must not become a false "no duplicate" result. That
       // could prompt another application while the source data still needs repair.
       sendJson(res, 500, { error: "The application tracker could not be checked safely." });

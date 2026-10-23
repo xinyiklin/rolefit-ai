@@ -21,8 +21,8 @@ const prepareStyles = readFileSync(new URL("../../styles/prepare.css", import.me
 
 assert.match(
   app,
-  /const applyReady = hasLoadedApplications && preparationReadiness\.canApply/,
-  "Apply waits for the first authoritative tracker snapshot"
+  /const trackerWritable = hasLoadedApplications && !trackerNewer;\s*const applyReady = trackerWritable && preparationReadiness\.canApply/,
+  "Apply waits for the first authoritative tracker snapshot and never runs against a newer tracker"
 );
 assert.match(
   applications,
@@ -107,9 +107,20 @@ assert.doesNotMatch(
 );
 assert.match(
   app,
-  /const trackerReadinessBlocker = !hasLoadedApplications[\s\S]{0,220}?isApplicationsLoading[\s\S]{0,260}?choose Refresh/,
+  /const trackerReadinessBlocker = trackerNewer[\s\S]{0,160}?newer version[\s\S]{0,80}?!hasLoadedApplications[\s\S]{0,220}?isApplicationsLoading[\s\S]{0,260}?choose Refresh/,
   "terminal tracker-load failure offers a real recovery action instead of an endless wait"
 );
+// A tracker saved by a newer RoleFit (D095): the Applications view shows why
+// it has no rows rather than an empty tracker, and the duplicate check says to
+// update rather than retry.
+const trackerTab = readFileSync(new URL("../../sections/tabs/TrackerTab.tsx", import.meta.url), "utf8");
+assert.match(trackerTab, /if \(loadError\) \{[\s\S]{0,260}?Could not load applications: \{loadError\}/);
+assert.match(app, /loadError=\{!hasLoadedApplications \? applicationsError : ""\}\s*applicationsError=\{hasLoadedApplications \? applicationsError : ""\}/);
+const duplicateGuard = readFileSync(new URL("../useDuplicateGuard.ts", import.meta.url), "utf8");
+assert.match(duplicateGuard, /isTrackerNewer\(\)\s*\?\s*"Update RoleFit to check this posting/, "the guard reads the refresh's own result, not a render-time flag");
+const settingsHook = readFileSync(new URL("../useAiSettings.ts", import.meta.url), "utf8");
+assert.match(settingsHook, /useState<WorkspacePreferencesStatus>\(currentWorkspacePreferencesStatus\)/, "Settings starts from the boot-time preferences status");
+
 assert.match(
   app,
   /const primaryActionDisabledHint = applicationActionsBusy[\s\S]{0,160}?current application action/,

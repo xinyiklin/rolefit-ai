@@ -130,6 +130,12 @@ const call = async (name, args) => (await rpc("tools/call", { name, arguments: a
   const result = await handleMcpMessage({ jsonrpc: "2.0", id: 9, method: "tools/call", params: { name: "search_applications", arguments: {} } }, offline);
   assert.equal(result.result.isError, true);
   assert.match(result.result.content[0].text, /not reachable/);
+  // A tracker saved by a newer RoleFit (D095): the agent gets the update instruction.
+  const newerMessage = "applications.json was saved by a newer version of RoleFit. Update RoleFit to use it; this version leaves it unchanged.";
+  const newer = createTools(base, async () => new Response(JSON.stringify({ error: newerMessage, code: "workspace-newer" }), { status: 423 }));
+  const locked = await handleMcpMessage({ jsonrpc: "2.0", id: 11, method: "tools/call", params: { name: "search_applications", arguments: {} } }, newer);
+  assert.equal(locked.result.isError, true);
+  assert.match(locked.result.content[0].text, /newer version of RoleFit\. Update RoleFit/);
   const timedOut = createTools(base, async () => { throw new DOMException("timed out", "TimeoutError"); });
   const slow = await handleMcpMessage({ jsonrpc: "2.0", id: 10, method: "tools/call", params: { name: "search_applications", arguments: {} } }, timedOut);
   assert.match(slow.result.content[0].text, /did not answer within 60 seconds/);

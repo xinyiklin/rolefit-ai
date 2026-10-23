@@ -461,7 +461,12 @@ try {
       assert.equal(loaded.fitAssessment.promptVersion, record.fitAssessment.promptVersion);
       assert.equal(loaded.fitAssessment.assessedAt, record.fitAssessment.assessedAt);
     }
-    assert.equal(await readFile(filePath, "utf8"), before, "compatibility reads do not rewrite the tracker");
+    const rewritten = await readFile(filePath, "utf8");
+    const upgraded = JSON.parse(rewritten);
+    assert.equal(upgraded.schemaVersion, 1, "an unversioned tracker is rewritten once at the current version");
+    assert.deepEqual(upgraded.applications, JSON.parse(JSON.stringify([loaded])), "the rewrite stores exactly the migrated record");
+    await readApplications(workspace);
+    assert.equal(await readFile(filePath, "utf8"), rewritten, "a current tracker is not rewritten on read");
   }
   for (const mutate of [
     (r) => { r.fitAssessment.result.status = "UNKNOWN"; },

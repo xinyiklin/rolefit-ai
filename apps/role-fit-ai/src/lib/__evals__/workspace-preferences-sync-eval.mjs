@@ -105,6 +105,44 @@ assert.equal(
   "a corrupt canonical record leaves the fail-open browser cache usable"
 );
 
+// Preferences saved by a newer RoleFit (D095): never written over, reported
+// as "newer" rather than as a failed save, and kept through a debounced edit.
+const {
+  WORKSPACE_PREFERENCES_STATUS_EVENT,
+  scheduleWorkspacePreferencesPush,
+  parseServerPreferencesResponse,
+  workspacePreferencesStatus
+} = await import("../workspacePreferencesSync.ts");
+const statuses = [];
+window.addEventListener(WORKSPACE_PREFERENCES_STATUS_EVENT, (event) => statuses.push(event.detail));
+assert.deepEqual(
+  parseServerPreferencesResponse({ exists: false, newer: true, restoreStamp: null }),
+  { exists: false, invalid: true, newer: true, restoreStamp: null },
+  "a newer file takes every invalid-file path"
+);
+let newerPostCount = 0;
+globalThis.fetch = async (_url, options) => {
+  if (options?.method === "POST") {
+    newerPostCount += 1;
+    return { ok: false, status: 423, async json() { return { error: "newer", code: "workspace-newer" }; } };
+  }
+  return { ok: true, async json() { return { exists: false, newer: true, restoreStamp: null }; } };
+};
+await adoptWorkspacePreferences();
+assert.equal(newerPostCount, 0, "newer preferences are never overwritten from the browser cache");
+assert.equal(statuses.at(-1), "newer");
+// Boot adoption finishes before React mounts, so the hook starts from this.
+assert.equal(workspacePreferencesStatus(), "newer", "a listener that mounts later still sees newer preferences");
+// A refused write (the file became newer after it was read) reports the same.
+globalThis.fetch = async (_url, options) => options?.method === "POST"
+  ? (newerPostCount += 1, { ok: false, status: 423, async json() { return { error: "newer", code: "workspace-newer" }; } })
+  : { ok: true, async json() { return { exists: false, restoreStamp: null }; } };
+await adoptWorkspacePreferences();
+assert.equal(newerPostCount, 1, "a missing record is seeded from the cache once");
+assert.equal(statuses.at(-1), "newer", "a 423 save reports newer, not a failed save");
+scheduleWorkspacePreferencesPush();
+assert.equal(statuses.at(-1), "newer", "a later edit does not hide the newer state while it waits");
+
 // A companion server still running pre-Profile code returns experience rows;
 // adopting them must convert, not drop, them before the next write-back.
 globalThis.fetch = async (_url, options) => options?.method === "POST"

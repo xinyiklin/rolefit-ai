@@ -1,0 +1,54 @@
+{
+  "savedAt": "2026-07-29T10:00:01.000Z",
+  "applications": [
+    {
+      "id": "legacy-interested",
+      "title": "Synthetic legacy-interested",
+      "company": "Example Co",
+      "role": "",
+      "roleDescription": "",
+      "source": "",
+      "jobUrl": "",
+      "jobDescription": "",
+      "rawJobDescription": "",
+      "status": "interested",
+      "createdAt": "2026-07-01T00:00:00.000Z",
+      "updatedAt": "2026-07-29T10:00:00.000Z",
+      "followupAt": "",
+      "location": "",
+      "jobType": "",
+      "workAuth": "",
+      "deadline": "",
+      "salaryMin": null,
+      "salaryMax": null,
+      "salaryCurrency": "",
+      "interviewTips": "",
+      "notes": "",
+      "templateId": "",
+      "applicationAnswers": [
+        {
+          "question": "Why this team?",
+          "answer": "Synthetic answer.",
+          "savedAt": "2026-07-29T10:00:00.000Z"
+        }
+      ],
+      "appliedAt": "2026-07-01T00:00:00.000Z",
+      "resumeUsed": "tailored",
+      "resumeArtifacts": {
+        "hasPdf": false,
+        "hasSource": true,
+        "sourceFingerprint": "typeset-resume-1",
+        "fileName": "draft.resume",
+        "savedAt": "2026-07-29T10:00:00.000Z"
+      },
+      "attachments": [
+        {
+          "fileName": "draft.pdf",
+          "label": "Draft",
+          "size": 100,
+          "savedAt": "2026-07-29T10:00:00.000Z"
+        }
+      ]
+    }
+  ]
+}

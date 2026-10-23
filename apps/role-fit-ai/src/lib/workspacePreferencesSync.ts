@@ -19,6 +19,7 @@ import {
   setLastBaseResumeSaveListener
 } from "./baseResumePrefs.ts";
 import { adoptWorkspaceRestoreDrafts } from "./autosaveDraftRegistry.ts";
+import { WORKSPACE_NEWER_CODE } from "./workspaceBackupContract.ts";
 import {
   applySettingEdits,
   changedSettingKeys,
@@ -34,7 +35,8 @@ const PREFERENCES_PUSH_PENDING_KEY = "rolefit:workspace-preferences-pending";
 const PREFERENCES_PENDING_EDITS_KEY = "rolefit:workspace-preferences-pending-edits";
 export const WORKSPACE_PREFERENCES_APPLIED_EVENT = "rolefit:workspace-preferences-applied";
 export const WORKSPACE_PREFERENCES_STATUS_EVENT = "rolefit:workspace-preferences-status";
-export type WorkspacePreferencesStatus = "idle" | "saving" | "saved" | "error";
+// "newer": the workspace file was saved by a newer RoleFit, which refuses saves (D095).
+export type WorkspacePreferencesStatus = "idle" | "saving" | "saved" | "error" | "newer";
 
 // Unpushed edits shared by this origin's tabs: values keyed by setting or
 // setting entry, removed keys, an edited last base resume (null when unchanged),
@@ -167,7 +169,22 @@ function dropPendingEdits(): void {
   discardSupersededPendingEdits();
 }
 
+// Sticky until a save or adoption succeeds: a later push or failure cannot
+// change what is true of the file.
+let workspaceNewer = false;
+
+// Boot adoption runs before React mounts, so listeners start from this.
+let currentStatus: WorkspacePreferencesStatus = "idle";
+
+export function workspacePreferencesStatus(): WorkspacePreferencesStatus {
+  return currentStatus;
+}
+
 function publishStatus(status: WorkspacePreferencesStatus): void {
+  if ((status === "saving" || status === "error") && workspaceNewer) return;
+  if (status === "newer") workspaceNewer = true;
+  if (status === "saved") workspaceNewer = false;
+  currentStatus = status;
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent(WORKSPACE_PREFERENCES_STATUS_EVENT, { detail: status }));
 }
@@ -193,6 +210,7 @@ async function readJson(response: Response): Promise<unknown> {
 type PostResult =
   | { status: "saved"; revision: string | null }
   | { status: "stale"; current: ServerPreferencesState | null }
+  | { status: "newer" }
   | { status: "failed" };
 
 // Bounded like the adoption read, so a pending write cannot hold first render.
@@ -210,6 +228,7 @@ async function postPreferences(posted: { settings: PersistedSettings; lastBaseRe
     if (response.status === 409 && payload?.stale === true) {
       return { status: "stale", current: payload.current ? parseServerPreferencesResponse(payload.current) : null };
     }
+    if (response.status === 423 && payload?.code === WORKSPACE_NEWER_CODE) return { status: "newer" };
     if (!response.ok) return { status: "failed" };
     return { status: "saved", revision: typeof payload?.revision === "string" ? payload.revision : null };
   } catch {
@@ -227,6 +246,10 @@ async function pushPreferencesNow(): Promise<boolean> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const posted = { settings: knownSettings, lastBaseResume: knownLastBaseResume };
     const result = await postPreferences(posted);
+    if (result.status === "newer") {
+      publishStatus("newer");
+      return false;
+    }
     if (result.status === "failed") break;
     if (result.status === "saved") {
       baseRevision = result.revision;
@@ -290,7 +313,7 @@ if (interruptedEdits) {
 }
 
 export type ServerPreferencesState =
-  | { exists: false; invalid: boolean; restoreStamp: string | null }
+  | { exists: false; invalid: boolean; newer?: true; restoreStamp: string | null }
   | {
       exists: true;
       source: "workspace" | "restore";
@@ -342,6 +365,8 @@ export function parseServerPreferencesResponse(payload: unknown): ServerPreferen
     ? value.restoreStamp
     : null;
   if (value.exists !== true) {
+    // A newer file is unreadable here too, so it takes every invalid-file path.
+    if (value.newer === true) return { exists: false, invalid: true, newer: true, restoreStamp: explicitRestoreStamp };
     return {
       exists: false,
       invalid: value.exists !== false || value.invalid === true,
@@ -491,7 +516,7 @@ export async function adoptWorkspacePreferences(): Promise<void> {
   // cache usable, surface the storage failure, and require explicit repair or
   // restore instead of silently overwriting the file with one origin's cache.
   if (!server.exists && server.invalid) {
-    publishStatus("error");
+    publishStatus(server.newer ? "newer" : "error");
     return;
   }
 
