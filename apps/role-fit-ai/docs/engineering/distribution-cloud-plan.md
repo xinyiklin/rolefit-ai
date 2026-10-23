@@ -155,6 +155,131 @@ and architecture. Every release also contains SHA-256 checksums generated from
 the exact uploaded files. A release workflow must reject duplicate artifact
 names rather than overwrite one architecture with another.
 
+## Browser extension distribution
+
+Researched 2026-10-23; not decided. Today the extension ships only as an
+unpacked folder: the companion materializes it under `userData`
+(`desktop/extension-bundle.cts`), or source development loads `extension/`
+directly. Nothing packages, signs, or publishes it, and no decision records a
+store channel. This section records what the options cost and require, so a
+later decision starts from facts. It changes nothing.
+
+**Why Firefox reloads and Chrome does not.** Chrome and Edge keep an unpacked
+extension across restarts. Firefox has no persistent unsigned install on
+Release or Beta: the companion's **Load Temporary Add-on** path is removed every
+time Firefox quits.
+
+**Options and costs.** These come from vendor documentation read on 2026-10-23;
+re-check them before acting.
+
+| Browser | Free path | Paid or store path | Notes |
+| --- | --- | --- | --- |
+| Chrome | Load unpacked (today) | Chrome Web Store, one-time developer fee | Google's registration page does not state the amount. A 2020 Chromium Blog post reportedly set it at US$5 (not re-verified); the dashboard shows the real amount at signup. Unpacked runs only while Developer mode stays on (Chrome 134+). A self-packed `.crx` is disabled on Windows and macOS unless it comes from the Web Store; Linux and managed policy are the exceptions. Each publisher has two public or unlisted slots by default (2026-08-20); private items do not use a slot. Review takes days and can take weeks. Publishing requires 2-Step Verification and a trader declaration. |
+| Edge | Load unpacked (today) | Edge Add-ons, no fee; certification up to 7 business days | Edge Stable shows a developer-mode notice that cannot be dismissed. Edge can also install from the Chrome Web Store once the user allows other stores. |
+| Firefox | Mozilla signing on AMO, free for listed or **unlisted** (self-distributed) | None | `web-ext sign --channel=unlisted` with free AMO API credentials returns a signed `.xpi`. Install it once through `about:addons` > Install Add-on From File and it survives restarts. Signing normally finishes within seconds to minutes; Mozilla says it can take up to 24 hours, or longer if the submission is picked for manual review. Any add-on, unlisted ones included, can be reviewed later, and a review can reject or block current or earlier versions. Developer Edition, Nightly, ESR, and unbranded builds can instead keep an unsigned `.xpi` with `xpinstall.signatures.required=false`; Release and Beta cannot. |
+
+The smallest change that removes the Firefox reload is unlisted AMO signing.
+Chrome and Edge do not need a store build for persistence. A store build would
+remove Chrome's Developer-mode requirement and Edge's developer-mode notice, and
+give automatic updates.
+
+**What a signed or store build would require.**
+
+- **Manifest.**
+  - **Data declaration.** Add `browser_specific_settings.gecko.data_collection_permissions`:
+    AMO has refused to sign new extensions without it since 2025-11-03. The
+    extension sends page text only to the local RoleFit server, which then
+    passes it to the user-selected AI provider for job analysis. The AMO
+    declaration and the store disclosures must account for that onward flow,
+    and the exact value still needs deciding. Firefox's built-in consent works
+    only on 140+. If the declaration names any category (for example
+    `websiteContent`) rather than `none`, either raise `gecko.strict_min_version`
+    from `128.0` to `140.0`, or add an in-extension consent control for Firefox
+    128–139 (Add-on Policies 6.2.2).
+  - **Firefox id.** Keep the stable `gecko.id` (`role-fit-ai@localhost`).
+    Whether AMO accepts an `@localhost` id is unconfirmed.
+  - **Icons.** Chrome and Edge do not support SVG manifest icons, so Chromium
+    store builds need PNG icons (at least 128×128). The same rule probably means
+    unpacked Chrome and Edge already show a fallback toolbar icon today
+    (unverified). Generate the PNGs from `desktop/assets/generate_icons.py`,
+    which owns the brand mark; point `icons` and `action.default_icon` at them;
+    add them to `EXTENSION_FILES`; and add them to DESIGN.md's brand-mark list.
+    Firefox accepts the existing SVG.
+  - **Validator compatibility.** Confirm that the store validators accept the
+    dual `background.service_worker` and `background.scripts` keys.
+- **Packaging.** Zip the `EXTENSION_FILES` allowlist in
+  `desktop/extension-bundle.cts` from source `extension/`. Use the untouched
+  `5181` `runtime-config.js`, and leave out `AGENTS.md` and `README.md`. If a
+  store rejects a key, ship a per-store manifest variant of the same file set
+  instead. The extension has no build step, so AMO should not need a source
+  upload. A CI signing job would add AMO or store secrets and is a deploy-shape
+  change that needs approval.
+- **Updates.**
+  - Each Firefox version must be re-signed with a higher version number, and
+    version numbers are unique across the listed and unlisted channels.
+  - A self-distributed `.xpi` updates itself only with a `gecko.update_url`
+    pointing to an HTTPS `updates.json`, or when a higher listed AMO version of
+    the same id exists; otherwise users reinstall each version. Hosting
+    `updates.json` and the `.xpi` extends the GitHub Pages and Releases boundary
+    in "Trust and data boundaries", so it belongs to the same deploy-shape
+    approval.
+  - Today the extension version ships with desktop releases and is pinned in
+    `scripts/desktop-release-contract.test.mjs`, so a separate cadence needs a
+    versioning rule.
+- **Companion.** Rewrite the Firefox install panel and its temporary-add-on
+  line. Adding or replacing a copy or open target (a store link or `.xpi`)
+  changes the closed desktop API 13 contract and its probes:
+  - `ipc-contract.cts`, `ipc.cts`, `preload.cts`, `extension-setup-copy.cts`
+  - the inline external targets in `main.cts`
+  - a desktop API version bump past 13 and its release-contract pins
+  - the target lists in `desktop/AGENTS.md`
+- **Store review material.**
+  - a single-purpose description
+  - a justification for each permission: `activeTab`, `scripting`, `storage`,
+    `cookies` and `http://localhost/*`. Only Firefox uses `cookies`, to read a
+    tab's container. Chrome and Edge never use it, so expect to justify it as
+    cross-browser or drop it from a Chromium-store manifest.
+  - a remote-code declaration (none)
+  - a privacy policy and data-use disclosures
+  - a listing description and screenshots
+
+**What would stay the same.**
+
+- The popup, background, and bridge code, unless a non-`none` data declaration
+  keeps Firefox 128–139 support and needs its own consent control.
+- The local extension API and its exact-origin approval.
+  - A Chrome or Edge store install gets a new `chrome-extension://` origin (the
+    two store ids differ). The user approves it once in the companion's Access
+    card and removes the old one.
+  - Whether a signed Firefox install with the same `gecko.id` keeps the
+    profile's existing `moz-extension://` origin is unverified. Plan for one
+    re-approval per profile.
+- The port contract. The companion rewrites only its own materialized folder,
+  so a signed or store copy keeps the `5181` seed it shipped with. Other ports
+  already use the popup's Settings view and the companion's **Copy port**. Only
+  the docs saying the companion seeds the port would need to note that this
+  applies to the unpacked folder alone.
+- The unpacked folder, which keeps working as the source-development and
+  fallback path in every browser.
+
+Sources:
+
+- Mozilla:
+  - [signing and distribution overview](https://extensionworkshop.com/documentation/publish/signing-and-distribution-overview/)
+  - [web-ext command reference](https://extensionworkshop.com/documentation/develop/web-ext-command-reference/)
+  - [updating your extension](https://extensionworkshop.com/documentation/manage/updating-your-extension/)
+  - [data collection consent for new extensions](https://blog.mozilla.org/addons/2025/10/23/data-collection-consent-changes-for-new-firefox-extensions/)
+  - [AMO's free hosting](https://addons.mozilla.org/en-US/about)
+- Google:
+  - [off-store install rules](https://support.google.com/chrome_webstore/answer/2811969)
+  - [Developer mode for unpacked extensions](https://developer.chrome.com/blog/extension-news-january-2025)
+  - [2026 review update](https://developer.chrome.com/blog/cws-review-updates-2026)
+  - [manifest icons](https://developer.chrome.com/docs/extensions/reference/manifest/icons)
+  - [registration](https://developer.chrome.com/docs/webstore/register)
+- Microsoft:
+  - [Edge developer account](https://learn.microsoft.com/en-us/microsoft-edge/extensions/publish/create-dev-account)
+  - [publishing an extension](https://learn.microsoft.com/en-us/microsoft-edge/extensions/publish/publish-extension)
+
 ## Version and release contract
 
 - `apps/role-fit-ai/package.json` is the RoleFit version source of truth.

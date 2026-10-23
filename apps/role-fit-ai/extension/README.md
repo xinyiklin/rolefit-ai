@@ -68,7 +68,9 @@ id, no filesystem path or arbitrary text is accepted from the renderer, and no
 renderer clipboard permission is needed.
 Each action keeps visible feedback on its hovered or focused control and uses a
 visually hidden polite announcement for assistive technology. Keep that folder
-in place after loading it. There is no browser-store package yet.
+in place after loading it. There is no browser-store or signed package yet;
+the options are researched in
+[distribution-cloud-plan.md](../docs/engineering/distribution-cloud-plan.md#browser-extension-distribution).
 
 **Source development:** Load this repository's `extension/` folder directly;
 the browser-specific steps below apply to either folder.

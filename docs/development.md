@@ -32,9 +32,14 @@ workspace; there is no generic root `dev`, `build`, or `preview` script.
   every supported runner rather than treating one host's lockfile entries as
   cross-platform proof. Electron Forge's nested TypeScript 5 compiler is
   private implementation detail and is not a workspace compiler.
-- Python 3 only for engine font-generation/check scripts. Install their pinned
-  dependencies from `packages/engine/scripts/requirements-fonts.txt` in an
-  isolated environment; CI creates `.font-tools` and places it on `PATH`.
+- Python 3 only for engine font-generation/check scripts and RoleFit's brand-mark
+  generator. Install the font scripts' pinned dependencies from
+  `packages/engine/scripts/requirements-fonts.txt` in an isolated environment;
+  CI creates `.font-tools` and places it on `PATH`.
+  `apps/role-fit-ai/desktop/assets/generate_icons.py`, which writes the
+  companion icons, both favicons, and the extension icon, needs fontTools (from
+  that file) plus Pillow; it is rerun by hand when the mark changes, never in
+  CI.
 
 ## Dependency changes
 

@@ -403,6 +403,13 @@
   background: var(--card-soft);
 }
 
+/* Keep the outline sources.css restores for increased contrast on hover too. */
+@media (prefers-contrast: more) {
+  .prepare-brief-row .text-input:hover {
+    border-color: var(--hairline-strong);
+  }
+}
+
 .prepare-brief-row .text-input:focus {
   border-color: var(--accent);
   background: var(--card);

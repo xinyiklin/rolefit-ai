@@ -621,9 +621,11 @@ For meaningful UI changes:
 
 1. Run `npm run dev:rolefit` and open `http://localhost:5181` in Chrome.
 2. Walk through the affected control in the Prepare + studio workflow.
-3. Confirm no console errors, overlap, unexpected layout shift, or
+3. Check it in light and dark (the OS theme, and Settings › App › Appearance
+   pinned to each); document pages stay paper in both.
+4. Confirm no console errors, overlap, unexpected layout shift, or
    broken keyboard path.
-4. Capture a screenshot or describe the visual QA in the final response.
+5. Capture a screenshot or describe the visual QA in the final response.
 
 For tiny copy/class changes, use judgment. If Chrome QA is skipped, say
 why.

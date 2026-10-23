@@ -306,7 +306,7 @@
 .preview-overlay__error .ghost-button:hover {
   background: rgba(255, 255, 255, 0.18);
   border-color: rgba(255, 255, 255, 0.32);
-  color: oklch(0.97 0.005 150);
+  color: oklch(0.97 0.003 265);
 }
 
 @media (pointer: coarse) {
