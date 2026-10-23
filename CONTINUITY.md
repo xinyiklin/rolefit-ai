@@ -7,7 +7,7 @@ operational detail belongs in the affected app documentation.
 
 ## Current state
 
-Current: extension 1.4.1, desktop bridge API 13. The published RoleFit release
+Current: extension 1.5.0, desktop bridge API 13. The published RoleFit release
 is the newest `rolefit-*` entry in `gh release list` (not recorded here;
 see `docs/git-workflow.md`). Release history: `docs/continuity/2026-10.md` and
 D-entries in `docs/decisions.md`.
@@ -75,6 +75,10 @@ D-entries in `docs/decisions.md`.
 - 2026-10-17..18 [TOOL] Unverified from merged work: #235's packaged smoke on
   macOS (win32 only); D087's OpenAI API live calls, its Models page in
   Firefox, and the Background view switch.
+- 2026-10-20..22 [USER+TOOL] Open from #257/#258 (entries rotated to
+  `docs/continuity/2026-10.md`): a bare Rejected move is not counted as a
+  reply; Ghosted to Applied skips back past Interviewing; the Timeline count
+  includes automatic stage entries; timeline and Analytics unchecked in Firefox.
 
 ## 2026-10-23
 
@@ -86,8 +90,9 @@ D-entries in `docs/decisions.md`.
   `tokens.css`, contrast math, and browser QA of all 24 popup states in light
   and dark against stubbed extension APIs (focus, hover, simulated increased
   contrast); independent review passed. Unverified: real unpacked installs,
-  Firefox, forced colors. Extension 1.5.0 (user-approved) ships in the next
-  release-prep PR.
+  Firefox, forced colors. Merged as #262. 0.20.0 preview prepared (minor:
+  light/dark appearance, #260-#262; extension 1.5.0 for the popup restyle);
+  notes `apps/role-fit-ai/docs/releases/0.20.0-beta.1.md`.
 
 ## 2026-10-22
 
@@ -100,7 +105,7 @@ D-entries in `docs/decisions.md`.
   accent, and the landing companion shot was retaken. Verified: desktop checks,
   release contract, Electron smoke, the RoleFit check, synthetic captures in
   light and dark; independent reviews passed. Unverified: native window
-  controls rendering, macOS, forced colors.
+  controls rendering, macOS, forced colors. Merged as #261.
 - [USER+CODE+TOOL] **Workspace redesign** (D093): calm native light/dark look
   replacing the green-paper visuals across RoleFit host CSS, plus Settings ›
   App › Appearance. The top bar is gone: a full-height rail headed by the
@@ -112,47 +117,7 @@ D-entries in `docs/decisions.md`.
   workspace in light and dark; the Chromium host audit now expects light pages
   and OS-following RoleFit chrome; independent reviews passed. Firefox/Safari and
   print UNCONFIRMED. Open with the user: white vs gray workspace plane,
-  stacked state labels.
-
-## 2026-10-20
-
-- [USER+CODE+TOOL] **Application stage history** (D091): submitted applications
-  keep a dated `stageHistory` (stage changes after submission, interviews with
-  kind and derived round, employer responses, follow-ups sent; day-granular).
-  Application Detail's Timeline button opens a popover beside the status card;
-  each entry saves on its own, only saving a new interview on an Applied record
-  moves the stage, and every exit asks before discarding an unsaved entry. The
-  server refuses an unrecorded stage change on a submitted record; older builds
-  reject trackers and backups with history (user-accepted). Verified by
-  `stage-history-probes.mjs`, `application-stage-history-eval.mjs`,
-  `date-input-eval.mjs` (six zones), the RoleFit check (192/192), and browser QA
-  on a synthetic workspace (1280/820/720/375 px). The first independent review
-  failed the UTC+13/+14 date round trip (an older helper bug, also in Detail's
-  Key dates); that and its other findings are fixed in `361ed62`, and the exact
-  pushed head is re-reviewed before merge. Known gaps: the Timeline count
-  includes automatic stage entries; no time of day; confirm and focus flows are
-  pinned by source evals and browser QA, not DOM tests. Merged as #257.
-- [USER+CODE+TOOL] **Analytics redesign + Ghosted** (D092, merged as
-  #258): derived No response (default 21 days,
-  7-180; a planned follow-up holds it) and a stored inactive Ghosted stage,
-  marked per row, in bulk from Analytics, or automatically (opt-in, off by
-  default). Analytics now follows the user's second mockup (DESIGN.md
-  "Analytics Insights"): a grouped KPI row (Total vs the same span one
-  period earlier; stages as shares, since cross-cohort stage changes mislead),
-  activity stacked by stage (weekly/monthly), the No response callout,
-  silence bars, a stage distribution with shares and a stage filter, a Needs
-  your attention table with next step and row menu, and a dated Coming up,
-  in a muted validated stage palette. A Fit-verdict breakdown was dropped
-  (Fit has no analytics role). Older builds reject trackers and backups
-  carrying the new stage, and every user's preferences file (code reading). Verified: evals, the
-  RoleFit check, npm test, layout measurements at 5 widths and a 35-step
-  interaction script on synthetic data (Chromium; Firefox UNCONFIRMED).
-  The threshold reads "Mark as Ghosted after" in Settings and on Analytics
-  (user, 2026-10-22). Open user questions: a bare Rejected move
-  is not a reply; Ghosted to Applied skips back past Interviewing.
-  0.19.0 preview prepared (minor: tracker and preferences format; extension
-  1.4.1 for the Ghosted popup label); notes
-  `apps/role-fit-ai/docs/releases/0.19.0-beta.1.md`.
+  stacked state labels. Merged as #260.
 
 ## 2026-10-18
 

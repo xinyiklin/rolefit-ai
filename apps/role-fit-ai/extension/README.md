@@ -60,8 +60,9 @@ extension files inside app data and writes the resolved local port into
 load it outside Electron's packaged archive. **Copy path** copies that
 app-owned folder path. The section also has click-to-copy controls for the
 exact Chrome (`chrome://extensions`), Edge (`edge://extensions`), and Firefox
-(`about:debugging#/runtime/this-firefox`) setup addresses, plus **Copy port**
-for the active numeric port. These are fixed desktop API 13 targets:
+(`about:debugging#/runtime/this-firefox`) setup addresses; **Copy port** for the
+active numeric port is in the companion's Settings (**Extension port**). These
+are fixed desktop API 13 targets:
 Electron main performs the clipboard write, the renderer sends only a target
 id, no filesystem path or arbitrary text is accepted from the renderer, and no
 renderer clipboard permission is needed.
