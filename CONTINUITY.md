@@ -14,8 +14,14 @@ D-entries in `docs/decisions.md`.
 
 ## Next actions
 
-- Deferred by the user: Stage 2B, the paired real-application Resume Polish
-  rerun (D071, D074).
+- 2026-10-20 [USER+TOOL] Open for the user: the Resume Polish default after
+  Stage 2B (D071). The paired rerun over 20 real applications on this machine
+  (its workspace is the user's real data) found 0 unsupported edits in either
+  arm. Astra preferred Sol 13–6 and the Opus judge preferred Opus 15–1, so there
+  is no cross-judge winner. Sol was faster in 17 of 20 pairs. The default
+  stays Sol Medium until the user decides. Details are in
+  `apps/role-fit-ai/docs/engineering/benchmarks.md`; the harness is in ignored
+  `.agent-work/tasks/2026-10-20-stage2b-real-polish/`.
 - 2026-10-23 [TOOL] Open for the user: an extension distribution channel.
   Firefox needs a reload after every restart because the unpacked add-on loads
   as temporary; free unlisted AMO signing would end that. Options, costs, and

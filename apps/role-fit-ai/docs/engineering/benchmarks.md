@@ -13,7 +13,7 @@ listed under coverage gaps.
 | Workflow | Current recommendation | Meaningful benchmark evidence | Limits |
 | --- | --- | --- | --- |
 | Prepare: Job analysis + Fit | Claude Sonnet 5.5 low, combined | 22 synthetic postings across five configurations; then 20 fresh postings × three repeats for Sonnet and the old Luna/GPT-5.5 split. Sonnet holdout: 4.9 s median versus 17.5 s, extraction 0.997 versus 0.993, zero fabricated terms in both. | Each setting had a Fit automation-flip group; synthetic labels are not human calibration. |
-| Resume Polish | GPT-6.1 Sol medium (since 2026-10-07; previously Claude Opus 5.5 high) | Factual safety favors Sol. 2026-10-07 live baseline, 39 synthetic cases, corrected opportunity gates, Astra fact-checks: Sol 39/39 passed, 88 edits, 0 unsupported, 1 immaterial; Opus High 35/39, 103 edits, 3 unsupported (each merged separately listed facts into a new relationship), 3 immaterial, 1 tense flip; both met all five gated opportunity cases. 2026-10-05, 32 fresh real applications: Opus 2/99 edits unsupported, Sol 0/123. 2026-10-04 34-case eval: Sol passed all cases; Opus passed 63/68 trap checks, then 67/68 after the round-2 prompt. Writing quality favored Opus: on the 2026-10-04 22-application holdout (older prompt), Opus High beat Sol Medium 11–5 where Astra and Opus agreed (Astra alone 11–11, Opus judge 17–5); Opus High also beat Sonnet Medium 17–1 there. | A user-directed safety-first choice. One run per synthetic case; the only fact-check judge is Astra (OpenAI family, same vendor as Sol). The quality comparison predates the current prompt and its arm labels (`opus-high-space` vs `sol-medium`) suggest unmatched guidance. A paired real-application rerun on the current prompt is pending (deferred for Codex usage). Page count is not materiality or a factuality score. |
+| Resume Polish | GPT-6.1 Sol medium (since 2026-10-07; previously Claude Opus 5.5 high) | Factual safety favors Sol. 2026-10-07 live baseline, 39 synthetic cases, corrected opportunity gates, Astra fact-checks: Sol 39/39 passed, 88 edits, 0 unsupported, 1 immaterial; Opus High 35/39, 103 edits, 3 unsupported (each merged separately listed facts into a new relationship), 3 immaterial, 1 tense flip; both met all five gated opportunity cases. 2026-10-05, 32 fresh real applications: Opus 2/99 edits unsupported, Sol 0/123. 2026-10-04 34-case eval: Sol passed all cases; Opus passed 63/68 trap checks, then 67/68 after the round-2 prompt. Writing quality favored Opus: on the 2026-10-04 22-application holdout (older prompt), Opus High beat Sol Medium 11–5 where Astra and Opus agreed (Astra alone 11–11, Opus judge 17–5); Opus High also beat Sonnet Medium 17–1 there. | A user-directed safety-first choice. One run per synthetic case; the synthetic baseline's only fact-check judge is Astra (OpenAI family, same vendor as Sol). The quality comparison predates the current prompt and its arm labels (`opus-high-space` vs `sol-medium`) suggest unmatched guidance. The 2026-10-20 paired real-application rerun on the current prompt ([below](#resume-polish-on-real-applications-2026-10-20-stage-2b)) found 0 unsupported edits in either arm and no cross-judge quality winner. Page count is not materiality or a factuality score. |
 | Resume Polish opt-in review | Off by default (user-accepted 2026-10-10) | 2026-10-10 paired run, 39 synthetic cases, Astra labels shared by both arms, against the approved default-on bar. Sol medium: 3 of 61 edits held back, 1 harmless (33%, bar 75%), 3.3% of supported material edits held back, 0 key-evidence or opportunity losses, review probes 2/5. Opus high (37 of 39 cases ran before the Codex limit): 4 held back, 2 harmless (50%), 1 supported edit to key evidence held back (bar 0), 3.7%, probes 2/5. Both models missed all three merged-facts probes, and on Opus none of its 6 unsupported edits was held back. | One run per case; small held-back counts; Astra is the only fact-check judge. The setting remains available. |
 | Cover Polish | GPT-6.1 Sol medium, existing prompt | 40 tuning applications plus 20 holdouts, sentence fact-checking and blinded Astra/Opus pairwise judging. On the 40-case same-prompt comparison, Sol beat Sonnet 25–2 and Opus 16–0 where both judges agreed. | Model judges disagreed on some comparisons. Claude-specific prompt gains did not transfer to Sol, so the shared prompt was retained. |
 | Answers | Claude Opus 5.5 high; GPT-6.1 Sol medium as OpenAI alternative | 57 synthetic cases × nine settings, 513 completed answers; 38 fresh cases and 19 regressions. Astra High and Opus High agreed the rubric before independent judging. | Opus High's fresh mean lead over Medium was only 0.67/100. Astra slightly preferred Sol Medium to Opus High; Opus preferred Opus High. One sample per case, no human calibration. |
@@ -33,7 +33,7 @@ Haiku 5.5 was added to the benchmark checkout only for these runs.
 | Stage | Settings compared | Result | Plan setting |
 | --- | --- | --- | --- |
 | Prepare (42 postings, combined + standalone) | Claude Sonnet 5.5 Low · Haiku 5.5 Low | Sonnet: 0 category misses, extraction 1.00, no combined/standalone verdict drift, 5.0 s median. Haiku: 2 misses, 0.98, 3 drifts, 9.7 s, about 4x the output tokens. | Claude only: Sonnet Low |
-| Prepare (42 postings) | OpenAI GPT-6.1 Sol Low · GPT-6 Luna Low | Sol: 1 miss, 0.993, no drift, 9.6 s. Luna: 4 misses, 0.992, 3 drifts, 4.6 s. Luna Medium was cut off by the Codex usage limit and discarded. | OpenAI only: Sol Low |
+| Prepare (42 postings) | OpenAI GPT-6.1 Sol Low · GPT-6 Luna Low | Sol: 1 miss, 0.993, no drift, 9.6 s. Luna: 4 misses, 0.992, 3 drifts, 4.6 s. Luna Medium (rerun 2026-10-20 after the first attempt hit the Codex limit): 5 misses, 0.998, 2 invalid standalone replies, 7 automation decisions differing between combined and standalone, 5.9 s. | OpenAI only: Sol Low |
 | Resume import (13 synthetic PDFs) | Claude Sonnet 5.5 Low · Haiku 5.5 Low | Both 13/13 usable; Sonnet 6.7 s median, Haiku 11.3 s with about 2.8x the output tokens. | Claude only: Sonnet Low |
 | Resume import (13 synthetic PDFs, run 2026-10-18 after the reset) | OpenAI GPT-6.1 Sol Low · GPT-6 Luna Low | Sol: 13/13 usable, precision and recall 1.00, 12.5 s median. Luna: 12/13 (one reply refused for taking parts of a line out of order), mean recall 0.93 and precision 0.94, 6.5 s median. | OpenAI only: Sol Low |
 | Cover (13 synthetic letters, Astra + Opus judges) | Claude Opus 5.5 High · Sonnet 5.5 Medium · OpenAI GPT-6.1 Sol Medium | Judge means 6.96 · 6.69 · 6.77; structural checks passed 7/13 · 1/13 · 0/13 (mostly the length check). The 40-case real-application comparison still favors Sol over both Claude models. | Claude only: Opus High |
@@ -88,6 +88,41 @@ Resume Polish only**; Cover Polish runs as before. Limits: one sample per case;
 the same family generated and judged the Opus arms; real cases have no
 opportunity labels; Astra re-judged previous-wording real gap claims, not every
 real edit.
+
+### Resume Polish on real applications, 2026-10-20 (Stage 2B)
+
+The paired rerun deferred under D071. It used the 20 most recent distinct
+company-and-role applications created since 2026-10-12, all newer than the
+earlier real-application runs: 11 Reasonable, 8 Stretch and 1 Strong by saved
+Fit. Two share a company and role with August applications. Each had the user's base resume, Background, Resume
+Polish guidance and saved Fit findings (55 gaps), sent through the production
+proposal workflow. Opus 5.5 High and GPT-6.1 Sol Medium each made one
+proposal. GPT-6 Astra High and Opus 5.5 High fact-checked every rewrite and
+addition, using the synthetic eval's rules. Both judges then picked the better
+edit set blind, once in each order. A judge's pick counts only when both
+orders agree.
+
+| | Opus 5.5 High | GPT-6.1 Sol Medium |
+| --- | --- | --- |
+| Proposals | 20/20 | 20/20 |
+| Edits (rewrites, additions, removals, reorders) | 84 (49, 10, 10, 15) | 80 (56, 14, 0, 10) |
+| Unsupported, Astra · Opus judge | 0 of 59 · 0 of 59 | 0 of 70 · 0 of 70 |
+| Immaterial, Astra · Opus judge | 2 · 1 | 1 · 3 |
+| Fit gaps marked ADDRESSED | 5 of 55 | 4 of 55 |
+| Generation wall time, median | 36.6 s | 26.6 s |
+
+Pairwise picks split by judge family. Astra preferred Sol 13–6 (1 split). The
+Opus judge preferred Opus 15–1 (4 splits). The judges agreed on 4 Opus wins and
+no Sol wins. Of the other 16, they picked opposite arms in 11, and one judge
+split in 5. A-position picks were 19 of 40 (Astra) and 22 of 40 (Opus judge).
+The safety gap behind D071 did not reproduce: neither model made an edit either
+judge called unsupported. Quality has no cross-judge winner. Sol was faster in
+17 of 20 pairs. Wall times include waiting for a provider slot beside judge
+calls, so the gap's size is approximate. Limits: one sample per arm; no human
+labels; Astra shares Sol's vendor, and the Opus judge is the Opus arm's own
+model and effort; ADDRESSED claims were not audited; stylistic tells were not
+tested for blinding. Receipts are ignored, under
+`workspace/resume-polish-real-eval/2026-10-20-stage2b/`.
 
 Resume/Cover use private application corpora; only aggregate findings belong
 here. Their experiment history is retained in the root
