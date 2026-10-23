@@ -22,6 +22,12 @@ D-entries in `docs/decisions.md`.
   stays Sol Medium until the user decides. Details are in
   `apps/role-fit-ai/docs/engineering/benchmarks.md`; the harness is in ignored
   `.agent-work/tasks/2026-10-20-stage2b-real-polish/`.
+- 2026-10-23 [TOOL] Open for the user: an extension distribution channel.
+  Firefox needs a reload after every restart because the unpacked add-on loads
+  as temporary; free unlisted AMO signing would end that. Options, costs, and
+  required changes are in
+  `apps/role-fit-ai/docs/engineering/distribution-cloud-plan.md` (Browser
+  extension distribution). Nothing is decided or changed.
 
 ## Deferred backlog
 
@@ -88,6 +94,15 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-23
 
+- [USER+CODE+TOOL] **Redesign leftovers** fixed after the 0.20.0 preview: the
+  extension failure badge uses the new `--danger`; the popup's Offer and
+  Withdrawn dots match the tracker; hovering a field no longer fades the
+  increased-contrast outline (Prepare brief rows, companion key and port
+  fields); one off-hue PDF-preview color; stale doc wording. Verified: the
+  RoleFit check (197/197) and Firefox 158 computed-style probes in light, dark
+  and increased contrast. Chrome automation is blocked on this machine by a
+  DeveloperToolsDisabled policy. The extension changed after 1.5.0 shipped, so
+  the next release needs extension 1.5.1.
 - [USER+CODE+TOOL] **Popup restyle** (D093 amended): the extension popup mirrors
   the workspace tokens and OS theme (chrome masthead, card body, filled
   controls, sentence-case labels, system UI type) with its structure and copy

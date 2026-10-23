@@ -12,7 +12,7 @@
   max-width: 90rem;
   margin-inline: auto;
   /* Stage fills: muted inks at the chroma floor so they sit on the neutral
-     plane (slate, forest, ochre, mauve, terracotta, sand, sea). Validated
+     plane (slate, green, ochre, mauve, terracotta, sand, sea). Validated
      together in this order as a categorical palette (dataviz
      validate_palette, light: every adjacent check passes; the ochre, sand,
      and sea fills sit under 3:1, relieved by the legend, the share labels,

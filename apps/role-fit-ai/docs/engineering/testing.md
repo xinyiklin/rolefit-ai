@@ -1413,6 +1413,8 @@ layout/theming risk, and let the user decide. When it runs, check:
 - for public landing changes, the complete desktop/390px page, release status,
   installer rows, and absence of horizontal overflow;
 - the affected control in the Prepare + studio workflow
+- light and dark: the OS theme, plus Settings › App › Appearance pinned to each
+  (document pages stay paper in both)
 - Sessions/Settings reachability and ordering in the expanded and collapsed
   studio rail, including the rightward viewport-bounded Sessions popover and
   its exclusion from APG output-tab navigation

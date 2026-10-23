@@ -898,6 +898,9 @@ code { padding: 1px 4px; border-radius: 4px; background: var(--control); color: 
   .overview-card, .provider-list, .extension-access, .extension-install, .site-port-form, .settings-about, .workspace-card, .connection-state-block,
   .provider-card__action, .site-port-form button, .workspace-open-button, .workspace-action, .extension-install__open, .extension-install__copy, .extension-origin__action,
   .provider-key-form input, .site-port-form input, .extension-browser-switch { border: 1px solid var(--ink-soft); }
+  /* The fields' hover hairline would otherwise fade the restored outline. */
+  .provider-key-form input:hover:not(:disabled, :focus),
+  .site-port-form input:hover:not(:disabled, :focus) { border-color: var(--ink-soft); }
   .companion-sidebar { border-right: 1px solid var(--ink-soft); }
 }
 
