@@ -7,7 +7,7 @@ operational detail belongs in the affected app documentation.
 
 ## Current state
 
-Current: extension 1.5.0, desktop bridge API 13. The published RoleFit release
+Current: extension 1.5.1, desktop bridge API 13. The published RoleFit release
 is the newest `rolefit-*` entry in `gh release list` (not recorded here;
 see `docs/git-workflow.md`). Release history: `docs/continuity/2026-10.md` and
 D-entries in `docs/decisions.md`.
@@ -98,6 +98,11 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-23
 
+- [USER+TOOL] **0.21.0 preview prepared** (minor: agent tracker writes and
+  MCP server, #266; extension 1.5.1 for #265's popup fixes; no stored-format
+  change); notes `apps/role-fit-ai/docs/releases/0.21.0-beta.1.md`. The MCP
+  server also ran under a real Claude Code and Codex 0.162.1 client against a
+  throwaway server.
 - [USER+CODE+TOOL] **Agent tracker writes** (D094): atomic
   `POST /api/applications/commit` with field-path refusals, server-side
   `POST /api/applications/<id>/status` sharing the row menu's rule and
@@ -105,8 +110,7 @@ D-entries in `docs/decisions.md`.
   stdio MCP server (six tools) in `apps/role-fit-ai/mcp/`.
   Verified: types, new probes, the RoleFit check, a throwaway-server stdio run,
   the packaged bundle; two independent reviews and a follow-up review of the
-  fixes. Unverified: a real MCP client (Claude Code), the companion on a
-  non-default port.
+  fixes. Unverified: the installed companion and a non-default port.
 - [USER+CODE+TOOL] **Redesign leftovers** fixed after the 0.20.0 preview: the
   extension failure badge uses the new `--danger`; the popup's Offer and
   Withdrawn dots match the tracker; hovering a field no longer fades the
@@ -114,8 +118,7 @@ D-entries in `docs/decisions.md`.
   fields); one off-hue PDF-preview color; stale doc wording. Verified: the
   RoleFit check (197/197) and Firefox 158 computed-style probes in light, dark
   and increased contrast. Chrome automation is blocked on this machine by a
-  DeveloperToolsDisabled policy. The extension changed after 1.5.0 shipped, so
-  the next release needs extension 1.5.1.
+  DeveloperToolsDisabled policy. Ships as extension 1.5.1 in 0.21.0.
 
 ## 2026-10-18
 

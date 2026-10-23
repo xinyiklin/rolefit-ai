@@ -13,7 +13,7 @@ application-data service.
 
 [Product site and companion downloads](https://rolefit.xinyiklin.com/)
 
-Current desktop source version: **0.20.0** (preview).
+Current desktop source version: **0.21.0** (preview).
 
 [Content and evidence checks](PRODUCT.md#content-and-evidence-warning-policy)
 keep otherwise usable output available with warnings before use. Accept, edit,
@@ -687,6 +687,10 @@ Any MCP client that launches stdio servers works the same way; in Codex:
 ```bash
 codex mcp add rolefit -- node /path/to/rolefit-ai/apps/role-fit-ai/mcp/server.ts
 ```
+
+Codex asks you to approve each RoleFit tool call. To pre-approve RoleFit's
+tools only, add `default_tools_approval_mode = "approve"` under
+`[mcp_servers.rolefit]` in `~/.codex/config.toml` (checked with Codex 0.162.1).
 
 Set `ROLEFIT_URL` (default `http://127.0.0.1:5181`) when the companion uses
 another port; only loopback origins are accepted. Tools:
