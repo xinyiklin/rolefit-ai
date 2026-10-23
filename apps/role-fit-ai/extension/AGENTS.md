@@ -61,6 +61,8 @@ V3 client of the local RoleFit server.
   `scripts` for Firefox, `type: "module"` for both). Firefox needs 128+ for a
   module event page, which is why `strict_min_version` is `128.0`; Chrome logs
   an unrecognized-key warning for `scripts` and uses the service worker.
+  `minimum_chrome_version` is `123` because the popup's colors use CSS
+  `light-dark()`; Firefox warns about that Chrome-only key and ignores it.
 - Detect the engine with a long-standing engine-only API
   (`browser.runtime.getBrowserInfo`), never with the newest API you happen to
   want. Detecting Firefox by `commands.openShortcutSettings` (Firefox 137+) sent
@@ -135,15 +137,23 @@ V3 client of the local RoleFit server.
   the app's Settings switches. Claim-token routing and Firefox
   container preservation remain part of the handoff. This holds for the
   keyboard command exactly as it does for the popup button.
-- Visual contract: the popup still wears the earlier green-paper look (D093
-  restyled the RoleFit workspace and landing page, not the popup). Hairlines
-  and paper tones carry structure, ledger rows with dotted leaders carry facts,
-  status is a dot beside a word, and the forest accent is reserved for the one
-  primary action. No filled status banners, no icon-plus-heading cards, no
-  glyph or emoji icons (icons are inline stroke SVG), and no motion beyond the
-  working rule under the popup's masthead and short (140ms) view and hover
-  transitions. Popup type runs below the DESIGN.md
-  ramp on purpose — 344px chrome cannot carry the 1440px desk's sizes.
+- Visual contract: the popup is the calm native workspace (D093) at 344px.
+  `popup.css` mirrors the token values of `src/styles/tokens.css` (it never
+  imports app CSS; change both together), follows the OS theme through
+  `color-scheme: light dark` with no Appearance override, and sets everything
+  in the system UI stack with tabular figures and no webfonts. Tone carries
+  structure: a `--chrome` masthead over a `--card` body, with no frames or
+  rules except the inline notice's warm edge and the port field's hover
+  hairline and focus border; other outlines return only under
+  `prefers-contrast: more` and forced colors. Label/value ledger rows with an
+  invisible leader carry facts, labels are sentence case, status is a dot
+  beside a word, and controls are filled shapes. The accent fills only the one
+  primary action; elsewhere it marks focus, progress, and text actions. No
+  filled status banners, no icon-plus-heading cards, no glyph or emoji icons
+  (icons are inline stroke SVG), and no motion beyond the working rule under
+  the masthead, short (140ms) view and hover transitions, and a 1px press.
+  Popup type keeps its own compact px scale instead of DESIGN.md's rem ramp,
+  sized for 344px chrome rather than the desk.
 - Keep popup copy aligned with `extension/README.md` and server route shapes.
   Copy is one short line: an error names the problem and its recovery.
 - Verify syntax, manifest validity, generated-port validation,

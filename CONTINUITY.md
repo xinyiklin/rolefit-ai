@@ -76,6 +76,19 @@ D-entries in `docs/decisions.md`.
   macOS (win32 only); D087's OpenAI API live calls, its Models page in
   Firefox, and the Background view switch.
 
+## 2026-10-23
+
+- [USER+CODE+TOOL] **Popup restyle** (D093 amended): the extension popup mirrors
+  the workspace tokens and OS theme (chrome masthead, card body, filled
+  controls, sentence-case labels, system UI type) with its structure and copy
+  unchanged; `minimum_chrome_version` is now 123 for `light-dark()`. Verified:
+  extension evals, the RoleFit check (197/197), token parity with
+  `tokens.css`, contrast math, and browser QA of all 24 popup states in light
+  and dark against stubbed extension APIs (focus, hover, simulated increased
+  contrast); independent review passed. Unverified: real unpacked installs,
+  Firefox, forced colors. Extension 1.5.0 (user-approved) ships in the next
+  release-prep PR.
+
 ## 2026-10-22
 
 - [USER+CODE+TOOL] **Companion restyle** (D093 amended): the desktop companion
@@ -99,7 +112,7 @@ D-entries in `docs/decisions.md`.
   workspace in light and dark; the Chromium host audit now expects light pages
   and OS-following RoleFit chrome; independent reviews passed. Firefox/Safari and
   print UNCONFIRMED. Open with the user: white vs gray workspace plane,
-  stacked state labels. Next: the extension popup restyle.
+  stacked state labels.
 
 ## 2026-10-20
 
