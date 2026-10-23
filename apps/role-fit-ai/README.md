@@ -435,8 +435,8 @@ the same operating-system `userData` directory.
 After resolving the active server, the companion writes that port into the
 materialized extension's `runtime-config.js` as a validated first-install seed.
 The extension's saved browser setting remains authoritative. The companion's
-Browser extension section shows and copies the active numeric port; after an app
-port change, save that value in the popup's **Settings** view. The popup
+Settings page shows and copies the active numeric port (**Extension port**);
+after an app port change, save that value in the popup's **Settings** view. The popup
 reconnects immediately without an extension reload.
 
 If a compatible RoleFit server already uses the selected port, its versioned
@@ -742,8 +742,9 @@ folder. In the companion, open **Browser extension**, pick your browser under
 browser asks where to load the extension. The same section includes **Copy
 path** and click-to-copy controls for the exact
 Chrome (`chrome://extensions`), Edge (`edge://extensions`), and Firefox
-(`about:debugging#/runtime/this-firefox`) setup addresses, plus **Copy port** for
-the active validated numeric port. These bounded actions are part of desktop
+(`about:debugging#/runtime/this-firefox`) setup addresses; **Copy port** for the
+active validated numeric port is in the companion's Settings (**Extension
+port**). These bounded actions are part of desktop
 API 13: the Electron main process owns every mapped value and clipboard write,
 while the renderer sends only a fixed target id; no renderer path, arbitrary
 clipboard text, or clipboard permission is exposed.
