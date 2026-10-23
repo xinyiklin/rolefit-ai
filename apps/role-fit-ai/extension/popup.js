@@ -305,8 +305,8 @@ function renderButton(label, className, onClick, attrs = {}) {
   return button;
 }
 
-function ledgerRow(label, value, { className = "" } = {}) {
-  return el("div", { className: `ledger-row ${className}`.trim() },
+function ledgerRow(label, value) {
+  return el("div", { className: "ledger-row" },
     el("dt", { textContent: label }),
     el("span", { className: "leader", "aria-hidden": "true" }),
     el("dd", {}, value)
@@ -491,8 +491,8 @@ function renderSettings() {
 
     el("h2", { className: "section-label", textContent: "Shortcuts" }),
     el("dl", { className: "ledger" },
-      ledgerRow("Import this page", keyCap(shortcuts.import, shortcuts.status), { className: "ledger-row-plain" }),
-      ledgerRow("Open this popup", keyCap(shortcuts.popup, shortcuts.status), { className: "ledger-row-plain" })
+      ledgerRow("Import this page", keyCap(shortcuts.import, shortcuts.status)),
+      ledgerRow("Open this popup", keyCap(shortcuts.popup, shortcuts.status))
     ),
     renderButton("Change in browser settings", "btn-quiet-sm", () => {
       controller.shortcutHint = "";

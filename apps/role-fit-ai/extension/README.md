@@ -107,7 +107,9 @@ one-time approval.
 | `icons/icon.svg` | toolbar icon |
 
 Firefox 128+ is required (`strict_min_version`), because the event page behind
-the keyboard command is an ES module.
+the keyboard command is an ES module. Chrome and Edge need 123+
+(`minimum_chrome_version`), because the popup's light and dark colors use CSS
+`light-dark()` with no build step.
 
 ## How it works
 

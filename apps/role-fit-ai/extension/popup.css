@@ -1,33 +1,43 @@
-/* RoleFit AI extension popup — the Drafting Desk at 344px.
-   Paper tones, hairline structure, ledger rows with dotted leaders, one forest
-   accent for action, and dot-plus-word status. No banners, pills, or cards. */
+/* RoleFit AI extension popup — the calm native workspace at 344px.
+   Mirrors the token values of the browser app's src/styles/tokens.css; the
+   popup never imports the app's CSS. The OS theme drives light/dark. */
 
 :root {
-  --paper: oklch(0.956 0.006 150);
-  --card: oklch(0.992 0.002 150);
-  --card-soft: oklch(0.963 0.005 150);
-  --card-elev: oklch(0.997 0.001 150);
-  --ink-strong: oklch(0.18 0.014 160);
-  --ink: oklch(0.25 0.012 160);
-  --ink-muted: oklch(0.41 0.014 160);
-  --ink-soft: oklch(0.5 0.014 160);
-  --ink-faint: oklch(0.51 0.012 160);
-  --hairline: oklch(0.885 0.008 150);
-  --hairline-soft: oklch(0.925 0.006 150);
-  --hairline-strong: oklch(0.81 0.01 150);
-  --accent: oklch(0.46 0.085 165);
-  --accent-deep: oklch(0.36 0.075 168);
-  --accent-soft: oklch(0.945 0.024 162);
-  --accent-glow: oklch(0.46 0.085 165 / 0.2);
-  --on-accent: oklch(0.975 0.008 150);
-  --warm: oklch(0.52 0.1 75);
-  --warm-soft: oklch(0.92 0.05 85);
-  --cool: oklch(0.45 0.06 250);
-  --danger: oklch(0.45 0.12 30);
-  --serif: "Charter", "Bitstream Charter", "Iowan Old Style", Georgia, Cambria, "Times New Roman", serif;
-  --sans: "Geist", -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
-  --mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-  --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
+  color-scheme: light dark;
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+
+  --chrome: light-dark(oklch(0.962 0.004 265), oklch(0.215 0.005 265));
+  --card: light-dark(oklch(1 0 0), oklch(0.235 0.005 265));
+  --card-soft: light-dark(oklch(0.962 0.004 265), oklch(0.27 0.006 265));
+  --card-hover: light-dark(oklch(0.952 0.005 265), oklch(0.29 0.007 265));
+  --control: light-dark(oklch(0.935 0.005 265), oklch(0.31 0.007 265));
+  --control-hover: light-dark(oklch(0.905 0.006 265), oklch(0.35 0.008 265));
+
+  --ink: light-dark(oklch(0.25 0.01 265), oklch(0.92 0.004 265));
+  --ink-strong: light-dark(oklch(0.18 0.01 265), oklch(0.97 0.003 265));
+  --ink-muted: light-dark(oklch(0.42 0.01 265), oklch(0.8 0.006 265));
+  --ink-soft: light-dark(oklch(0.5 0.01 265), oklch(0.72 0.008 265));
+  --ink-faint: light-dark(oklch(0.53 0.01 265), oklch(0.68 0.008 265));
+
+  --hairline: light-dark(oklch(0.905 0.005 265), oklch(0.32 0.006 265));
+  --hairline-strong: light-dark(oklch(0.86 0.006 265), oklch(0.4 0.008 265));
+
+  --accent: light-dark(oklch(0.53 0.2 258), oklch(0.72 0.14 253));
+  --accent-deep: light-dark(oklch(0.47 0.19 260), oklch(0.8 0.11 252));
+  --accent-hover: light-dark(oklch(0.48 0.2 259), oklch(0.77 0.12 253));
+  --accent-veil: light-dark(oklch(0.53 0.2 258 / 0.12), oklch(0.72 0.14 253 / 0.18));
+  --on-accent: light-dark(oklch(0.995 0.002 260), oklch(0.17 0.02 260));
+
+  --warm: light-dark(oklch(0.55 0.13 62), oklch(0.8 0.13 75));
+  --warm-veil: light-dark(oklch(0.97 0.03 80), oklch(0.27 0.04 75));
+  --warm-line: light-dark(oklch(0.55 0.13 62 / 0.28), oklch(0.8 0.13 75 / 0.3));
+  --cool: light-dark(oklch(0.52 0.09 235), oklch(0.76 0.09 235));
+  --positive: light-dark(oklch(0.49 0.11 160), oklch(0.76 0.12 160));
+  --danger: light-dark(oklch(0.54 0.2 27), oklch(0.72 0.16 25));
+
+  --r-sm: 6px;
+  --r-md: 8px;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -37,30 +47,23 @@ body {
   min-height: 148px;
   max-height: 560px;
   overflow-y: auto;
-  background: var(--paper);
+  background: var(--card);
   color: var(--ink);
-  font-family: var(--sans);
+  font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.5;
+  font-synthesis: none;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 button, input { font: inherit; color: inherit; }
-.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+/* A historical name, like the app's --font-mono: tabular figures in the UI face. */
+.mono { font-variant-numeric: tabular-nums; }
 
-:where(button, input, a):focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--accent-glow);
-  border-radius: 4px;
-}
-
-/* Forced-colors mode drops box-shadow, so the ring has to become a real outline
-   or keyboard focus disappears entirely. */
-@media (forced-colors: active) {
-  :where(button, input, a):focus-visible {
-    outline: 2px solid;
-    outline-offset: 2px;
-  }
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* ── Masthead ─────────────────────────────────────────────────────────── */
@@ -71,14 +74,14 @@ button, input { font: inherit; color: inherit; }
   gap: 10px;
   height: 46px;
   padding: 0 8px 0 14px;
-  background: var(--card);
-  border-bottom: 1px solid var(--hairline);
+  background: var(--chrome);
 }
 
 .wordmark {
   margin-right: auto;
-  font: 600 16px/1 var(--serif);
-  letter-spacing: -0.005em;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1;
   color: var(--ink-strong);
 }
 
@@ -89,7 +92,7 @@ button, input { font: inherit; color: inherit; }
   font-size: 11px;
   color: var(--ink-soft);
 }
-.port-status .mono { font-size: 11px; color: var(--ink-muted); }
+.port-status .mono { color: var(--ink-muted); }
 
 .icon-button {
   display: grid;
@@ -98,21 +101,20 @@ button, input { font: inherit; color: inherit; }
   height: 30px;
   flex: 0 0 auto;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--r-md);
   background: transparent;
   color: var(--ink-soft);
   cursor: pointer;
   transition: color 140ms var(--ease), background-color 140ms var(--ease);
 }
-.icon-button:hover { background: var(--accent-soft); color: var(--accent-deep); }
-.icon-button[aria-expanded="true"] { color: var(--accent-deep); }
+.icon-button:hover,
+.icon-button[aria-expanded="true"] { background: var(--control); color: var(--ink-strong); }
 
 /* The one moment of motion: a press-rule that runs only while a request is in
    flight. Reserved height keeps every view from shifting when it appears. */
 .working-rule {
   position: relative;
   height: 2px;
-  margin-top: -1px;
   overflow: hidden;
   background: transparent;
 }
@@ -158,71 +160,52 @@ button, input { font: inherit; color: inherit; }
   border-radius: 50%;
   background: var(--hairline-strong);
 }
-.dot-connected, .dot-active { background: var(--accent); }
-.dot-checking, .dot-watch { background: var(--warm); }
-.dot-approval { background: var(--warm); }
+.dot-connected, .dot-active { background: var(--positive); }
+.dot-checking, .dot-watch, .dot-approval { background: var(--warm); }
 .dot-unavailable, .dot-closed { background: var(--danger); }
 .dot-filed { background: var(--cool); }
-.dot-idle { background: transparent; box-shadow: inset 0 0 0 1px var(--hairline-strong); }
+.dot-idle { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-faint); }
 
+/* Baseline-aligned so a ledger row lines the word up with its label; the dot,
+   which has no baseline of its own, centers on the line instead. */
 .value-status {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: 7px;
-  color: var(--ink);
   font-size: 12.5px;
 }
-.value-pending { color: var(--ink-faint); font-style: italic; }
+.value-status .dot { align-self: center; }
+.value-pending { color: var(--ink-faint); }
 
 /* ── Job capture ──────────────────────────────────────────────────────── */
 
 .capture { display: flex; flex-direction: column; gap: 3px; }
 .job-title {
   font-size: 16.5px;
-  font-weight: 600;
+  font-weight: 650;
   line-height: 1.25;
-  letter-spacing: -0.002em;
   color: var(--ink-strong);
   overflow-wrap: anywhere;
 }
 .job-company { font-size: 12.5px; color: var(--ink-muted); overflow-wrap: anywhere; }
 
-/* Ledger rows: label, dotted leader, value — the app's fact vocabulary. */
+/* Ledger rows: the app's label/value facts, with an invisible leader. */
 .ledger { display: flex; flex-direction: column; gap: 7px; }
 .ledger-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .ledger-row dt {
   flex: 0 0 auto;
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-/* Sentence-length labels read as shouting in the tracked-uppercase style. */
-.ledger-row-plain dt {
   font-size: 12.5px;
-  font-weight: 400;
-  letter-spacing: normal;
-  text-transform: none;
-  color: var(--ink-muted);
+  color: var(--ink-soft);
 }
-
-.ledger-row .leader {
-  flex: 1 1 auto;
-  min-width: 12px;
-  height: 0;
-  border-bottom: 1px dotted var(--hairline);
-  transform: translateY(-3px);
-}
+.ledger-row .leader { flex: 1 1 auto; min-width: 12px; }
 .ledger-row dd {
   flex: 0 1 auto;
   min-width: 0;
   text-align: right;
   font-size: 12.5px;
-  color: var(--ink);
+  color: var(--ink-strong);
   overflow-wrap: anywhere;
 }
-.ledger-row dd .mono { font-size: 11.5px; color: var(--ink-muted); }
 
 .evidence {
   margin-top: -4px;
@@ -235,8 +218,9 @@ button, input { font: inherit; color: inherit; }
 /* ── Notices ──────────────────────────────────────────────────────────── */
 
 .notice-title {
-  font: 600 15.5px/1.25 var(--sans);
-  letter-spacing: -0.002em;
+  font-size: 15.5px;
+  font-weight: 650;
+  line-height: 1.25;
   color: var(--ink-strong);
 }
 .notice-copy {
@@ -253,16 +237,16 @@ button, input { font: inherit; color: inherit; }
    popup open, or an import that failed here and then reconnected cleanly. */
 .inline-notice {
   padding: 8px 10px;
-  border: 1px solid var(--hairline);
-  border-radius: 6px;
-  background: var(--warm-soft);
+  border: 1px solid var(--warm-line);
+  border-radius: var(--r-md);
+  background: var(--warm-veil);
   font-size: 11.5px;
   line-height: 1.45;
   color: var(--ink-strong);
   overflow-wrap: anywhere;
 }
 
-/* ── Controls ─────────────────────────────────────────────────────────── */
+/* ── Controls: filled shapes without outlines ────────────────────────── */
 
 .actions { display: flex; flex-direction: column; gap: 8px; }
 
@@ -275,7 +259,7 @@ button, input { font: inherit; color: inherit; }
   height: 38px;
   padding: 0 12px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--r-md);
   background: var(--accent);
   color: var(--on-accent);
   font-size: 13px;
@@ -283,72 +267,78 @@ button, input { font: inherit; color: inherit; }
   cursor: pointer;
   transition: background-color 140ms var(--ease);
 }
-.btn-primary:hover:not(:disabled) { background: var(--accent-deep); }
+.btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
 
 .btn-quiet {
   width: 100%;
   height: 32px;
-  border: 1px solid var(--hairline);
-  border-radius: 6px;
-  background: var(--card-elev);
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--control);
   color: var(--ink-strong);
   font-size: 12.5px;
-  font-weight: 500;
+  font-weight: 550;
   cursor: pointer;
-  transition: background-color 140ms var(--ease), color 140ms var(--ease), border-color 140ms var(--ease);
+  transition: background-color 140ms var(--ease);
 }
-.btn-quiet:hover:not(:disabled) {
-  border-color: var(--accent-soft);
-  background: var(--accent-soft);
-  color: var(--accent-deep);
-}
+.btn-quiet:hover:not(:disabled) { background: var(--control-hover); }
 
+/* A ghost text action. The negative margin keeps its label on the content edge
+   while the hover fill reaches past it. */
 .btn-quiet-sm {
   align-self: flex-start;
+  margin: -4px -8px;
+  padding: 4px 8px;
   border: 0;
+  border-radius: var(--r-md);
   background: transparent;
   color: var(--accent-deep);
   font-size: 11.5px;
-  font-weight: 500;
+  font-weight: 550;
   cursor: pointer;
-  padding: 2px 0;
+  transition: background-color 140ms var(--ease);
 }
-.btn-quiet-sm:hover:not(:disabled) { text-decoration: underline; text-underline-offset: 2px; }
+.btn-quiet-sm:hover:not(:disabled) { background: var(--card-hover); }
 
 .btn-inline {
-  height: 30px;
-  padding: 0 11px;
-  border: 1px solid var(--hairline);
-  border-radius: 6px;
-  background: var(--card-elev);
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--control);
   color: var(--ink-strong);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 140ms var(--ease), color 140ms var(--ease);
+  transition: background-color 140ms var(--ease);
 }
-.btn-inline:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent-deep); }
+.btn-inline:hover:not(:disabled) { background: var(--control-hover); }
 
+:is(.btn-primary, .btn-quiet, .btn-inline):active:not(:disabled) { transform: translateY(1px); }
+
+/* Disabled is flat neutral, never a faded tint of the enabled state. */
 button:disabled {
-  border-color: var(--hairline-soft);
-  background: var(--card-soft);
+  background: var(--control);
   color: var(--ink-faint);
   cursor: default;
 }
-/* A completed action is disabled but finished, not unavailable. */
-.btn-primary:disabled .dot-active { background: var(--accent); }
+.btn-quiet-sm:disabled { background: transparent; }
 
+/* Shortcut keys: plain figures on the primary action, a filled key in rows. */
 .kbd {
-  padding: 2px 5px;
-  border: 1px solid oklch(0.975 0.008 150 / 0.34);
-  border-radius: 4px;
-  font-family: var(--mono);
-  font-size: 10.5px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
   line-height: 1.4;
-  letter-spacing: 0.02em;
-  color: inherit;
-  opacity: 0.85;
 }
+.ledger-row .kbd {
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  background: var(--control);
+  color: var(--ink-muted);
+}
+
 /* Only ever seen when the popup's modules failed to load. */
 .boot-error {
   padding: 18px 14px;
@@ -367,49 +357,44 @@ button:disabled {
   white-space: nowrap;
 }
 
-.ledger-row .kbd {
-  border-color: var(--hairline);
-  background: var(--card-elev);
-  color: var(--ink-muted);
-  opacity: 1;
-}
-
 /* ── Settings ─────────────────────────────────────────────────────────── */
 
 .section-label {
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--hairline);
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
+  color: var(--ink-soft);
 }
 .view-settings { gap: 11px; }
-.view-settings .section-label:not(:first-child) { margin-top: 6px; }
+.view-settings .section-label:not(:first-child) { margin-top: 8px; }
 
 .port-form { display: flex; align-items: center; gap: 8px; }
 .field-label {
   flex: 0 0 auto;
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--ink-muted);
 }
+/* Filled, a hairline on hover, accent border plus veil on focus. */
 .port-input {
   flex: 1 1 auto;
   min-width: 0;
-  height: 30px;
-  padding: 0 9px;
-  border: 1px solid var(--hairline);
-  border-radius: 6px;
-  background: var(--card-elev);
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: var(--card-soft);
   color: var(--ink-strong);
   font-size: 13px;
+  transition: background-color 140ms var(--ease), border-color 140ms var(--ease), box-shadow 140ms var(--ease);
 }
-.port-input:hover { border-color: var(--hairline-strong); }
-.port-input:focus { border-color: var(--accent); }
+.port-input:hover:not(:focus) { border-color: var(--hairline); }
+.port-input:focus {
+  border-color: var(--accent);
+  /* Transparent, not none: forced colors paint it, since they drop the ring. */
+  outline: 2px solid transparent;
+  background: var(--card);
+  box-shadow: 0 0 0 3px var(--accent-veil);
+}
 
 .settings-row {
   display: flex;
@@ -424,7 +409,7 @@ button:disabled {
 
 .view-notice .port-form { margin-top: 2px; }
 
-/* ── Scrollbar and motion ─────────────────────────────────────────────── */
+/* ── Scrollbar, motion, and contrast ──────────────────────────────────── */
 
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -438,4 +423,18 @@ button:disabled {
     opacity: 0.4;
   }
   *, *::before, *::after { transition-duration: 0.01ms !important; }
+}
+
+/* Tone alone can be too faint; restore outlines for users who ask for contrast. */
+@media (prefers-contrast: more) {
+  .masthead { border-bottom: 1px solid var(--ink-soft); }
+  .btn-primary, .btn-quiet, .btn-inline, .port-input, .inline-notice { border: 1px solid var(--ink-soft); }
+  .port-input:hover:not(:focus) { border-color: var(--ink-soft); }
+}
+
+/* Forced colors drop fills and shadows: borders give filled controls an edge,
+   and the dots and working rule keep their own colors. */
+@media (forced-colors: active) {
+  .dot, .working-rule.is-active::after { forced-color-adjust: none; }
+  .btn-primary, .btn-quiet, .btn-inline, .port-input { border: 1px solid ButtonText; }
 }
