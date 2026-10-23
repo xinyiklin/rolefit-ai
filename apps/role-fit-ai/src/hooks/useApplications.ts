@@ -322,6 +322,13 @@ export function useApplications() {
   const [hasLoadedApplications, setHasLoadedApplications] = useState(false);
   const [error, setError] = useState("");
   const [workspaceNewer, setWorkspaceNewer] = useState(false);
+  // Read synchronously by a caller awaiting refresh(), before React re-renders.
+  const workspaceNewerRef = useRef(false);
+  const markWorkspaceNewer = useCallback((newer: boolean) => {
+    workspaceNewerRef.current = newer;
+    setWorkspaceNewer(newer);
+  }, []);
+  const isTrackerNewer = useCallback(() => workspaceNewerRef.current, []);
   const [storagePath, setStoragePath] = useState("");
   const [pendingWrites, setPendingWrites] = useState(0);
   // Synchronous source for optimistic mutations. Keeping mutation side effects
@@ -376,11 +383,11 @@ export function useApplications() {
         setStoragePath(read.path);
         conflictMessage.current = "";
         setError("");
-        setWorkspaceNewer(false);
+        markWorkspaceNewer(false);
       } catch (err) {
         if (!cancelled && readId === readVersion.current) {
           setError(err instanceof Error ? err.message : "Failed to load applications.");
-          if (err instanceof TrackerReadError && err.newer) setWorkspaceNewer(true);
+          if (err instanceof TrackerReadError && err.newer) markWorkspaceNewer(true);
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -418,7 +425,7 @@ export function useApplications() {
       const data = await res.json();
       if (!res.ok) {
         const message = typeof data.error === "string" ? data.error : "Save failed.";
-        if (data.code === WORKSPACE_NEWER_CODE) setWorkspaceNewer(true);
+        if (data.code === WORKSPACE_NEWER_CODE) markWorkspaceNewer(true);
         if (res.status === 409 && Array.isArray(data.applications)) {
           const conflict = new ApplicationConflictError(message, data.applications);
           confirmedApplications.current = conflict.applications;
@@ -997,7 +1004,7 @@ export function useApplications() {
           setHasLoadedApplications(true);
           conflictMessage.current = "";
           setError("");
-          setWorkspaceNewer(false);
+          markWorkspaceNewer(false);
           return true;
         }
         return false;
@@ -1005,7 +1012,7 @@ export function useApplications() {
         if (readId === readVersion.current) {
           setError(err instanceof Error ? err.message : "Failed to load applications.");
           // Only a successful read clears it; any other failure says nothing new.
-          if (err instanceof TrackerReadError && err.newer) setWorkspaceNewer(true);
+          if (err instanceof TrackerReadError && err.newer) markWorkspaceNewer(true);
         }
         return false;
       }
@@ -1024,6 +1031,7 @@ export function useApplications() {
     hasLoadedApplications,
     error,
     workspaceNewer,
+    isTrackerNewer,
     storagePath,
     pendingWrites,
     createApplication,

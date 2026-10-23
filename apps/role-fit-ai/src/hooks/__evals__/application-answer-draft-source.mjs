@@ -67,7 +67,7 @@ export function renderPreparationDesk(context) {
   const { currentPreparationId, getCurrentPreparationId, hasLoadedApplications, jobPrepared, jobUrl, jobDescription,
     preparedApplicationJobDescription, jobRawText, jobTracking, currentJobTracking, importedJob, pipelineAiUsage,
     fitAssessmentState, saveApplicationAnswer, linkPostingRecords, getApplication, refreshApplications,
-    findDuplicatesForTarget, setImportedJob } = context;
+    isTrackerNewer = () => false, findDuplicatesForTarget, setImportedJob } = context;
   // Document-title and material-card effects of a commit are outside this eval.
   const setMaterialSelection = () => undefined, DEFAULT_MATERIAL_SELECTION = null;
   const clearPreparedResumeRecommendationRef = { current: () => undefined };

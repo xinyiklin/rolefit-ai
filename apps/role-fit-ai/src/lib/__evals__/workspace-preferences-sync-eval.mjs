@@ -107,8 +107,12 @@ assert.equal(
 
 // Preferences saved by a newer RoleFit (D095): never written over, reported
 // as "newer" rather than as a failed save, and kept through a debounced edit.
-const { WORKSPACE_PREFERENCES_STATUS_EVENT, scheduleWorkspacePreferencesPush, parseServerPreferencesResponse } =
-  await import("../workspacePreferencesSync.ts");
+const {
+  WORKSPACE_PREFERENCES_STATUS_EVENT,
+  scheduleWorkspacePreferencesPush,
+  parseServerPreferencesResponse,
+  workspacePreferencesStatus
+} = await import("../workspacePreferencesSync.ts");
 const statuses = [];
 window.addEventListener(WORKSPACE_PREFERENCES_STATUS_EVENT, (event) => statuses.push(event.detail));
 assert.deepEqual(
@@ -127,6 +131,8 @@ globalThis.fetch = async (_url, options) => {
 await adoptWorkspacePreferences();
 assert.equal(newerPostCount, 0, "newer preferences are never overwritten from the browser cache");
 assert.equal(statuses.at(-1), "newer");
+// Boot adoption finishes before React mounts, so the hook starts from this.
+assert.equal(workspacePreferencesStatus(), "newer", "a listener that mounts later still sees newer preferences");
 // A refused write (the file became newer after it was read) reports the same.
 globalThis.fetch = async (_url, options) => options?.method === "POST"
   ? (newerPostCount += 1, { ok: false, status: 423, async json() { return { error: "newer", code: "workspace-newer" }; } })

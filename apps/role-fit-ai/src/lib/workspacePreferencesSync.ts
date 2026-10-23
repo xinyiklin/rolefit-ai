@@ -173,10 +173,18 @@ function dropPendingEdits(): void {
 // change what is true of the file.
 let workspaceNewer = false;
 
+// Boot adoption runs before React mounts, so listeners start from this.
+let currentStatus: WorkspacePreferencesStatus = "idle";
+
+export function workspacePreferencesStatus(): WorkspacePreferencesStatus {
+  return currentStatus;
+}
+
 function publishStatus(status: WorkspacePreferencesStatus): void {
   if ((status === "saving" || status === "error") && workspaceNewer) return;
   if (status === "newer") workspaceNewer = true;
   if (status === "saved") workspaceNewer = false;
+  currentStatus = status;
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent(WORKSPACE_PREFERENCES_STATUS_EVENT, { detail: status }));
 }

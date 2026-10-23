@@ -1094,6 +1094,7 @@ function App() {
     hasLoadedApplications,
     error: applicationsError,
     workspaceNewer: trackerNewer,
+    isTrackerNewer,
     pendingWrites: pendingApplicationWrites,
     createApplication,
     updateApplicationById,
@@ -1159,6 +1160,7 @@ function App() {
     jobRawText,
     tracking: () => currentJobTracking(),
     refreshApplications,
+    isTrackerNewer,
     findDuplicatesForTarget,
     onOpenExisting: async (applicationId, isCurrent) => {
       const application = getApplication(applicationId);
@@ -3568,7 +3570,8 @@ function App() {
                 <TrackerTab
                   applications={applications}
                   applicationsPath={applicationsPath}
-                  applicationsError={applicationsError}
+                  loadError={!hasLoadedApplications ? applicationsError : ""}
+                  applicationsError={hasLoadedApplications ? applicationsError : ""}
                   pendingApplicationWrites={pendingApplicationWrites}
                   statusFilter={statusFilter}
                   setStatusFilter={setStatusFilter}

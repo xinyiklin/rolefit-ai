@@ -150,7 +150,10 @@ locks.
 
   The Drafting Desk shows one notice naming the locked data once a tracker read
   or write reports it (only a successful read clears it), and Apply and Skip are
-  blocked through the tracker readiness check. MCP tools pass on the server's
+  blocked through the tracker readiness check. Preferences checked before the
+  app mounts keep their status for Settings to start from. The Applications view
+  says it could not load applications rather than showing an empty tracker, and
+  Prepare's duplicate check asks for an update instead of a retry. MCP tools pass on the server's
   message; the extension shows its own update message for a `423`.
 - **Restore** refuses a newer envelope or a newer embedded tracker with the same
   message and leaves the workspace untouched. Restoring an older backup over a

@@ -109,8 +109,11 @@ D-entries in `docs/decisions.md`.
   workspace-newer` on every route, backup, and restore, never written, with a
   Drafting Desk notice. Verified: types, focused probes (each tracker route
   leaves a newer workspace byte-identical), the RoleFit check, two independent
-  reviews and a follow-up review of the fixes. Unverified: the notice in a
-  browser (flag-first, not run) and a real downgrade between installed builds.
+  reviews and a follow-up review of the fixes. Browser QA (user-authorized, a
+  throwaway workspace, in-app pane at 1280/730/375px in light and dark; contrast
+  by computed color because pane screenshots timed out) found and fixed three
+  gaps: a settings-only lock showed no notice, Applications looked empty, and
+  Prepare said to retry. Unverified: a real downgrade between installed builds.
 - [USER+TOOL] **0.21.0 preview prepared** (minor: agent tracker writes and
   MCP server, #266; extension 1.5.1 for #265's popup fixes; no stored-format
   change); notes `apps/role-fit-ai/docs/releases/0.21.0-beta.1.md`. The MCP
