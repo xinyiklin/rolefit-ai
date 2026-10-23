@@ -163,9 +163,10 @@ assert.match(modal, /formatNotApplyingReasons\(related\.notApplyingReasons, 2\)/
 assert.match(modal, /notApplyingReasons: normalizeNotApplyingReasons\(application\.notApplyingReasons\)/, "the form baseline is canonical");
 assert.equal((inspector.match(/formatNotApplyingReasons\([^)]*, 2\)/g) ?? []).length, 2, "both inspector lines cap reasons");
 assert.match(duplicateGuard, /formatNotApplyingReasons\(application\.notApplyingReasons\)/, "the duplicate prompt lists every reason");
+assert.match(applicationsHook, /withStatusChange\(a, status, now\)/, "a stage move goes through the shared transform");
 assert.match(
-  applicationsHook,
-  /notApplyingReasons: status === "not_applying" \? a\.notApplyingReasons : undefined/,
+  read("../../lib/applicationStageHistory.ts"),
+  /notApplyingReasons: status === "not_applying" \? application\.notApplyingReasons : undefined/,
   "a stage move keeps a Skipped record's reasons"
 );
 for (const source of [modal, inspector, duplicateGuard, skipDialog, skippedDecisionPopover]) {
@@ -316,7 +317,7 @@ assert.match(documentsTab, /disabled=\{!application \|\| documentsLocked \|\| bu
 assert.ok(tracker.includes("TRACKER_STAGE_MENU_GROUPS"));
 assert.match(
   tracker,
-  /disabled:\s*app\.status === status\s*\|\|\s*!applicationStatusTransitionAllowed\(app\.status, status\)/,
+  /disabled: !stageMenuMoveAllowed\(app\.status, status\)/,
   "stage menu disables transitions the record cannot make, including Draft for submitted records"
 );
 assert.match(

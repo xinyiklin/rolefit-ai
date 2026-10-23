@@ -22,6 +22,13 @@ export function toIso(dateInput: string) {
   return Number.isNaN(date.getTime()) ? "" : date.toISOString();
 }
 
+// toIso for typed input from outside a date picker: an impossible day such as
+// 2026-02-30 is refused instead of rolling over into the next month.
+export function exactDayIso(dateInput: string) {
+  const iso = toIso(dateInput);
+  return iso && toDateInput(iso) === dateInput ? iso : "";
+}
+
 export function todayIso(now = new Date()) {
   return toIso(localDay(now));
 }

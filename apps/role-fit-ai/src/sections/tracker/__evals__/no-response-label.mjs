@@ -14,6 +14,7 @@ import {
   noResponseLabel
 } from "../../../lib/applicationDisplay.ts";
 import { noResponseCandidate, noResponseCandidates } from "../../../lib/noResponse.ts";
+import { stageMenuMoveAllowed } from "../../../lib/applicationStatusTransitions.ts";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const today = new Date(2026, 9, 5);
@@ -116,10 +117,13 @@ assert.match(
   /if \(noResponseById\.has\(app\.id\)\) \{[\s\S]{0,260}?Mark as \$\{STATUS_LABEL\.ghosted\}[\s\S]{0,200}?onUpdateStatus\(app\.id, "ghosted"\)/,
   "a flagged row gets a one-step Mark as Ghosted"
 );
-assert.match(
-  tracker,
-  /status === "ghosted" && !applicationStatusOptions\(app\.status\)\.includes\(status\)/,
-  "the stage list does not offer Ghosted to a Rejected, Withdrawn, Offer, or Skipped record"
-);
+assert.match(tracker, /disabled: !stageMenuMoveAllowed\(app\.status, status\)/, "the stage list uses the shared menu rule");
+for (const status of ["rejected", "withdrawn", "offer", "not_applying"]) {
+  assert.equal(stageMenuMoveAllowed(status, "ghosted"), false, `the stage list does not offer Ghosted to ${status}`);
+}
+assert.equal(stageMenuMoveAllowed("applied", "ghosted"), true);
+assert.equal(stageMenuMoveAllowed("rejected", "applied"), true, "the row menu can reopen a record");
+assert.equal(stageMenuMoveAllowed("applied", "applied"), false, "the current stage is not a move");
+assert.equal(stageMenuMoveAllowed("applied", "draft"), false);
 
 console.log("No-response label probes passed");

@@ -91,9 +91,22 @@ D-entries in `docs/decisions.md`.
   `docs/continuity/2026-10.md`): a bare Rejected move is not counted as a
   reply; Ghosted to Applied skips back past Interviewing; the Timeline count
   includes automatic stage entries; timeline and Analytics unchecked in Firefox.
+- 2026-10-22..23 [USER+TOOL] Open from #260-#262 (entries rotated to
+  `docs/continuity/2026-10.md`): white vs gray workspace plane and stacked
+  state labels (user's call); unverified Firefox/Safari, print, forced colors,
+  macOS, native window-control rendering, and real unpacked popup installs.
 
 ## 2026-10-23
 
+- [USER+CODE+TOOL] **Agent tracker writes** (D094): atomic
+  `POST /api/applications/commit` with field-path refusals, server-side
+  `POST /api/applications/<id>/status` sharing the row menu's rule and
+  transform, later-answers and timeline-event routes, and a dependency-free
+  stdio MCP server (six tools) in `apps/role-fit-ai/mcp/`.
+  Verified: types, new probes, the RoleFit check, a throwaway-server stdio run,
+  the packaged bundle; two independent reviews and a follow-up review of the
+  fixes. Unverified: a real MCP client (Claude Code), the companion on a
+  non-default port.
 - [USER+CODE+TOOL] **Redesign leftovers** fixed after the 0.20.0 preview: the
   extension failure badge uses the new `--danger`; the popup's Offer and
   Withdrawn dots match the tracker; hovering a field no longer fades the
@@ -103,42 +116,6 @@ D-entries in `docs/decisions.md`.
   and increased contrast. Chrome automation is blocked on this machine by a
   DeveloperToolsDisabled policy. The extension changed after 1.5.0 shipped, so
   the next release needs extension 1.5.1.
-- [USER+CODE+TOOL] **Popup restyle** (D093 amended): the extension popup mirrors
-  the workspace tokens and OS theme (chrome masthead, card body, filled
-  controls, sentence-case labels, system UI type) with its structure and copy
-  unchanged; `minimum_chrome_version` is now 123 for `light-dark()`. Verified:
-  extension evals, the RoleFit check (197/197), token parity with
-  `tokens.css`, contrast math, and browser QA of all 24 popup states in light
-  and dark against stubbed extension APIs (focus, hover, simulated increased
-  contrast); independent review passed. Unverified: real unpacked installs,
-  Firefox, forced colors. Merged as #262. 0.20.0 preview prepared (minor:
-  light/dark appearance, #260-#262; extension 1.5.0 for the popup restyle);
-  notes `apps/role-fit-ai/docs/releases/0.20.0-beta.1.md`.
-
-## 2026-10-22
-
-- [USER+CODE+TOOL] **Companion restyle** (D093 amended): the desktop companion
-  mirrors the workspace tokens and OS theme in a fixed 760×480 unified shell
-  (hidden native title bar with theme-matched controls, icon-led nav, visually
-  hidden page titles, status lines in the content, the port copy field only in
-  Settings). `generate_icons.py` now makes every brand mark (desktop icons and
-  the browser, landing, and extension SVGs); the extension badge uses the
-  accent, and the landing companion shot was retaken. Verified: desktop checks,
-  release contract, Electron smoke, the RoleFit check, synthetic captures in
-  light and dark; independent reviews passed. Unverified: native window
-  controls rendering, macOS, forced colors. Merged as #261.
-- [USER+CODE+TOOL] **Workspace redesign** (D093): calm native light/dark look
-  replacing the green-paper visuals across RoleFit host CSS, plus Settings ›
-  App › Appearance. The top bar is gone: a full-height rail headed by the
-  brand, which toggles it, with drag resize/collapse, and a floating Apply
-  pill at the bottom-right; every page head is one compact 48px row. The
-  landing page wears the same tokens; its app captures and the README shots
-  were retaken. Verified: tsc, the RoleFit check (197/197 evals, landing and
-  desktop builds), contrast math, and headless-Edge captures of a synthetic
-  workspace in light and dark; the Chromium host audit now expects light pages
-  and OS-following RoleFit chrome; independent reviews passed. Firefox/Safari and
-  print UNCONFIRMED. Open with the user: white vs gray workspace plane,
-  stacked state labels. Merged as #260.
 
 ## 2026-10-18
 

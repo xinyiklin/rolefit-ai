@@ -22,7 +22,7 @@ import {
   STAGE_HISTORY_FULL_MESSAGE,
   mergeStageHistories,
   stageHistoryFits,
-  withStageChange
+  withStatusChange
 } from "../lib/applicationStageHistory.ts";
 import {
   APPLICATION_STATUSES,
@@ -629,20 +629,7 @@ export function useApplications() {
         return;
       }
       const now = nextApplicationRevision(existing.updatedAt);
-      const next = current.map((a) =>
-        a.id === id
-          ? {
-              ...a,
-              status,
-              updatedAt: now,
-              stageHistory: withStageChange(a, status, a.stageHistory),
-              appliedAt: status === "draft" ? undefined : status !== "not_applying" && !a.appliedAt ? now : a.appliedAt,
-              notApplyingAt: status === "not_applying" ? now : undefined,
-              notApplyingReasons: status === "not_applying" ? a.notApplyingReasons : undefined,
-              notApplyingNote: status === "not_applying" ? a.notApplyingNote : undefined
-            }
-          : a
-      );
+      const next = current.map((a) => a.id === id ? withStatusChange(a, status, now) : a);
       applicationsRef.current = next;
       setApplications(next);
       void persist(next, [{ id, operation: "upsert", baseUpdatedAt: existing.updatedAt }]);

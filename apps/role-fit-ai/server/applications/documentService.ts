@@ -43,6 +43,22 @@ const documentServiceDependencies: PersistApplicationDocumentDependencies = {
   writeApplications
 };
 
+// The tracker metadata for one stored document slot: a PDF or editable source.
+export function documentArtifacts({ hasPdf, sourceText, fileName, savedAt = new Date().toISOString() }: {
+  hasPdf: boolean;
+  sourceText: string;
+  fileName: string;
+  savedAt?: string;
+}) {
+  return {
+    hasPdf,
+    hasSource: Boolean(sourceText),
+    ...(sourceText ? { sourceFingerprint: documentSourceFingerprint(sourceText) } : {}),
+    fileName,
+    savedAt
+  };
+}
+
 // File bytes and tracker metadata form one application-revision transaction.
 // Capture the previous slot before mutation and restore it if metadata commit
 // fails; callers must not reorder these operations independently.
@@ -76,15 +92,7 @@ export async function persistApplicationDocument({
     );
     const artifacts = remove
       ? undefined
-      : {
-          hasPdf: Boolean(pdfBuffer),
-          hasSource: Boolean(sourceBuffer),
-          ...(sourceText
-            ? { sourceFingerprint: documentSourceFingerprint(sourceText) }
-            : {}),
-          fileName,
-          savedAt: new Date().toISOString()
-        };
+      : documentArtifacts({ hasPdf: Boolean(pdfBuffer), sourceText: sourceBuffer ? sourceText : "", fileName });
     const nextApplication = {
       ...current,
       ...(kind === "resume"

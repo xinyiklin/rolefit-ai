@@ -670,6 +670,38 @@ The [benchmark record and cost estimates](docs/engineering/benchmarks.md)
 collects Answers, Prepare, Resume and Cover findings, with measured per-task
 averages, benchmark-run subtotals and explicit gaps in historical usage.
 
+## Agent access (MCP)
+
+An AI agent can record applications in the tracker through a local MCP
+server. It speaks MCP over stdio, calls the running RoleFit server on
+loopback, and never edits workspace files itself. It runs from a source
+checkout with Node 24.18+ (installers do not include it). Start RoleFit
+first, then register the server with your agent, for example in Claude Code:
+
+```bash
+claude mcp add rolefit -- node /path/to/rolefit-ai/apps/role-fit-ai/mcp/server.ts
+```
+
+Set `ROLEFIT_URL` (default `http://127.0.0.1:5181`) when the companion uses
+another port; only loopback origins are accepted. Tools:
+
+- `search_applications` — duplicate check with the tracker's own matcher,
+  plus company, text, and stage filters.
+- `get_application` — one record in full: notes, answers, Fit snapshot,
+  timeline, and saved documents.
+- `commit_application` — one Applied or Skipped record with its `.resume` and
+  `.cover` sources, saved atomically. A value the tracker would drop, clip, or
+  normalize refuses the whole commit with field-level `issues`.
+- `add_application_answers` — answers given after the commit, appended as
+  new entries; saved answers never change.
+- `log_application_event` — an interview, employer response, or follow-up on
+  a submitted application's timeline, exactly as the Log buttons add it.
+- `update_application_status` — a stage change, applied by the server with the
+  same history entry the tracker row's stage menu adds.
+
+The agent receives the tracker data it reads, so its own model provider sees
+that personal data.
+
 ## Browser extension
 
 The unpacked Chrome/Firefox extension uses an explicit first-use approval in
@@ -937,6 +969,7 @@ src/
 ../../packages/engine/           # document adapters/codecs (`.resume`, `.cover`), layout, DOM/print, PDF, fonts
 ../../packages/editor/           # shared direct editor, history/style hooks, formatting toolbar, editor CSS
 extension/                       # Chrome/Firefox MV3 popup (preparation + duplicate/applied status)
+mcp/                             # local stdio MCP server for agents (tracker search, commit, stage)
 desktop/                         # required product launcher, provider manager, vault + trust boundary
 landing/                         # isolated public product/download page
 dist-electron/                   # generated companion CommonJS output; gitignored

@@ -31,8 +31,12 @@ import {
   handleSaveApplicationDocument
 } from "./applications/documentRoutes.ts";
 import {
+  handleAppendApplicationAnswers,
+  handleApplicationStatus,
+  handleCommitApplication,
   handleDeleteApplication,
   handleListApplications,
+  handleLogApplicationEvent,
   handleSaveApplications
 } from "./applications/trackerRoutes.ts";
 import { isApplicationDocumentKind } from "./applications/documents.ts";
@@ -572,6 +576,45 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
       } else {
         sendJson(res, 405, { error: "Use GET or PUT." });
       }
+      return;
+    }
+
+    // Before the id route below, which would read "commit" as an id.
+    if (pathname === "/api/applications/commit" && req.method === "POST") {
+      dispatch(res, handleCommitApplication(req, res, workspaceDir));
+      return;
+    }
+
+    const statusMatch = pathname.match(/^\/api\/applications\/([^/]+)\/status$/);
+    if (statusMatch) {
+      const id = decodeRouteSegment(statusMatch[1]);
+      if (id === null) {
+        sendJson(res, 400, { error: "Invalid application id." });
+        return;
+      }
+      dispatch(res, handleApplicationStatus(req, res, id, workspaceDir));
+      return;
+    }
+
+    const answersMatch = pathname.match(/^\/api\/applications\/([^/]+)\/answers$/);
+    if (answersMatch) {
+      const id = decodeRouteSegment(answersMatch[1]);
+      if (id === null) {
+        sendJson(res, 400, { error: "Invalid application id." });
+        return;
+      }
+      dispatch(res, handleAppendApplicationAnswers(req, res, id, workspaceDir));
+      return;
+    }
+
+    const eventsMatch = pathname.match(/^\/api\/applications\/([^/]+)\/events$/);
+    if (eventsMatch) {
+      const id = decodeRouteSegment(eventsMatch[1]);
+      if (id === null) {
+        sendJson(res, 400, { error: "Invalid application id." });
+        return;
+      }
+      dispatch(res, handleLogApplicationEvent(req, res, id, workspaceDir));
       return;
     }
 

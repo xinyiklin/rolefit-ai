@@ -8,6 +8,11 @@ import {
   sanitizeApplications
 } from "./schema.ts";
 import { reconcileApplicationMutations } from "./reconcile.ts";
+import { ApplicationCommitError, commitApplication } from "./commitService.ts";
+import { MAX_DOCUMENT_BYTES } from "./documents.ts";
+import { ApplicationAnswersError, appendApplicationAnswers } from "./answerService.ts";
+import { logApplicationEvent } from "./eventService.ts";
+import { changeApplicationStatus } from "./statusService.ts";
 import {
   readApplications,
   readApplicationsSnapshot,
@@ -183,4 +188,112 @@ export async function handleDeleteApplication(
         : {})
     });
   }
+}
+
+// One atomic Applied or Skipped record plus its editable document sources.
+// Refusals name the fields at fault so a non-browser caller can correct them.
+export async function handleCommitApplication(
+  req: IncomingMessage,
+  res: ServerResponse,
+  workspaceDir = jobWorkspaceDir
+): Promise<void> {
+  try {
+    // Two documents at the per-file cap, with room for JSON string escaping,
+    // plus the record.
+    const body = JSON.parse(await readBody(req, 3 * MAX_DOCUMENT_BYTES + 1_000_000)) as unknown;
+    const saved = await commitApplication(workspaceDir, body);
+    sendJson(res, 201, saved);
+  } catch (error) {
+    if (restoreConflictHandled(error, res)) return;
+    if (error instanceof ApplicationCommitError) {
+      sendJson(res, error.status, { error: error.message, issues: error.issues });
+      return;
+    }
+    if (error instanceof Error && error.message === "Request is too large.") {
+      sendJson(res, 413, { error: "The commit is larger than the supported limit. Nothing was saved." });
+      return;
+    }
+    const status = error instanceof ApplicationsStorageError
+      ? error.status
+      : error instanceof SyntaxError ? 400 : 500;
+    sendJson(res, status, {
+      error: status === 400 && error instanceof SyntaxError
+        ? "The commit body is not valid JSON. Nothing was saved."
+        : storageErrorMessage(error, "The application commit failed. Nothing was saved.")
+    });
+  }
+}
+
+export async function handleApplicationStatus(
+  req: IncomingMessage,
+  res: ServerResponse,
+  id: string,
+  workspaceDir = jobWorkspaceDir
+): Promise<void> {
+  if (req.method !== "POST") {
+    sendJson(res, 405, { error: "Use POST." });
+    return;
+  }
+  try {
+    const body = JSON.parse(await readBody(req, 20_000)) as unknown;
+    sendJson(res, 200, await changeApplicationStatus(workspaceDir, id, body));
+  } catch (error) {
+    sendRecordWriteError(error, res, "The stage change failed. Nothing was saved.");
+  }
+}
+
+// Answers given after an application was saved, appended as new revisions.
+export async function handleAppendApplicationAnswers(
+  req: IncomingMessage,
+  res: ServerResponse,
+  id: string,
+  workspaceDir = jobWorkspaceDir
+): Promise<void> {
+  if (req.method !== "POST") {
+    sendJson(res, 405, { error: "Use POST." });
+    return;
+  }
+  try {
+    const body = JSON.parse(await readBody(req, 2_000_000)) as unknown;
+    sendJson(res, 200, await appendApplicationAnswers(workspaceDir, id, body));
+  } catch (error) {
+    sendRecordWriteError(error, res, "Saving the answers failed. Nothing was saved.");
+  }
+}
+
+// An interview, employer response, or follow-up added to a submitted record's timeline.
+export async function handleLogApplicationEvent(
+  req: IncomingMessage,
+  res: ServerResponse,
+  id: string,
+  workspaceDir = jobWorkspaceDir
+): Promise<void> {
+  if (req.method !== "POST") {
+    sendJson(res, 405, { error: "Use POST." });
+    return;
+  }
+  try {
+    const body = JSON.parse(await readBody(req, 20_000)) as unknown;
+    sendJson(res, 200, await logApplicationEvent(workspaceDir, id, body));
+  } catch (error) {
+    sendRecordWriteError(error, res, "Logging the event failed. Nothing was saved.");
+  }
+}
+
+// The per-record routes outside the browser share one error shape: a stale
+// revision returns the current record, refusals keep their issues, and only
+// an unexpected failure is a 500.
+function sendRecordWriteError(error: unknown, res: ServerResponse, fallback: string): void {
+  if (restoreConflictHandled(error, res)) return;
+  const tooLarge = error instanceof Error && error.message === "Request is too large.";
+  const status = error instanceof ApplicationsStorageError
+    ? error.status
+    : tooLarge ? 413 : error instanceof SyntaxError ? 400 : 500;
+  sendJson(res, status, {
+    error: tooLarge ? "The request is larger than the supported limit. Nothing was saved." : storageErrorMessage(error, fallback),
+    ...(error instanceof ApplicationAnswersError ? { issues: error.issues } : {}),
+    ...(status === 409 && error instanceof ApplicationsStorageError && error.currentApplications
+      ? { application: error.currentApplications[0] }
+      : {})
+  });
 }

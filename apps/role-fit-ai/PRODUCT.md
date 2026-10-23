@@ -982,3 +982,15 @@ discard it.") and never starts from an import.
   not a content judgment; Check items for either reading only inform.
 - **Out of scope:** OCR, DOCX, Typeset import, cover-letter import, and
   persisting import findings (the review is session-only).
+
+## Agent access
+
+An outside AI agent may record applications through the local MCP server in
+`mcp/` (README: Agent access). It changes the tracker only as the app would:
+one atomic commit of a submitted or skipped job with its editable documents,
+later answers appended without changing saved ones, timeline events through the
+Log buttons' rules, and stage moves the row menu offers. A value the tracker
+would drop or alter refuses the whole write with the field named; nothing is
+guessed. The agent receives whatever tracker data it reads, so its own model
+provider sees that personal data; RoleFit itself sends nothing to the agent's
+provider and keeps the server loopback-only.
