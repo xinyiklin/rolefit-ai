@@ -110,8 +110,7 @@ D-entries in `docs/decisions.md`.
   stdio MCP server (six tools) in `apps/role-fit-ai/mcp/`.
   Verified: types, new probes, the RoleFit check, a throwaway-server stdio run,
   the packaged bundle; two independent reviews and a follow-up review of the
-  fixes. Unverified: a real MCP client (Claude Code), the companion on a
-  non-default port.
+  fixes. Unverified: the installed companion and a non-default port.
 - [USER+CODE+TOOL] **Redesign leftovers** fixed after the 0.20.0 preview: the
   extension failure badge uses the new `--danger`; the popup's Offer and
   Withdrawn dots match the tracker; hovering a field no longer fades the
