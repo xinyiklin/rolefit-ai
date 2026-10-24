@@ -28,15 +28,6 @@ D-entries in `docs/decisions.md`.
   required changes are in
   `apps/role-fit-ai/docs/engineering/distribution-cloud-plan.md` (Browser
   extension distribution). Nothing is decided or changed.
-- 2026-10-24 [USER+CODE] **0.22.0 preview prepared** (minor: tracker format
-  version D095 #268, Electron 44 and no Intel macOS D096 #269, RoleFit rename
-  D097 #272/#275/#276); extension 1.5.2 (name, PNG icons, newer-workspace
-  message), desktop API 13; notes
-  `apps/role-fit-ai/docs/releases/0.22.0-beta.1.md` carry the three
-  release notices rotated to `docs/continuity/2026-10.md` today. Tag
-  `rolefit-preview-v0.22.0-beta.1` only after the release PR merges and the
-  user approves it; until a release with `RoleFit-*` assets exists, the
-  landing page links every download to GitHub Releases.
 - 2026-10-24 [TOOL] Shared-editor startup: font metrics load per family
   (`metrics/<family>.gen.ts`; layout awaits `ensureLayoutMetrics`). Typeset's
   main bundle fell 5.8 → 0.5 MB and a two-page resume's first page paints in
