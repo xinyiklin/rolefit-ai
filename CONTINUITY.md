@@ -44,15 +44,17 @@ D-entries in `docs/decisions.md`.
   (it shares the same data and, launched from the Dock, would run the old
   build); Windows updates in place but leaves a stale `RoleFit AI` shortcut
   beside the new `RoleFit` one; download file names drop "AI"; the extension
-  keeps its pairing. Its notes heading becomes `# RoleFit X.Y.Z:`, so update
-  the frozen heading assertion in `scripts/desktop-release-contract.test.mjs`
-  with that version bump. No published release (all `RoleFit-AI-*`) parses in
-  the new landing catalog, so tag a preview soon after merge. The four
+  keeps its pairing but must be reloaded once to pick up the new PNG toolbar
+  icons and its bumped version. Bump `extension/manifest.json` past 1.5.1 and,
+  in `scripts/desktop-release-contract.test.mjs`, `EXTENSION_VERSION` and the
+  frozen notes heading (now `# RoleFit X.Y.Z:`) together in that release. No
+  published release (all `RoleFit-AI-*`) parses in the new landing catalog,
+  so tag a preview soon after merge. The four
   product screenshots (landing and README twins) were retaken 2026-10-24 from
   a freshly seeded synthetic workspace (Alex Morgan / LumenDesk, built through
-  the app's own codecs and tracker sanitizer, served on 5183); the companion
-  shot `desktop-app.png` was not retaken and is no longer used on the page. An
-  installed-upgrade check (0.21.0 with a saved API key, then this build) is
+  the app's own codecs and tracker sanitizer, served on 5183), plus the three
+  README tracker shots on 2026-10-24; the unused `desktop-app.png` is deleted.
+  An installed-upgrade check (0.21.0 with a saved API key, then this build) is
   still unrun.
 
 ## Deferred backlog
