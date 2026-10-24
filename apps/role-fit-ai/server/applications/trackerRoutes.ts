@@ -190,8 +190,9 @@ export async function handleDeleteApplication(
   }
 }
 
-// One atomic Applied or Skipped record plus its editable document sources.
-// Refusals name the fields at fault so a non-browser caller can correct them.
+// One atomic Applied, Skipped, or Draft record plus its editable document
+// sources. Refusals name the fields at fault so a non-browser caller can
+// correct them; a duplicate refusal also lists the matching records.
 export async function handleCommitApplication(
   req: IncomingMessage,
   res: ServerResponse,
@@ -202,11 +203,15 @@ export async function handleCommitApplication(
     // plus the record.
     const body = JSON.parse(await readBody(req, 3 * MAX_DOCUMENT_BYTES + 1_000_000)) as unknown;
     const saved = await commitApplication(workspaceDir, body);
-    sendJson(res, 201, saved);
+    sendJson(res, "dryRun" in saved ? 200 : 201, saved);
   } catch (error) {
     if (workspaceGateHandled(error, res)) return;
     if (error instanceof ApplicationCommitError) {
-      sendJson(res, error.status, { error: error.message, issues: error.issues });
+      sendJson(res, error.status, {
+        error: error.message,
+        issues: error.issues,
+        ...(error.duplicates ? { duplicates: error.duplicates } : {})
+      });
       return;
     }
     if (error instanceof Error && error.message === "Request is too large.") {

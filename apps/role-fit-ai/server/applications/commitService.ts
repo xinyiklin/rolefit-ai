@@ -1,8 +1,9 @@
-// One atomic write for a finished application decision: the tracker record and
-// its editable document sources land together or not at all. Built for callers
-// outside the browser (the local MCP server), so every refusal names the field
-// at fault and nothing a caller sent is lost or altered, beyond the documented
-// skip-reason order and answer stamps.
+// One atomic write for an application decision or a Draft: the tracker record
+// and its editable document sources land together or not at all. Built for
+// callers outside the browser (the local MCP server), so every refusal names the
+// field at fault and nothing a caller sent is lost or altered, beyond the
+// documented skip-reason order and answer stamps. A dry run answers exactly as
+// the commit would, without writing.
 
 import { randomUUID } from "node:crypto";
 import { rm } from "node:fs/promises";
@@ -20,6 +21,7 @@ import { answerForRecord, answerIssues } from "./answerService.ts";
 import { documentArtifacts } from "./documentService.ts";
 import { reconcileApplicationMutations } from "./reconcile.ts";
 import { applicationDocumentDir } from "./routeSupport.ts";
+import { findDuplicateApplications, type DuplicateMatch, type DuplicateTarget } from "../../src/lib/jobIdentity.ts";
 import { normalizeNotApplyingReasons } from "../../src/lib/notApplying.ts";
 import {
   isCanonicalApplicationTimestamp,
@@ -27,12 +29,15 @@ import {
   strictApplicationIssues
 } from "./schema.ts";
 import {
+  assertTrackerCapacity,
   readApplicationsSnapshot,
   withApplicationsLock,
   writeApplicationsSnapshot
 } from "./storage.ts";
 
-export const COMMIT_STATUSES = ["applied", "not_applying"] as const;
+export const COMMIT_STATUSES = ["applied", "not_applying", "draft"] as const;
+export const MAX_ACKNOWLEDGED_DUPLICATES = 100;
+const COMMIT_FIELDS = ["application", "documents", "dryRun", "acknowledgedDuplicates"];
 
 // The server assigns identity, revisions and file metadata; posting groups and
 // history are separate, revision-checked mutations of existing records.
@@ -47,14 +52,18 @@ const SERVER_OWNED_FIELDS = [
   "jobPostingGroupId"
 ] as const;
 
+type DuplicateSummary = Record<string, unknown> & { id: string; match: Omit<DuplicateMatch, "application"> };
+
 export class ApplicationCommitError extends Error {
   status: number;
   issues: string[];
-  constructor(issues: string[], status = 400) {
+  duplicates?: DuplicateSummary[];
+  constructor(issues: string[], status = 400, duplicates?: DuplicateSummary[]) {
     super("The application was not saved. Fix the listed fields and commit again.");
     this.name = "ApplicationCommitError";
     this.status = status;
     this.issues = issues;
+    this.duplicates = duplicates;
   }
 }
 
@@ -128,8 +137,14 @@ function prepareCommit(body: unknown, now: string) {
     throw new ApplicationCommitError(["application: required object"]);
   }
   const issues: string[] = [];
-  const unknownKey = Object.keys(body).find((key) => key !== "application" && key !== "documents");
-  if (unknownKey) issues.push(`${unknownKey}: not a commit field (send application and documents)`);
+  const unknownKey = Object.keys(body).find((key) => !COMMIT_FIELDS.includes(key));
+  if (unknownKey) issues.push(`${unknownKey}: not a commit field (send ${COMMIT_FIELDS.join(", ")})`);
+  if (body.dryRun !== undefined && typeof body.dryRun !== "boolean") issues.push("dryRun: must be true or false");
+  const acknowledged = body.acknowledgedDuplicates === undefined ? [] : body.acknowledgedDuplicates;
+  if (!Array.isArray(acknowledged) || acknowledged.length > MAX_ACKNOWLEDGED_DUPLICATES
+    || acknowledged.some((id) => typeof id !== "string" || !id)) {
+    issues.push(`acknowledgedDuplicates: must be a list of at most ${MAX_ACKNOWLEDGED_DUPLICATES} record ids`);
+  }
   const application = body.application;
   for (const field of SERVER_OWNED_FIELDS) {
     if (Object.hasOwn(application, field)) issues.push(`application.${field}: set by the server; omit it`);
@@ -146,12 +161,18 @@ function prepareCommit(body: unknown, now: string) {
   if (status === "not_applying" && application.appliedAt !== undefined) {
     issues.push("application.appliedAt: a Skipped commit records a job you did not apply to; omit it");
   }
-  if (status === "applied" && application.notApplyingAt !== undefined) {
+  if (status === "draft" && application.appliedAt !== undefined) {
+    issues.push("application.appliedAt: a Draft has not been submitted; omit it");
+  }
+  if ((status === "applied" || status === "draft") && application.notApplyingAt !== undefined) {
     issues.push("application.notApplyingAt: only a Skipped commit has one");
   }
   const documents = commitDocuments(body.documents, issues);
   if (status === "not_applying" && documents.length) {
     issues.push("documents: a Skipped commit cannot store application documents");
+  }
+  if (status === "draft" && documents.length) {
+    issues.push("documents: a Draft cannot store application documents");
   }
   if (issues.length) throw new ApplicationCommitError(issues);
 
@@ -167,9 +188,8 @@ function prepareCommit(body: unknown, now: string) {
     id,
     createdAt: now,
     updatedAt: now,
-    ...(status === "applied"
-      ? { appliedAt: application.appliedAt ?? now }
-      : { notApplyingAt: application.notApplyingAt ?? now })
+    ...(status === "applied" ? { appliedAt: application.appliedAt ?? now } : {}),
+    ...(status === "not_applying" ? { notApplyingAt: application.notApplyingAt ?? now } : {})
   };
   for (const document of documents) {
     record[document.kind === "resume" ? "resumeArtifacts" : "coverLetterArtifacts"] = documentArtifacts({
@@ -187,23 +207,68 @@ function prepareCommit(body: unknown, now: string) {
   if (!strict.application || strict.issues.length) {
     throw new ApplicationCommitError(strict.issues.map((issue) => `application.${issue}`));
   }
-  return { id, record: strict.application, documents };
+  return {
+    id,
+    record: strict.application,
+    documents,
+    dryRun: body.dryRun === true,
+    acknowledged: new Set(acknowledged as string[])
+  };
+}
+
+// The same target the Prepare duplicate guard builds: raw posting text first.
+function duplicateTarget(record: Record<string, unknown>): DuplicateTarget {
+  const text = (field: string) => (typeof record[field] === "string" ? record[field] as string : undefined);
+  return {
+    jobUrl: text("jobUrl"),
+    jobText: text("rawJobDescription")?.trim() || text("jobDescription"),
+    company: text("company"),
+    role: text("role"),
+    location: text("location")
+  };
+}
+
+// Every match must be named in acknowledgedDuplicates, as the Prepare guard
+// makes the user choose before a second record for the same job is saved.
+function refuseUnacknowledgedDuplicates(
+  record: Record<string, unknown>,
+  applications: readonly (DuplicateTarget & { id: string })[],
+  acknowledged: Set<string>
+) {
+  const unacknowledged = findDuplicateApplications(duplicateTarget(record), applications)
+    .filter(({ application }) => !acknowledged.has(application.id));
+  if (!unacknowledged.length) return;
+  const duplicates = unacknowledged.map(({ application, level, confidence, evidence }) => {
+    const { title, company, role, status, jobUrl, appliedAt, notApplyingAt, updatedAt } = application as Record<string, unknown>;
+    return { id: application.id, title, company, role, status, jobUrl, appliedAt, notApplyingAt, updatedAt, match: { level, confidence, evidence } };
+  });
+  throw new ApplicationCommitError([
+    `acknowledgedDuplicates: this job matches ${duplicates.length === 1 ? "a saved record" : `${duplicates.length} saved records`} ` +
+      `(${duplicates.map(({ id }) => id).join(", ")}). If it is the same application, update that record instead; ` +
+      "to save a separate record, list each id here."
+  ], 409, duplicates);
 }
 
 const commitDependencies = { writeApplicationsSnapshot };
 
 export async function commitApplication(workspaceDir: string, body: unknown, dependencies = commitDependencies) {
-  const { id, record, documents } = prepareCommit(body, new Date().toISOString());
+  const { id, record, documents, dryRun, acknowledged } = prepareCommit(body, new Date().toISOString());
   const dir = applicationDocumentDir(id, workspaceDir);
   if (!dir) throw new ApplicationCommitError(["id: could not allocate a document folder"], 500);
   return withApplicationsLock(async () => {
     const current = await readApplicationsSnapshot(workspaceDir);
+    refuseUnacknowledgedDuplicates(record, current.applications, acknowledged);
     // Same mutation rules as every tracker save: unique id, answer receipts.
     const reconciled = reconcileApplicationMutations(
       current.applications,
       sanitizeApplications([record]),
       [{ id, operation: "upsert", baseUpdatedAt: null }]
     );
+    if (dryRun) {
+      // The write's own capacity check, which a dry run never reaches.
+      assertTrackerCapacity(reconciled);
+      return { dryRun: true as const, valid: true };
+    }
     try {
       for (const document of documents) {
         await writeApplicationFile(

@@ -3,7 +3,9 @@
 // Locked here: a commit stores the record and its document sources together
 // with every sent value intact; any value the tracker would drop, clip, or
 // normalize refuses the whole commit with a path-named issue and writes
-// nothing; a failed tracker write removes the document folder; the status
+// nothing; a duplicate match refuses until its id is acknowledged; a dry run
+// answers as the commit would and writes nothing; a Draft commit carries no
+// dates or documents; a failed tracker write removes the document folder; the status
 // route applies only the tracker row menu's moves and records the stage entry the
 // tracker requires.
 import assert from "node:assert/strict";
@@ -193,7 +195,16 @@ try {
     [{ application, documents: { resume: { sourceText: resumeSource, fileName: "r".repeat(201) } } }, "documents.resume.fileName: must be a non-empty string of at most 200"],
     [{ application: { ...application, applicationAnswers: [{ question: "Q", answer: "A", savedAt: "yesterday" }] } }, "application.applicationAnswers[0].savedAt: must be a canonical ISO timestamp"],
     [{ application: JSON.parse(`{"title":"Proto","status":"applied","__proto__":{"x":1}}`) }, "application.__proto__: dropped"],
-    [{ application: { ...application, applicationAnswers: [staleRevision] } }, "application.applicationAnswers[0]: its counts or limits do not match its text"]
+    [{ application: { ...application, applicationAnswers: [staleRevision] } }, "application.applicationAnswers[0]: its counts or limits do not match its text"],
+    [{ application: { ...application, extra: true }, dryRun: true }, "application.extra: dropped"],
+    [{ application, dryRun: "yes" }, "dryRun: must be true or false"],
+    [{ application, acknowledgedDuplicates: [1] }, "acknowledgedDuplicates: must be a list"],
+    [{ application, acknowledgedDuplicates: "a1" }, "acknowledgedDuplicates: must be a list"],
+    [{ application, acknowledgedDuplicates: null }, "acknowledgedDuplicates: must be a list"],
+    [{ application: { ...application, status: "draft", resumeUsed: undefined, appliedAt: "2026-10-01T12:00:00.000Z" } }, "application.appliedAt: a Draft has not been submitted"],
+    [{ application: { ...application, status: "draft", resumeUsed: undefined, notApplyingAt: "2026-10-01T12:00:00.000Z" } }, "application.notApplyingAt: only a Skipped commit"],
+    [{ application: { ...application, status: "draft", resumeUsed: undefined }, documents: { resume: { sourceText: resumeSource } } }, "documents: a Draft cannot store application documents"],
+    [{ application: { ...application, status: "draft" } }, "application.status: a draft cannot carry"]
   ];
   const before = await trackerText();
   const beforeFolders = await folders();
@@ -206,10 +217,49 @@ try {
   assert.deepEqual(await folders(), beforeFolders, "refusals write no document folder");
   assert.equal((await commit("{not json")).status, 400);
 
+  // A second record for a saved job is refused until each match is acknowledged.
+  const first = (await readApplications(workspaceDir)).find((record) => record.jobUrl === application.jobUrl);
+  {
+    const res = await commit({ application, documents: { resume: { sourceText: resumeSource } } });
+    assert.equal(res.status, 409, res.chunk);
+    assert.match(res.json.issues[0], /^acknowledgedDuplicates: this job matches a saved record/);
+    assert.deepEqual(res.json.duplicates.map(({ id, match }) => [id, match.confidence]), [[first.id, "exact"]]);
+    assert.equal(res.json.duplicates[0].title, first.title);
+    assert.equal(res.json.duplicates[0].jobDescription, undefined, "summaries only");
+    const dryRun = await commit({ application, dryRun: true });
+    assert.equal(dryRun.status, 409, "a dry run reports the duplicate the commit would refuse");
+    assert.equal((await commit({ application, acknowledgedDuplicates: ["someone-else"] })).status, 409, "only the matching id acknowledges it");
+    const acknowledged = await commit({ application, dryRun: true, acknowledgedDuplicates: [first.id], documents: { resume: { sourceText: resumeSource } } });
+    assert.equal(acknowledged.status, 200, acknowledged.chunk);
+    assert.deepEqual(acknowledged.json, { dryRun: true, valid: true });
+    assert.equal(await trackerText(), before, "duplicate refusals and dry runs write nothing");
+    assert.deepEqual(await folders(), beforeFolders, "nor any document folder");
+  }
+
+  // A Draft is an unsubmitted record: no dates, no documents, no stage history.
+  {
+    const draft = { ...application, title: "Platform Engineer at Draft Co", company: "Draft Co", role: "Platform Engineer", jobUrl: "https://draft.example.test/jobs/7", status: "draft", resumeUsed: undefined };
+    const res = await commit({ application: draft });
+    assert.equal(res.status, 201, res.chunk);
+    const saved = res.json.application;
+    assert.equal(saved.status, "draft");
+    assert.equal(saved.appliedAt, undefined);
+    assert.equal(saved.notApplyingAt, undefined);
+    assert.equal(saved.stageHistory, undefined);
+    assert.equal(saved.applicationAnswers[0].answer, "I build reliable APIs.", "a Draft keeps its answers");
+    assert.equal((await commit({ application: draft })).status, 409, "the Draft guards its own job");
+    const submitted = await changeStatus(saved.id, { status: "applied", baseUpdatedAt: saved.updatedAt });
+    assert.equal(submitted.status, 200, submitted.chunk);
+    assert.ok(submitted.json.application.appliedAt, "submitting the Draft dates it now");
+  }
+
   // A failed tracker write removes the document folder it created.
   {
     const failing = { writeApplicationsSnapshot: async () => { throw new Error("disk full"); } };
-    await assert.rejects(commitApplication(workspaceDir, { application, documents: { resume: { sourceText: resumeSource } } }, failing), /disk full/);
+    const before = await trackerText();
+    const beforeFolders = await folders();
+    const acknowledgedDuplicates = (await readApplications(workspaceDir)).map(({ id }) => id);
+    await assert.rejects(commitApplication(workspaceDir, { application, acknowledgedDuplicates, documents: { resume: { sourceText: resumeSource } } }, failing), /disk full/);
     assert.equal(await trackerText(), before);
     assert.deepEqual(await folders(), beforeFolders, "no orphaned document folder");
   }
