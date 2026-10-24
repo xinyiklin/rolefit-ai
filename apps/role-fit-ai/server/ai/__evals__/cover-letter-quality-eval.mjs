@@ -29,6 +29,9 @@ import { COVER_LETTER_JUDGE_PANEL, buildCoverLetterJudgePrompts, coverLetterJudg
 import { gradeCoverLetterResult } from "../coverLetterQuality.ts";
 import { resolveProviderRequest } from "../providers.ts";
 import { buildCoverLetterPreflight } from "../../../src/lib/coverLetterPreflight.ts";
+import { ensureAllFontMetrics } from "@typeset/engine/typeset/fontRegistry.ts";
+
+await ensureAllFontMetrics();
 
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const FIXTURE_URL = new URL("./fixtures/cover-letter-quality.json", import.meta.url);

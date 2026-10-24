@@ -23,10 +23,14 @@ import {
 import { buildCoverLetterVerticalStream } from "../coverLetterBlocks.ts";
 import {
   layoutCoverLetter,
+  layoutFamilies,
   layoutResume,
   layoutVerticalStream
 } from "../layout.ts";
 import { toTypesetSchema } from "../schema.ts";
+import { ensureAllFontMetrics } from "../fontRegistry.ts";
+
+await ensureAllFontMetrics();
 
 const resumeSchema = toTypesetSchema(buildStarterResume());
 const sharedHeader = buildStarterResume().header;
@@ -236,5 +240,24 @@ for (const bulletIndentPt of [0, 7.5, 36]) {
 const flush = bulletGeometry({ ...commonStyle, entryIndentPt: 0, bulletIndentPt: 0 });
 assert.equal(flush.firsts[0].dot, 0, 'zero entry and bullet indent put the dot on the margin');
 console.log('bullet indent geometry checks passed');
+
+// The metrics pre-scan must name every family layout measures with: inline
+// overrides on text, and the carrier family of an empty field (the header
+// name is measured in its stored carrier even with no text).
+{
+  const starter = buildStarterResume();
+  const carrierSchema = toTypesetSchema({
+    ...starter,
+    header: { ...starter.header, name: '<font=noto-sans></font>' },
+    sections: starter.sections.map((section, i) => i === 0
+      ? { ...section, heading: `<font=lora>${section.heading}</font>` }
+      : section)
+  });
+  const families = layoutFamilies(carrierSchema, commonStyle);
+  assert.deepEqual([...families].sort(), ['latin-modern', 'lora', 'noto-sans'], 'pre-scan lists the document, inline, and empty-carrier families');
+  const runFamilies = new Set(layoutResume(carrierSchema, commonStyle).pages.flatMap((p) => p.lines.flatMap((l) => l.runs.map((r) => r.style.family))));
+  for (const family of runFamilies) assert.ok(families.includes(family), `layout measured ${family} without the pre-scan naming it`);
+  console.log('layoutFamilies pre-scan checks passed');
+}
 
 await import("./heading-wrap.mjs");

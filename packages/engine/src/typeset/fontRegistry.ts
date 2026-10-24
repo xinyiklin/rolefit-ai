@@ -1,6 +1,6 @@
 import type { FaceName } from "./metrics.gen.ts";
-import { faceMetrics, type FaceMetrics } from "./metrics.ts";
-import { FONT_FAMILIES, coerceFontFamily, DEFAULT_FONT_FAMILY, type FontFamily } from "../lib/fontFamilies.ts";
+import { faceMetrics, fontMetricsLoaded, loadFontMetrics, type FaceMetrics } from "./metrics.ts";
+import { FONT_FAMILIES, FONT_FAMILY_IDS, coerceFontFamily, DEFAULT_FONT_FAMILY, type FontFamily } from "../lib/fontFamilies.ts";
 
 // The engine-facing name for the one document font-family union owned by
 // lib/fontFamilies.ts (the persisted contract).
@@ -282,6 +282,26 @@ export const DOCUMENT_FONT_FAMILIES: Readonly<
   "rubik": standardFamilyDefinition("rubik", "Rubik", -12.0, -12.0, "arimo"),
   "work-sans": standardFamilyDefinition("work-sans", "WorkSans", -13.0, -13.0, "arimo")
 };
+
+// Measuring with a family also measures borrowed glyphs in its fallback, so a
+// family is ready to lay out only once both families' metrics have arrived.
+function familyAndFallback(family: DocumentFontFamily): DocumentFontFamily[] {
+  const fallback = DOCUMENT_FONT_FAMILIES[family].fallback;
+  return fallback ? [family, fallback] : [family];
+}
+
+export function fontMetricsReady(family: DocumentFontFamily): boolean {
+  return familyAndFallback(family).every(fontMetricsLoaded);
+}
+
+// Resolves once every family in `families` is ready to lay out synchronously.
+export function ensureFontMetrics(families: Iterable<DocumentFontFamily>): Promise<void> {
+  return loadFontMetrics([...families].flatMap(familyAndFallback));
+}
+
+export function ensureAllFontMetrics(): Promise<void> {
+  return loadFontMetrics(FONT_FAMILY_IDS);
+}
 
 export function fontFace(family: DocumentFontFamily, face: FaceName): DocumentFontFaceDefinition {
   return DOCUMENT_FONT_FAMILIES[family].faces[face];

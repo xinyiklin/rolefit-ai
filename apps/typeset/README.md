@@ -230,7 +230,8 @@ runtime behavior is browser-side.
 ### Font assets
 
 `packages/engine/scripts/generate_font_assets.py` builds the static WOFF2 files
-in `packages/engine/fonts/` and regenerates `src/typeset/metrics.gen.ts` from
+in `packages/engine/fonts/` and regenerates `src/typeset/metrics.gen.ts` and
+the per-family `src/typeset/metrics/*.gen.ts` modules from
 pinned, checksum-verified sources — these fonts are the source of truth, and each
 app mirrors them into its own `public/fonts/` at build time. Its header records
 the reproducible Python tooling; run it with `--check` to verify those committed

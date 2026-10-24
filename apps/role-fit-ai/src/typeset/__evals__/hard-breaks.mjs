@@ -6,6 +6,9 @@ import { DOC_STYLE_DEFAULTS } from "@typeset/engine/lib/documentStyle.ts";
 import { paragraphItems } from "@typeset/engine/typeset/measure.ts";
 import { breakParagraph } from "@typeset/engine/typeset/linebreak.ts";
 import { layoutResume } from "@typeset/engine/typeset/layout.ts";
+import { ensureAllFontMetrics } from "@typeset/engine/typeset/fontRegistry.ts";
+
+await ensureAllFontMetrics();
 
 const SIZE = 10;
 const WIDE_COLUMN = 1000;

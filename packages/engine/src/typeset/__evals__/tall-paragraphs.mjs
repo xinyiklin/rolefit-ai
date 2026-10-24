@@ -8,6 +8,9 @@ import { coverLetterResumeData } from "../../lib/coverLetter.ts";
 import { skillsRowText, wholeFieldFormat, withWholeFieldFormat } from "../../lib/inlineMarksText.ts";
 import { layoutCoverLetter, layoutResume } from "../layout.ts";
 import { toTypesetSchema } from "../schema.ts";
+import { ensureAllFontMetrics } from "../fontRegistry.ts";
+
+await ensureAllFontMetrics();
 
 const lines = (doc) => doc.pages.flatMap((page) => page.lines);
 const offPage = (doc) => lines(doc).filter((line) => line.baseline > doc.geometry.lastBaselineMax + 1e-6);

@@ -37,6 +37,11 @@ D-entries in `docs/decisions.md`.
   `rolefit-preview-v0.22.0-beta.1` only after the release PR merges and the
   user approves it; until a release with `RoleFit-*` assets exists, the
   landing page links every download to GitHub Releases.
+- 2026-10-24 [TOOL] Shared-editor startup: font metrics load per family
+  (`metrics/<family>.gen.ts`; layout awaits `ensureLayoutMetrics`). Typeset's
+  main bundle fell 5.8 → 0.5 MB and a two-page resume's first page paints in
+  290 ms instead of 715 (production, cold). Open: exercise RoleFit's editor and
+  exports in a browser; only its build and offline suite were run.
 
 ## Deferred backlog
 

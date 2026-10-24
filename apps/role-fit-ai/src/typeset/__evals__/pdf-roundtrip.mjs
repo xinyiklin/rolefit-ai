@@ -18,11 +18,13 @@ import {
 import { DOC_STYLE_DEFAULTS } from "@typeset/engine/lib/documentStyle.ts";
 import { buildStarterResume } from "@typeset/engine/sampleResume.ts";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
-import { DOCUMENT_FONT_FAMILIES, sfntAssetFile } from "@typeset/engine/typeset/fontRegistry.ts";
+import { DOCUMENT_FONT_FAMILIES, ensureAllFontMetrics, sfntAssetFile } from "@typeset/engine/typeset/fontRegistry.ts";
 import { layoutCoverLetter, layoutResume } from "@typeset/engine/typeset/layout.ts";
 import { faceSegments } from "@typeset/engine/typeset/measure.ts";
 import { emitPdf } from "@typeset/engine/typeset/pdf/emit.ts";
 import { PDFDict, PDFDocument, PDFName, PDFRawStream } from "pdf-lib";
+
+await ensureAllFontMetrics();
 
 // The engine's starter supplies the real resume structure. The first bullet
 // deliberately covers the last emitted face and paint contracts the starter

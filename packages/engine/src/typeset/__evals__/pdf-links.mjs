@@ -8,10 +8,12 @@ import { PDFDocument, PDFName } from "pdf-lib";
 
 import { DOC_STYLE_DEFAULTS } from "../../lib/documentStyle.ts";
 import { encodeLinkHref } from "../../lib/links.ts";
-import { DOCUMENT_FONT_FAMILIES, sfntAssetFile } from "../fontRegistry.ts";
+import { DOCUMENT_FONT_FAMILIES, ensureAllFontMetrics, sfntAssetFile } from "../fontRegistry.ts";
 import { layoutResume } from "../layout.ts";
 import { emitPdf } from "../pdf/emit.ts";
 import { toTypesetSchema } from "../schema.ts";
+
+await ensureAllFontMetrics();
 
 const fonts = new Map();
 for (const face of Object.keys(DOCUMENT_FONT_FAMILIES["latin-modern"].faces)) {

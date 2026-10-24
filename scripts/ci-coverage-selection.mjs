@@ -25,7 +25,7 @@ const ROLEFIT_BROWSER_INPUTS = ['apps/role-fit-ai/src/', 'apps/role-fit-ai/share
   'apps/role-fit-ai/server/starter.resume', 'apps/role-fit-ai/tsconfig.json'];
 const TYPESET_BROWSER_INPUTS = ['apps/typeset/src/', 'apps/typeset/tsconfig.json'];
 const ENGINE_FONT_INPUTS = ['packages/engine/scripts/', 'packages/engine/fonts/',
-  'packages/engine/src/typeset/metrics.gen.ts', 'packages/engine/package.json'];
+  'packages/engine/src/typeset/metrics.gen.ts', 'packages/engine/src/typeset/metrics/', 'packages/engine/package.json'];
 const within = (path, prefixes) => prefixes.some(prefix => path === prefix || (prefix.endsWith('/') && path.startsWith(prefix)));
 
 // Release prep may change only the RoleFit workspace version in these documents.

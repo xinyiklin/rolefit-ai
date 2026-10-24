@@ -26,14 +26,15 @@ export function ResumePrintLayer({
   // This layer is only visible while printing, so its relayout may lag the
   // editor's: deferring keeps rapid typing from running the layout engine
   // twice per keystroke, and the deferred value has always settled by the
-  // time a print dialog can open.
-  const deferredResume = useDeferredValue(resume);
+  // time a print dialog can open. It also mounts empty, so its first layout
+  // runs after the editor's first page instead of delaying it.
+  const deferredResume = useDeferredValue<ResumeData | null>(resume, null);
   const deferredStyle = useDeferredValue(docStyle);
-  const schema = useMemo(() => toTypesetSchema(deferredResume), [deferredResume]);
+  const schema = useMemo(() => deferredResume && toTypesetSchema(deferredResume), [deferredResume]);
 
   return createPortal(
     <div className="resume-print-layer" aria-hidden="true">
-      <TypesetDomPages schema={schema} docStyle={deferredStyle} variant="print" />
+      {schema ? <TypesetDomPages schema={schema} docStyle={deferredStyle} variant="print" /> : null}
     </div>,
     document.body
   );

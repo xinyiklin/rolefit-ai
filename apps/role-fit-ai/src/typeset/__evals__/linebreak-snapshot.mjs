@@ -17,6 +17,9 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { paragraphItems } from "@typeset/engine/typeset/measure.ts";
 import { breakParagraph } from "@typeset/engine/typeset/linebreak.ts";
+import { ensureAllFontMetrics } from "@typeset/engine/typeset/fontRegistry.ts";
+
+await ensureAllFontMetrics();
 
 const here = dirname(fileURLToPath(import.meta.url));
 const snapshotPath = join(here, "linebreak-snapshot.json");

@@ -14,6 +14,9 @@ import { buildVerticalStream, pageBox, pageGeometry, type VLine } from "./blocks
 import { buildCoverLetterVerticalStream } from "./coverLetterBlocks.ts";
 import type { CoverLetterDocumentStyle, DocumentStyle } from "../lib/documentStyle.ts";
 import type { TypesetSchema } from "./schema.ts";
+import { documentFontFamily, ensureFontMetrics, type DocumentFontFamily } from "./fontRegistry.ts";
+import { segmentsFromInlineMarks } from "./measure.ts";
+import { emptyFieldCarrier } from "../lib/inlineMarksText.ts";
 
 export type PlacedLine = {
   runs: GlyphRun[]; // x absolute on the page (margin included)
@@ -154,6 +157,34 @@ export function layoutVerticalStream(
 export function layoutResume(schema: TypesetSchema, style: DocumentStyle): LayoutDocument {
   const geo = pageGeometry(style);
   return layoutVerticalStream(buildVerticalStream(schema, style), geo);
+}
+
+// Every family a layout of `schema` measures with: the document font and each
+// inline <font=…> override. Layout is synchronous, so a caller awaits
+// `ensureLayoutMetrics` (these families and their glyph-fallback families) first.
+export function layoutFamilies(schema: TypesetSchema, style: Pick<DocumentStyle, "fontFamily">): DocumentFontFamily[] {
+  const families = new Set<DocumentFontFamily>([documentFontFamily(style.fontFamily)]);
+  const texts = [schema.header?.name ?? "", ...(schema.header?.contact ?? [])];
+  for (const section of schema.sections) {
+    texts.push(section.heading);
+    for (const item of section.items) {
+      texts.push(item.titleLeft ?? "", item.titleRight ?? "", item.subtitleLeft ?? "", item.subtitleRight ?? "", ...item.bullets);
+    }
+  }
+  for (const text of texts) {
+    for (const segment of segmentsFromInlineMarks(text)) {
+      if (segment.fontFamily) families.add(documentFontFamily(segment.fontFamily));
+    }
+    // An empty field has no segments, yet an empty header name is measured in
+    // the family its stored carrier tags hold (blocks.ts `emptyFieldCarrier`).
+    const carrier = emptyFieldCarrier(text).fontFamily;
+    if (carrier) families.add(documentFontFamily(carrier));
+  }
+  return [...families];
+}
+
+export function ensureLayoutMetrics(schema: TypesetSchema, style: Pick<DocumentStyle, "fontFamily">): Promise<void> {
+  return ensureFontMetrics(layoutFamilies(schema, style));
 }
 
 export function layoutCoverLetter(

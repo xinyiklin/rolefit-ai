@@ -16,9 +16,11 @@ import { fileURLToPath } from "node:url";
 import fontkit from "@pdf-lib/fontkit";
 
 import { PAGE_HEIGHT_BP } from "@typeset/engine/typeset/blocks.ts";
-import { DOCUMENT_FONT_FAMILIES, sfntAssetFile } from "@typeset/engine/typeset/fontRegistry.ts";
+import { DOCUMENT_FONT_FAMILIES, ensureAllFontMetrics, sfntAssetFile } from "@typeset/engine/typeset/fontRegistry.ts";
 import { measure, texLigatures } from "@typeset/engine/typeset/measure.ts";
 import { emitPdf } from "@typeset/engine/typeset/pdf/emit.ts";
+
+await ensureAllFontMetrics();
 
 const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
 

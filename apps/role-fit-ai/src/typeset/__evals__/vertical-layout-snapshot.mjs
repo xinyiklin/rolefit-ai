@@ -23,6 +23,9 @@ import {
 import { buildStarterResume } from "@typeset/engine/sampleResume.ts";
 import { layoutResume } from "@typeset/engine/typeset/layout.ts";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
+import { ensureAllFontMetrics } from "@typeset/engine/typeset/fontRegistry.ts";
+
+await ensureAllFontMetrics();
 
 const here = dirname(fileURLToPath(import.meta.url));
 const snapshotPath = join(here, "vertical-layout-snapshot.json");

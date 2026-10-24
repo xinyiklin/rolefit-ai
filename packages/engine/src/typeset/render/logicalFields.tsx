@@ -25,21 +25,26 @@ const baselineMarker = () => {
   return marker;
 };
 const blockAscents = new Map<string, number>();
-function blockAscent(element: HTMLElement): number {
-  const { fontFamily, fontSize, fontWeight, fontStyle, lineHeight } = element.style;
-  const key = [fontFamily, fontSize, fontWeight, fontStyle, lineHeight].join("|");
-  const cached = blockAscents.get(key);
-  if (cached !== undefined) return cached;
-  const probe = document.createElement("span"), marker = baselineMarker();
-  probe.setAttribute("aria-hidden", "true");
-  Object.assign(probe.style, { position: "absolute", left: "-100000px", top: "0", whiteSpace: "pre", fontFamily, fontSize, fontWeight, fontStyle, lineHeight });
-  probe.append(document.createTextNode("Mg"), marker);
-  document.body.append(probe);
-  const ascent = marker.getBoundingClientRect().top - probe.getBoundingClientRect().top;
-  probe.remove();
-  blockAscents.set(key, ascent);
-  return ascent;
+const blockAscentKey = ({ style }: HTMLElement) =>
+  [style.fontFamily, style.fontSize, style.fontWeight, style.fontStyle, style.lineHeight].join("|");
+// Probes every unmeasured style before reading any, so the browser lays out once.
+function measureBlockAscents(elements: HTMLElement[]): void {
+  const probes = new Map<string, { probe: HTMLElement; marker: HTMLElement }>();
+  for (const element of elements) {
+    const key = blockAscentKey(element);
+    if (blockAscents.has(key) || probes.has(key)) continue;
+    const { fontFamily, fontSize, fontWeight, fontStyle, lineHeight } = element.style;
+    const probe = document.createElement("span"), marker = baselineMarker();
+    probe.setAttribute("aria-hidden", "true");
+    Object.assign(probe.style, { position: "absolute", left: "-100000px", top: "0", whiteSpace: "pre", fontFamily, fontSize, fontWeight, fontStyle, lineHeight });
+    probe.append(document.createTextNode("Mg"), marker);
+    document.body.append(probe);
+    probes.set(key, { probe, marker });
+  }
+  for (const [key, { probe, marker }] of probes) blockAscents.set(key, marker.getBoundingClientRect().top - probe.getBoundingClientRect().top);
+  for (const { probe } of probes.values()) probe.remove();
 }
+const blockAscent = (element: HTMLElement) => blockAscents.get(blockAscentKey(element))!;
 
 // Logical inline flow keeps native search/selection intact; relative offsets
 // place its fragments on the engine's physical pages without reflowing text.
@@ -93,13 +98,18 @@ export function LogicalFields({ doc, variant, zoom, unit, faceBox, highlightFiel
     const host = layer?.parentElement;
     if (!layer || !host) return;
     const scale = variant === "print" ? 4 / 3 : zoom;
+    // DOM reads and writes stay in separate passes: interleaving them forced a
+    // synchronous layout per fragment, which held back the first painted page.
     const origin = host.getBoundingClientRect();
-    const pages = Array.from(host.querySelectorAll<HTMLElement>(".tsd-page"));
+    const pageOrigins = Array.from(host.querySelectorAll<HTMLElement>(".tsd-page"), (page) => {
+      const rect = page.getBoundingClientRect();
+      return { x: rect.left - origin.left + page.clientLeft, y: rect.top - origin.top + page.clientTop };
+    });
     const rows = new Map<string, { top: number; ascent: number }>();
     doc.pages.forEach((page, pi) => page.lines.forEach((line, li) => {
       rows.set(`${pi}-${li}`, { top: Math.min(...line.runs.map(run => line.baseline - faceBox(run.style.family, run.style.face).ascent * run.style.size)) * scale, ascent: 0 });
     }));
-    const measured = fields.map((field, index) => {
+    const probes = fields.map((field, index) => {
       const group = layer.children[index] as HTMLElement;
       const measuring = document.createElement("div");
       measuring.setAttribute("aria-hidden", "true");
@@ -108,25 +118,26 @@ export function LogicalFields({ doc, variant, zoom, unit, faceBox, highlightFiel
       const fragments = Array.from(clone.querySelectorAll<HTMLElement>("[data-tsdf]"));
       for (const fragment of fragments) { fragment.style.left = "0px"; fragment.style.top = "0px"; }
       measuring.append(clone);
-      document.body.append(measuring);
-      const probeOrigin = measuring.getBoundingClientRect();
-      const offsets = fragments.map(element => {
-        const x = element.getBoundingClientRect().left - probeOrigin.left;
-        const marker = baselineMarker();
-        element.append(marker);
-        const baseline = marker.getBoundingClientRect().top - probeOrigin.top;
-        marker.remove();
-        return { x, baseline, blockAscent: blockAscent(element) };
-      });
-      measuring.remove();
-      const painted = group.querySelectorAll<HTMLElement>("[data-tsdf]");
+      return { field, group, measuring, fragments };
+    });
+    document.body.append(...probes.map(({ measuring }) => measuring));
+    const probeOrigins = probes.map(({ measuring }) => measuring.getBoundingClientRect());
+    const xs = probes.map(({ fragments }, fieldIndex) => fragments.map(element => element.getBoundingClientRect().left - probeOrigins[fieldIndex].left));
+    // A zero-size baseline marker adds no advance or line height, so every
+    // fragment's marker can sit in the flow at once.
+    const markers = probes.map(({ fragments }) => fragments.map(element => element.appendChild(baselineMarker())));
+    const baselines = markers.map((group, fieldIndex) => group.map(marker => marker.getBoundingClientRect().top - probeOrigins[fieldIndex].top));
+    for (const { measuring } of probes) measuring.remove();
+    const decorations = Array.from(host.querySelectorAll<HTMLElement>("[data-tsd-decoration]"));
+    measureBlockAscents([...probes.flatMap(({ fragments }) => fragments), ...decorations]);
+    const measured = probes.map(({ field, group, fragments }, fieldIndex) => {
+      const offsets = fragments.map((element, fi) => ({ x: xs[fieldIndex][fi], baseline: baselines[fieldIndex][fi], blockAscent: blockAscent(element) }));
       field.runs.forEach((run, ri) => {
         const row = rows.get(run.line)!;
         row.ascent = Math.max(row.ascent, offsets[ri].blockAscent);
       });
-      return { field, painted, offsets };
+      return { field, painted: group.querySelectorAll<HTMLElement>("[data-tsdf]"), offsets };
     });
-    const decorations = Array.from(host.querySelectorAll<HTMLElement>("[data-tsd-decoration]"));
     for (const element of decorations) {
       const row = rows.get(element.parentElement!.getAttribute("data-tsd-line-box")!)!;
       row.ascent = Math.max(row.ascent, blockAscent(element));
@@ -136,10 +147,8 @@ export function LogicalFields({ doc, variant, zoom, unit, faceBox, highlightFiel
     measured.forEach(({ field, painted, offsets }) => {
       field.runs.forEach((run, ri) => {
         const element = painted[ri], offset = offsets[ri];
-        const page = pages[run.page];
-        const rect = page.getBoundingClientRect();
-        const pageX = variant === "print" ? 0 : rect.left - origin.left + page.clientLeft;
-        const pageY = variant === "print" ? run.page * PAGE_HEIGHT_BP * scale : rect.top - origin.top + page.clientTop;
+        const pageX = variant === "print" ? 0 : pageOrigins[run.page].x;
+        const pageY = variant === "print" ? run.page * PAGE_HEIGHT_BP * scale : pageOrigins[run.page].y;
         element.style.left = `${pageX + run.x * scale - offset.x}px`;
         const row = rows.get(run.line)!;
         element.style.top = `${pageY + row.top + row.ascent - offset.baseline}px`;

@@ -3,6 +3,9 @@ import { layoutResume, layoutCoverLetter } from "../layout.ts";
 import { DOC_STYLE_DEFAULTS } from "../../lib/documentStyle.ts";
 import { toTypesetSchema } from "../schema.ts";
 import { coverLetterResumeData } from "../../lib/coverLetter.ts";
+import { ensureAllFontMetrics } from "../fontRegistry.ts";
+
+await ensureAllFontMetrics();
 
 // Inventory follows FieldSrc plus its real summary/cover and skills adapters.
 const targets = ["name", "contact", "heading", "titleLeft", "titleRight", "subtitleLeft", "subtitleRight",

@@ -16,11 +16,13 @@ import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, PDFDict, PDFName } from "pdf-lib";
 
 import { DOC_STYLE_DEFAULTS } from "../../lib/documentStyle.ts";
-import { DOCUMENT_FONT_FAMILIES, sfntAssetFile } from "../fontRegistry.ts";
+import { DOCUMENT_FONT_FAMILIES, ensureAllFontMetrics, sfntAssetFile } from "../fontRegistry.ts";
 import { layoutResume } from "../layout.ts";
 import { faceSegments, measure, runFamilies } from "../measure.ts";
 import { emitPdf, fetchFontBytes } from "../pdf/emit.ts";
 import { toTypesetSchema } from "../schema.ts";
+
+await ensureAllFontMetrics();
 
 const SIZE = 10;
 const fontFile = (family, face) => new URL(`../../../fonts/${sfntAssetFile(family, face)}`, import.meta.url);

@@ -70,11 +70,12 @@ export function useResumeExport({
   // of the main bundle until first use.
   async function renderEnginePdfBytes(): Promise<Uint8Array> {
     if (!editedResume) throw new Error("No structured resume to typeset.");
-    const [{ layoutResume }, { emitPdf, fetchFontBytes }] = await Promise.all([
+    const [{ ensureLayoutMetrics, layoutResume }, { emitPdf, fetchFontBytes }] = await Promise.all([
       import("@typeset/engine/typeset/layout.ts"),
       import("@typeset/engine/typeset/pdf/emit.ts")
     ]);
     const schema = toTypesetSchema(editedResume);
+    await ensureLayoutMetrics(schema, docStyle);
     const document = layoutResume(schema, docStyle);
     // `fetchFontBytes` receives a host-owned public asset base. Vite rewrites
     // CSS font URLs for sub-path deployments, but it cannot rewrite a runtime

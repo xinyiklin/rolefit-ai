@@ -6,6 +6,9 @@ import { TEXT_SIZES_PT } from "../../lib/documentTypography.ts";
 import { FONT_FAMILY_IDS } from "../../lib/fontFamilies.ts";
 import { layoutCoverLetter, layoutResume } from "../layout.ts";
 import { inkExtent, underlineRule, underlineSpans } from "../measure.ts";
+import { ensureAllFontMetrics } from "../fontRegistry.ts";
+
+await ensureAllFontMetrics();
 
 const PAGE_HEIGHT = 792;
 const header = { name: "Name", contact: [] };

@@ -1,5 +1,5 @@
 // Deterministic text measurement for the browser typesetting engine over the
-// committed per-family tables in metrics.gen.ts. No runtime font parsing means
+// committed per-family tables in metrics/<family>.gen.ts. No runtime font parsing means
 // the editor, print layout, and tests use identical advances.
 //
 // Shaping stages:

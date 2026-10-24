@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { DOC_STYLE_DEFAULTS } from "../../lib/documentStyle.ts";
 import { FONT_FAMILY_IDS } from "../../lib/fontFamilies.ts";
 import { layoutResume } from "../layout.ts";
+import { ensureAllFontMetrics } from "../fontRegistry.ts";
+
+await ensureAllFontMetrics();
 
 const fixture = heading => ({ sections: [{ id: "section", type: "standard", heading, items: [{
   id: "entry", titleLeft: "Engineer", titleRight: "2026", subtitleLeft: "Company", subtitleRight: "Remote",

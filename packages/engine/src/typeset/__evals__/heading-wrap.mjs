@@ -6,6 +6,9 @@ import { buildVerticalStream, pageGeometry } from "../blocks.ts";
 import { breakParagraph, graphemeClusters } from "../linebreak.ts";
 
 import { inkExtent, paragraphItems } from "../measure.ts";
+import { ensureAllFontMetrics } from "../fontRegistry.ts";
+
+await ensureAllFontMetrics();
 
 const fields = ["titleLeft", "titleRight", "subtitleLeft", "subtitleRight"];
 const fixture = (values) => ({ sections: [{ id: "section", type: "standard", heading: "Experience", items: [{

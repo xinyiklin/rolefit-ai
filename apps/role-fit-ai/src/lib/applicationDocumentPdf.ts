@@ -1,3 +1,4 @@
+import type { LayoutDocument } from "@typeset/engine/typeset/layout.ts";
 import type { Application } from "../hooks/useApplications";
 import {
   applicationDocumentUrl,
@@ -23,7 +24,7 @@ export async function applicationDocumentPdfBlob(
   const [
     { coverLetterStyleToDocumentStyle, parseCoverLetterFile },
     { parseResumeFile },
-    { layoutCoverLetter, layoutResume },
+    { ensureLayoutMetrics, layoutCoverLetter, layoutResume },
     { toTypesetSchema },
     { emitPdf, fetchFontBytes }
   ] = await Promise.all([
@@ -36,18 +37,19 @@ export async function applicationDocumentPdfBlob(
   const title = kind === "resume"
     ? application.role || application.title || "Resume"
     : `${application.role || application.title || "Cover letter"} cover letter`;
-  const document = kind === "resume"
-    ? (() => {
-        const parsed = parseResumeFile(sourceBytes);
-        return layoutResume(toTypesetSchema(parsed.data), parsed.documentStyle);
-      })()
-    : (() => {
-        const parsed = parseCoverLetterFile(sourceBytes);
-        return layoutCoverLetter(
-          toTypesetSchema(parsed.data),
-          coverLetterStyleToDocumentStyle(parsed.style)
-        );
-      })();
+  let document: LayoutDocument;
+  if (kind === "resume") {
+    const parsed = parseResumeFile(sourceBytes);
+    const schema = toTypesetSchema(parsed.data);
+    await ensureLayoutMetrics(schema, parsed.documentStyle);
+    document = layoutResume(schema, parsed.documentStyle);
+  } else {
+    const parsed = parseCoverLetterFile(sourceBytes);
+    const schema = toTypesetSchema(parsed.data);
+    const style = coverLetterStyleToDocumentStyle(parsed.style);
+    await ensureLayoutMetrics(schema, style);
+    document = layoutCoverLetter(schema, style);
+  }
   const publicBase = publicBaseUrl.replace(/\/$/, "");
   const fonts = await fetchFontBytes(document, `${publicBase}/fonts`);
   const bytes = await emitPdf(document, fonts, { title });
