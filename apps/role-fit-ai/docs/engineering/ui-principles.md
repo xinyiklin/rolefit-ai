@@ -3,7 +3,7 @@
 Paths in this document are relative to `apps/role-fit-ai/`. Run commands from
 the repository root.
 
-RoleFit AI should feel like a compact desktop-first job-prep workspace:
+RoleFit should feel like a compact desktop-first job-prep workspace:
 calm, dense, and focused on the resume-polishing workflow. It is not a
 marketing landing page, a SaaS dashboard, or a native desktop installer.
 
@@ -397,7 +397,8 @@ Avoid:
   placeholder is fine; multi-sentence inline help blocks and "how to"
   essays are not.
 - Fix stale or misleading visible copy during the same UI polish pass.
-- The product title is "RoleFit AI" (per `index.html`); do not silently rename it.
+- The product title is "RoleFit" (per `index.html`; renamed from "RoleFit AI"
+  on 2026-10-23, D097); do not silently rename it.
 
 ## Loading And Empty States
 

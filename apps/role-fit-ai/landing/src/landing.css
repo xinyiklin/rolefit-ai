@@ -1,25 +1,59 @@
-/* RoleFit's public page wears the app's calm native look: the workspace
-   tokens (one source of truth, light and dark from the OS), system type, tone
-   instead of lines, one blue accent for action. See DESIGN.md § Public
-   product/download page. */
+/* RoleFit's public page: the workspace tokens (one source of truth, light and
+   dark from the OS), system type, one blue accent for action, and the RoleFit
+   brand art (ribbon R, soft waves) as quiet section backgrounds. See
+   DESIGN.md § Public product/download page. */
 @import "../../src/styles/tokens.css";
 
 :root {
-  /* The local-first band: deep in light, a raised tone in dark. Its text tones
-     are fixed light values because the band is dark in both themes. */
-  --band: light-dark(oklch(0.245 0.008 265), oklch(0.235 0.005 265));
-  --on-band-strong: oklch(0.97 0.003 265);
-  --on-band: oklch(0.9 0.004 265);
-  --on-band-muted: oklch(0.79 0.006 265);
-  --on-band-faint: oklch(0.72 0.008 265);
-  --on-band-line: oklch(1 0 0 / 0.1);
-  --on-band-fill: oklch(1 0 0 / 0.06);
-  /* Product captures: a hairline ring for their edge plus one soft drop. */
+  /* Brand-only tints from the RoleFit brand kit; actions keep --accent. */
+  --brand-ink: light-dark(oklch(0.19 0.03 265), oklch(0.97 0.003 265));
+  --brand-mist: light-dark(oklch(0.975 0.01 270), oklch(0.215 0.012 270));
+  --brand-tile: light-dark(oklch(0.955 0.025 262), oklch(0.3 0.06 262));
+  --panel: light-dark(oklch(1 0 0), oklch(0.215 0.012 270));
+  --art-opacity: 1;
+  --ribbon-opacity: 1;
+  --ribbon-filter: none;
+  /* Product captures and floating cards: a hairline ring plus one soft drop. */
   --shot-shadow:
     0 0 0 1px light-dark(oklch(0.2 0.01 265 / 0.07), oklch(1 0 0 / 0.08)),
     0 1px 2px light-dark(oklch(0.2 0.01 265 / 0.05), oklch(0 0 0 / 0.3)),
-    0 24px 48px -28px light-dark(oklch(0.2 0.01 265 / 0.28), oklch(0 0 0 / 0.6));
-  --page: min(1180px, calc(100vw - 48px));
+    0 18px 40px -24px light-dark(oklch(0.25 0.05 265 / 0.3), oklch(0 0 0 / 0.6));
+  --panel-shadow:
+    0 0 0 1px light-dark(oklch(0.2 0.02 265 / 0.05), oklch(1 0 0 / 0.07)),
+    0 24px 60px -36px light-dark(oklch(0.3 0.08 265 / 0.35), oklch(0 0 0 / 0.6));
+  --page: min(1200px, calc(100vw - 80px));
+  /* Frosted glass for cards and panels: a translucent tint, a backdrop blur,
+     and a light top edge. Opaque fallbacks follow below. */
+  --glass: light-dark(oklch(1 0 0 / 0.58), oklch(0.26 0.014 270 / 0.5));
+  --glass-strong: light-dark(oklch(1 0 0 / 0.8), oklch(0.235 0.014 270 / 0.8));
+  --glass-blur: blur(22px) saturate(1.6);
+  --glass-edge:
+    inset 0 1px 0 light-dark(oklch(1 0 0 / 0.95), oklch(1 0 0 / 0.12)),
+    inset 0 0 0 1px light-dark(oklch(1 0 0 / 0.6), oklch(1 0 0 / 0.07));
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --glass: var(--card);
+    --glass-strong: var(--panel);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --glass: var(--card);
+    --glass-strong: var(--panel);
+    --glass-blur: none;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --art-opacity: 0.32;
+    --ribbon-opacity: 0.8;
+    /* The ribbon's pale bands read as grey on a dark page; deepen them. */
+    --ribbon-filter: saturate(1.5) brightness(0.62);
+  }
 }
 
 /* ── Base + layout ───────────────────────────────────────────────────────── */
@@ -45,13 +79,6 @@ body {
 button,
 a {
   font: inherit;
-}
-
-button {
-  color: inherit;
-}
-
-a {
   color: inherit;
 }
 
@@ -60,9 +87,21 @@ img {
   max-width: 100%;
 }
 
-code {
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+kbd {
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  background: var(--control);
+  color: var(--ink-strong);
   font-family: inherit;
-  font-size: inherit;
+  font-size: 0.86em;
+  white-space: nowrap;
 }
 
 ::selection {
@@ -80,7 +119,7 @@ main:focus-visible {
 }
 
 section[id] {
-  scroll-margin-top: 76px;
+  scroll-margin-top: 72px;
 }
 
 .section-shell {
@@ -88,38 +127,169 @@ section[id] {
   margin-inline: auto;
 }
 
+.icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.eyebrow {
+  margin-bottom: 12px;
+  color: var(--accent-deep);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+h1,
+h2 {
+  color: var(--brand-ink);
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.06;
+  text-wrap: balance;
+}
+
+h2 {
+  font-size: clamp(1.75rem, 2.6vw, 2.25rem);
+  line-height: 1.1;
+}
+
+/* Decorative brand art: an aria-hidden image layer behind each section's
+   content. Images, not stylesheet references, keep the build guard intact. */
+.hero,
+.features,
+.download {
+  position: relative;
+  isolation: isolate;
+}
+
+/* The extension panel stays above the ribbon that flows out beneath the
+   workspace gallery. */
+.extension {
+  position: relative;
+  z-index: 1;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
   height: 1px;
-  padding: 0;
   margin: -1px;
   overflow: hidden;
-  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
   white-space: nowrap;
-  border: 0;
 }
 
-/* The shared label voice: sentence case, no tracking. */
-.status-line,
-.eyebrow,
-.spec-strip span,
-.spread__index,
-.boundary__lists h3,
-.runtime__label,
-.download-row__platform span,
-.colophon__col h2 {
-  font-size: 0.8rem;
-  font-weight: 600;
-  letter-spacing: 0;
-  line-height: 1.4;
+.section-art {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: var(--art-opacity);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* The hero's <picture> swaps in the mobile art. The art keeps its natural
+   aspect, anchored to the hero's bottom edge where it fades; its transparent
+   top margin absorbs any overflow under the header. */
+.section-art img {
+  width: 100%;
+  height: auto;
+}
+
+.hero > .section-art {
+  top: auto;
+  height: auto;
+}
+
+/* The hero's waves fade before its edge and drop to a wash behind the copy so
+   the text keeps contrast. */
+.hero > .section-art {
+  -webkit-mask-image:
+    linear-gradient(to bottom, #000 72%, transparent),
+    linear-gradient(to right, rgb(0 0 0 / 0.3), rgb(0 0 0 / 0.3) 34%, #000 58%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to bottom, #000 72%, transparent),
+    linear-gradient(to right, rgb(0 0 0 / 0.3), rgb(0 0 0 / 0.3) 34%, #000 58%);
+  mask-composite: intersect;
+}
+
+/* The ribbon is always shown whole, never cropped or masked, and always
+   passes behind content: under the workspace gallery (above that section's
+   tint, below the cards), flowing out beneath them toward the extension
+   panel, and behind the download card, running past its top and bottom. */
+.section-ribbon,
+.download__art img {
+  position: absolute;
+  z-index: -1;
+  max-width: none;
+  height: auto;
+  opacity: var(--ribbon-opacity);
+  filter: var(--ribbon-filter);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* A low-profile ribbon (its ends taper to transparent inside the image)
+   anchored to the section's bottom: it runs behind the cards' lower edge and
+   20% of it extends below toward the extension panel. */
+.section-ribbon {
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  transform: translateY(20%);
+}
+
+/* A full-bleed layer that clips the ribbon to the viewport's width, so the
+   ribbon can be sized from the section's height (always running past the
+   card's top and bottom) without widening the page. */
+.download__art {
+  position: absolute;
+  z-index: -1;
+  inset-block: 0;
+  left: 50%;
+  width: 100vw;
+  overflow: hidden;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.download__art img {
+  top: 50%;
+  left: 50%;
+  z-index: auto;
+  width: auto;
+  min-width: 100%;
+  height: calc(100% - 24px);
+  object-fit: cover;
+  transform: translate(-50%, -50%) scaleX(-1);
+}
+
+/* Every card and panel is the same frosted surface; each rule below keeps its
+   own shadow and adds the glass edge. */
+.platform-button:not(.platform-button--primary),
+.gallery-controls__button,
+.feature-card,
+.extension,
+.browser-list li,
+.runtime li,
+.privacy__facts,
+.download__panel {
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
 }
 
 .skip-link,
 .wordmark,
 .site-nav button,
+.site-footer__nav button,
 .header-download,
-.button {
+.gallery-controls__button {
   margin: 0;
   border: 0;
   background: none;
@@ -146,12 +316,26 @@ section[id] {
 }
 
 /* ── Header ──────────────────────────────────────────────────────────────── */
-/* A solid chrome-tone bar; it separates from the plane by value, not a rule. */
 .site-header {
   position: sticky;
   z-index: 30;
   top: 0;
-  background: var(--chrome);
+  background: color-mix(in oklch, var(--paper) 86%, transparent);
+  box-shadow: 0 1px 0 var(--hairline);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .site-header {
+    background: var(--paper);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .site-header {
+    background: var(--paper);
+  }
 }
 
 .site-header__inner {
@@ -159,677 +343,761 @@ section[id] {
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   width: var(--page);
-  min-height: 60px;
+  min-height: 72px;
   margin-inline: auto;
-}
-
-.masthead-id {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 12px;
-}
-
-.masthead-id__rule {
-  width: 1px;
-  height: 16px;
-  background: var(--hairline-strong);
-}
-
-.masthead-id__creator {
-  color: var(--ink-faint);
-  font-size: 0.86rem;
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.masthead-id__creator:hover {
-  color: var(--ink-strong);
 }
 
 .wordmark {
   display: inline-flex;
   align-items: center;
   justify-self: start;
-  gap: 9px;
+  gap: 8px;
   min-height: 40px;
   padding: 0;
-  color: var(--ink-strong);
-  font-size: 1rem;
-  font-weight: 650;
-  text-align: left;
+  color: var(--brand-ink);
+  font-size: 1.5rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
   text-decoration: none;
 }
 
-/* The app tile: the one place the accent is identity rather than action. */
 .wordmark__mark {
-  display: grid;
-  width: 26px;
-  height: 26px;
-  place-items: center;
-  border-radius: 7px;
-  background: var(--accent);
-  color: var(--on-accent);
-  font-size: 0.92rem;
-  font-weight: 700;
-  line-height: 1;
+  width: 32px;
+  height: 32px;
 }
 
 .site-nav {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
 }
 
 .site-nav button,
-.header-actions > a {
-  min-height: 34px;
+.site-nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
   padding: 0 12px;
   border-radius: var(--r-md);
-  background: transparent;
   color: var(--ink-muted);
-  font-size: 0.88rem;
+  font-size: 0.875rem;
   font-weight: 500;
   text-decoration: none;
 }
 
+.site-nav .icon {
+  width: 16px;
+  height: 16px;
+}
+
 .site-nav button:hover,
-.header-actions > a:hover {
+.site-nav a:hover {
   background: var(--control);
   color: var(--ink-strong);
 }
 
-.header-actions {
-  display: flex;
-  align-items: center;
-  justify-self: end;
-  gap: 6px;
-}
-
-.header-actions > a {
-  display: inline-flex;
-  align-items: center;
-}
-
 .header-download {
-  min-height: 34px;
-  padding: 0 14px;
+  justify-self: end;
+  min-height: 40px;
+  padding: 0 20px;
   border-radius: var(--r-md);
   background: var(--accent);
   color: var(--on-accent);
-  font-size: 0.86rem;
+  font-size: 0.9rem;
   font-weight: 600;
 }
 
 .header-download:hover,
-.button--primary:hover,
-.download-row__action.is-direct:hover {
+.platform-button--primary:hover {
   background: var(--accent-hover);
 }
 
 .header-download:active,
-.button:active,
-.download-row__action:active {
+.platform-button:active,
+.gallery-controls__button:active {
   transform: translateY(1px);
 }
 
-/* ── Hero ────────────────────────────────────────────────────────────────── */
-.hero {
-  display: grid;
-  grid-template-columns: minmax(320px, 5fr) minmax(520px, 7fr);
-  gap: clamp(40px, 5vw, 72px);
-  align-items: center;
-  padding-block: 80px 56px;
-}
-
-/* Dot plus word; the script colors the dot for a signed release or a preview. */
-.status-line {
+/* ── Platform buttons (hero and download panel) ──────────────────────────── */
+.platform-actions {
   display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.platform-button {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin: 0 0 20px;
-  color: var(--ink-muted);
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 20px 8px 18px;
+  border-radius: var(--r-lg);
+  background: var(--glass);
+  box-shadow: var(--glass-edge), var(--shot-shadow);
+  color: var(--accent-deep);
+  text-align: left;
+  text-decoration: none;
 }
 
-.status-line span {
-  width: 7px;
-  height: 7px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: var(--ink-faint);
+.platform-button:hover {
+  background: var(--card-hover);
 }
 
-.status-line span.is-signed {
-  background: var(--positive);
+.platform-button--primary {
+  background: var(--accent);
+  box-shadow: 0 10px 24px -14px var(--accent);
+  color: var(--on-accent);
 }
 
-.status-line span.is-preview {
-  background: var(--warm);
+.platform-button .icon {
+  width: 20px;
+  height: 20px;
 }
 
-.hero h1,
-.section-heading h2 {
-  margin: 0;
-  color: var(--ink-strong);
-  font-family: var(--font-display);
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  text-wrap: balance;
+.platform-button span {
+  display: grid;
+  line-height: 1.25;
+}
+
+.platform-button strong {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.platform-button small {
+  font-size: 0.75rem;
+  opacity: 0.86;
+}
+
+/* Full strength on the accent fill keeps the format line (it carries
+   "Unsigned") above AA contrast. */
+.platform-button--primary small {
+  opacity: 1;
+}
+
+/* ── Hero ────────────────────────────────────────────────────────────────── */
+
+.hero__inner {
+  display: grid;
+  grid-template-columns: minmax(340px, 46fr) minmax(460px, 54fr);
+  gap: 48px;
+  align-items: center;
+  padding-block: 64px 48px;
 }
 
 .hero h1 {
-  font-size: clamp(2.6rem, 4.3vw, 4.1rem);
-  line-height: 1.04;
-}
-
-/* The second line steps down in tone, never into the accent. */
-.hero h1 em {
-  color: var(--ink-soft);
-  font-style: normal;
+  font-size: clamp(2.25rem, 3.65vw, 3.25rem);
+  letter-spacing: -0.035em;
+  line-height: 1.08;
 }
 
 .hero__lede {
   max-width: 34rem;
-  margin: 24px 0 0;
+  margin-top: 20px;
   color: var(--ink-muted);
-  font-size: 1.08rem;
-  line-height: 1.6;
+  font-size: 1.125rem;
+  line-height: 1.55;
 }
 
-.hero__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 30px;
+.hero .platform-actions {
+  margin-top: 28px;
 }
 
-.button {
-  display: inline-flex;
-  min-height: 44px;
-  align-items: center;
-  justify-content: center;
-  padding: 0 20px;
-  border-radius: var(--r-md);
-  font-size: 0.94rem;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.button--primary {
-  background: var(--accent);
-  color: var(--on-accent);
-}
-
-.button--secondary {
-  background: var(--control);
-  color: var(--ink-strong);
-}
-
-.button--secondary:hover {
-  background: var(--control-hover);
-}
-
+/* The script colors the dot for a signed release or an unsigned preview. */
 .hero__note {
-  margin: 22px 0 0;
-  color: var(--ink-faint);
-  font-size: 0.84rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  color: var(--ink-soft);
+  font-size: 0.86rem;
 }
 
-/* ── Hero capture and the edit card ─────────────────────────────────────── */
-.hero__visual {
+.hero__note span {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.hero__note span:not([class]) {
+  display: none;
+}
+
+.hero__note span.is-signed {
+  background: var(--positive);
+}
+
+.hero__note span.is-preview {
+  background: var(--warm);
+}
+
+/* Reusable laptop frame: put any image or element in __screen. The frame
+   image's screen is transparent; the insets are that opening's measured share
+   of the cropped 1395x873 asset. */
+.device-laptop {
   position: relative;
-  min-width: 0;
-}
-
-.hero__shot {
   margin: 0;
+  aspect-ratio: 1395 / 873;
+  filter: drop-shadow(0 28px 36px light-dark(oklch(0.3 0.06 265 / 0.2), oklch(0 0 0 / 0.5)));
 }
 
-.hero__shot img {
+.device-laptop__screen {
+  position: absolute;
+  top: 4.353%;
+  left: 10.394%;
+  width: 79.14%;
+  height: 74.112%;
+  overflow: hidden;
+  border-radius: 0.5% / 0.8%;
+  background: oklch(1 0 0);
+}
+
+.device-laptop__screen > img {
   width: 100%;
-  height: auto;
-  border-radius: var(--r-lg);
-  background: var(--card);
-  box-shadow: var(--shot-shadow);
+  height: 100%;
+  object-fit: cover;
+  object-position: left top;
 }
 
-.hero__caption {
-  min-height: 40px;
-  padding-top: 14px;
+.device-laptop__frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* ── Workflow strip ──────────────────────────────────────────────────────── */
+.workflow {
+  padding-block: 0;
+}
+
+.workflow__steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workflow__steps li {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 6px;
+  text-align: center;
+}
+
+/* A quiet arrow between steps, centered in the gap beside each icon. */
+.workflow__steps li + li::before {
+  content: "→" / "";
+  position: absolute;
+  top: 10px;
+  left: -12px;
+  color: var(--ink-faint);
+  font-size: 1.2rem;
+  transform: translateX(-50%);
+}
+
+.workflow__icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 6px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--brand-tile);
+  color: var(--accent);
+}
+
+.workflow__icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.workflow h3 {
+  color: var(--brand-ink);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.workflow p {
+  max-width: 15rem;
+  color: var(--ink-muted);
+  font-size: 0.875rem;
+}
+
+/* ── Features gallery ────────────────────────────────────────────────────── */
+/* The tint fades in and out, so the section is distinct without a hard band. */
+.features {
+  margin-top: 64px;
+  padding-block: 56px 96px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--brand-mist) 96px,
+    var(--brand-mist) calc(100% - 120px),
+    transparent
+  );
+}
+
+.features__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 32px;
+}
+
+.features__head h2 {
+  max-width: 17ch;
+}
+
+.features__head p:not(.eyebrow) {
+  max-width: 38rem;
+  margin-top: 14px;
+  color: var(--ink-muted);
+}
+
+.gallery-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gallery-controls__note {
+  max-width: 13rem;
+  margin-right: 8px;
   color: var(--ink-soft);
   font-size: 0.86rem;
   text-align: right;
 }
 
-/* One proposed edit, drawn as a floating card in the app's diff vocabulary. */
-.edit-card {
-  position: absolute;
-  bottom: -28px;
-  left: -48px;
-  width: min(344px, 62%);
-  padding: 16px 18px 14px;
-  border-radius: var(--r-xl);
-  background: var(--card-elev);
-  box-shadow: var(--shadow-lift);
+.gallery-controls__button {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--glass);
+  box-shadow: var(--glass-edge), var(--shot-shadow);
+  color: var(--accent);
 }
 
-.edit-card p {
-  margin: 0;
+.gallery-controls__button:hover {
+  background: var(--card-hover);
 }
 
-.edit-card__head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  color: var(--ink-soft);
-  font-size: 0.78rem;
-}
-
-.edit-card__head span:first-child {
-  color: var(--ink-strong);
-  font-size: 0.88rem;
-  font-weight: 650;
-}
-
-.edit-card__line {
-  padding-top: 10px;
-  color: var(--ink-strong);
-  font-size: 0.94rem;
-  line-height: 1.55;
-}
-
-/* Removed words fade and take a warm strike; inserted words take the accent
-   wash, as in the app's proposal rows. Each is drawn once on load. */
-.edit-card del,
-.edit-card ins {
-  padding: 0 2px;
-  border-radius: var(--r-sm);
-  text-decoration: none;
-}
-
-.edit-card del {
-  background-image: linear-gradient(var(--warm), var(--warm));
-  background-position: 0 58%;
-  background-repeat: no-repeat;
-  background-size: 100% 1.5px;
+.gallery-controls__button[aria-disabled="true"] {
   color: var(--ink-faint);
-}
-
-.edit-card ins {
-  background: var(--accent-soft);
-  color: var(--accent-deep);
-}
-
-.edit-card__reason {
-  padding-top: 10px;
-  color: var(--ink-muted);
-  font-size: 0.84rem;
-  line-height: 1.45;
-}
-
-.edit-card__reason span {
-  margin-right: 6px;
-  color: var(--ink-soft);
-  font-weight: 600;
-}
-
-.edit-card__actions {
-  display: flex;
-  gap: 6px;
-  padding-top: 14px;
-}
-
-.edit-card__actions span {
-  padding: 4px 10px;
-  border-radius: var(--r-md);
-  background: var(--control);
-  color: var(--ink-strong);
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-
-.edit-card__actions .is-primary {
-  background: var(--accent);
-  color: var(--on-accent);
-}
-
-.edit-card__foot {
-  padding-top: 12px;
-  color: var(--ink-faint);
-  font-size: 0.72rem;
-}
-
-/* ── Spec strip ──────────────────────────────────────────────────────────── */
-.spec-strip {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  margin-top: 40px;
-  margin-bottom: 120px;
-  border-radius: var(--r-lg);
-  background: var(--card);
-}
-
-.spec-strip > div {
-  min-width: 0;
-  padding: 18px 22px;
-}
-
-.spec-strip span {
-  display: block;
-  color: var(--ink-soft);
-}
-
-.spec-strip strong {
-  display: block;
-  margin-top: 4px;
-  overflow: hidden;
-  color: var(--ink-strong);
-  font-size: 0.98rem;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.eyebrow {
-  margin: 0 0 12px;
-  color: var(--ink-soft);
-}
-
-/* Shared maker section head: the claim left, the lede right, bottoms aligned. */
-.section-heading {
-  display: grid;
-  grid-template-columns: 1fr minmax(320px, 0.72fr);
-  gap: 64px;
-  align-items: end;
-}
-
-.section-heading h2 {
-  max-width: 17ch;
-  font-size: clamp(2.05rem, 3.4vw, 3.1rem);
-  line-height: 1.08;
-}
-
-.section-heading > p,
-.section-heading > div:last-child > p {
-  max-width: 34rem;
-  margin: 0;
-  color: var(--ink-muted);
-  font-size: 1.02rem;
-  line-height: 1.65;
-}
-
-/* ── Workflow spreads ────────────────────────────────────────────────────── */
-.product {
-  padding-bottom: 128px;
-}
-
-.product > .section-heading {
-  margin-bottom: 40px;
-}
-
-/* Spreads separate by space; there are no rules between them. */
-.spread {
-  display: grid;
-  grid-template-columns: minmax(240px, 4fr) minmax(0, 8fr);
-  gap: 48px;
-  align-items: start;
-  padding-block: 48px;
-}
-
-.spread--pair {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 40px;
-}
-
-.spread--pair .spread__copy {
-  min-height: 15rem;
-  margin-bottom: 24px;
-}
-
-.spread__index {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin: 0;
-  color: var(--ink-muted);
-}
-
-.spread__index span {
-  color: var(--ink-faint);
-  font-variant-numeric: tabular-nums;
-}
-
-.spread__copy h3 {
-  max-width: 14ch;
-  margin: 12px 0 0;
-  color: var(--ink-strong);
-  font-family: var(--font-display);
-  font-size: clamp(1.6rem, 2.4vw, 2.15rem);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.12;
-  text-wrap: balance;
-}
-
-.spread--pair .spread__copy h3 {
-  max-width: 18ch;
-}
-
-.spread__copy > p:last-child {
-  max-width: 34rem;
-  margin: 16px 0 0;
-  color: var(--ink-muted);
-  font-size: 0.98rem;
-  line-height: 1.65;
-}
-
-.app-frame {
-  margin: 0;
-  min-width: 0;
-  overflow: hidden;
-  border-radius: var(--r-lg);
-  background: var(--card);
-  box-shadow: var(--shot-shadow);
-}
-
-.app-frame img {
-  width: 100%;
-  height: auto;
-}
-
-/* An enlargement: the hero already shows the whole resume page, so step 02
-   sets the same capture at 1.75x, framed on the workflow rail. */
-.app-frame--detail {
-  position: relative;
-  aspect-ratio: 16 / 10;
-}
-
-.app-frame--detail img {
-  width: 175%;
-  max-width: none;
-  transform: translate(-42.86%, -11%);
-}
-
-.app-frame--detail figcaption {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  padding: 4px 10px;
-  border-radius: var(--r-pill);
-  background: var(--card-elev);
-  box-shadow: var(--shadow-lift);
-  color: var(--ink-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-/* ── Local-first band (see --band and --on-band-*) ───────────────────────── */
-.local-first {
-  background: var(--band);
-  color: var(--on-band);
-}
-
-.local-first__inner {
-  padding-block: 104px 96px;
-}
-
-.section-heading--inverse h2 {
-  color: var(--on-band-strong);
-}
-
-.section-heading--inverse > p {
-  color: var(--on-band-muted);
-}
-
-.boundary {
-  display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-  gap: 56px;
-  align-items: start;
-  margin-top: 56px;
-}
-
-.boundary__lists {
-  display: grid;
-  gap: 36px;
-}
-
-.boundary__lists h3 {
-  margin: 0;
-  color: var(--on-band-faint);
-}
-
-.boundary__lists ul {
-  margin: 10px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* Row separators inside one list, never a frame. */
-.boundary__lists li {
-  padding: 12px 0;
-  color: var(--on-band);
-  font-size: 0.98rem;
-  line-height: 1.5;
-}
-
-.boundary__lists li + li {
-  border-top: 1px solid var(--on-band-line);
-}
-
-.boundary__shot {
-  margin: 0;
-}
-
-.boundary__shot img {
-  width: 100%;
-  height: auto;
-  border-radius: var(--r-lg);
-  box-shadow:
-    0 0 0 1px var(--on-band-line),
-    0 30px 60px -36px oklch(0 0 0 / 0.6);
-}
-
-.boundary__shot figcaption {
-  margin-top: 14px;
-  color: var(--on-band-muted);
-  font-size: 0.86rem;
-}
-
-/* Node-and-wire runtime diagram (CareFlow's wiring diagram shares the grammar). */
-.runtime {
-  margin: 72px 0 0;
-}
-
-.runtime__label {
-  color: var(--on-band-faint);
-}
-
-.runtime__flow {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 56px;
-  margin: 16px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.runtime__flow li {
-  position: relative;
-  padding: 14px 16px;
-  border-radius: var(--r-lg);
-  background: var(--on-band-fill);
-}
-
-.runtime__flow li:not(:last-child)::after {
-  position: absolute;
-  top: 50%;
-  left: calc(100% + 8px);
-  width: 40px;
-  height: 1px;
-  background: var(--on-band-faint);
-  content: "";
+  box-shadow: none;
+  cursor: default;
   opacity: 0.6;
 }
 
-.runtime__flow li:not(:last-child)::before {
-  position: absolute;
-  top: calc(50% - 4px);
-  left: calc(100% + 42px);
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
-  border-left: 6px solid var(--on-band-faint);
-  content: "";
+.gallery {
+  display: grid;
+  grid-auto-columns: calc((100% - 48px) / 3);
+  grid-auto-flow: column;
+  gap: 24px;
+  margin: 40px 0 0;
+  /* Room for the cards' shadow inside the scroller's clip. */
+  padding: 4px 4px 28px;
+  overflow-x: auto;
+  list-style: none;
+  scroll-padding-inline: 4px;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
 }
 
-.runtime__flow strong {
-  display: block;
-  color: var(--on-band-strong);
-  font-size: 0.9rem;
+.gallery::-webkit-scrollbar {
+  display: none;
+}
+
+.gallery:focus-visible {
+  outline-offset: 4px;
+}
+
+.feature-card {
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  background: var(--glass);
+  box-shadow: var(--glass-edge), var(--shot-shadow);
+  scroll-snap-align: start;
+}
+
+/* Each card zooms its capture to the working area so the text stays legible;
+   the origin picks the region (visible start = origin x (1 - 1 / scale)). */
+/* The screenshot sits inset in the glass, so the frosted surface shows on all
+   four sides rather than only under the caption. */
+.feature-card {
+  padding: 8px 8px 0;
+}
+
+.feature-card__shot {
+  overflow: hidden;
+  margin: 0;
+  aspect-ratio: 16 / 10;
+  border-radius: calc(var(--r-lg) - 4px);
+  background: var(--chrome);
+}
+
+.feature-card__shot img {
+  width: 100%;
+  height: auto;
+  transform: scale(1.7);
+  transform-origin: 24% 0;
+}
+
+/* Prepare and applications: past the app sidebar. Resume and cover letter: framed on the
+   document page alone (about 24-77% of the capture's width), clear of the
+   sidebar and the workflow rail. */
+.feature-card__shot--prepare img,
+.feature-card__shot--applications img {
+  transform-origin: 35% 0;
+}
+
+.feature-card__shot--resume img,
+.feature-card__shot--cover img {
+  transform: scale(1.85);
+  transform-origin: 51% 12%;
+}
+
+.feature-card__body {
+  display: flex;
+  gap: 14px;
+  padding: 20px;
+}
+
+.feature-card__icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--r-lg);
+  background: var(--brand-tile);
+  color: var(--accent);
+}
+
+.feature-card__icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.feature-card h3 {
+  color: var(--ink-strong);
+  font-size: 1rem;
   font-weight: 650;
 }
 
-.runtime__flow span {
-  display: block;
-  margin-top: 2px;
-  color: var(--on-band-muted);
-  font-size: 0.86rem;
+.feature-card p {
+  margin-top: 4px;
+  color: var(--ink-muted);
+  font-size: 0.875rem;
 }
 
-/* ── Downloads ───────────────────────────────────────────────────────────── */
-.downloads {
-  padding-block: 112px 104px;
+/* ── Glow zone ───────────────────────────────────────────────────────────────
+   The extension and privacy sections share one soft brand-color field, so
+   their frosted panels have color to blur. CSS gradients only (the build
+   guard rejects stylesheet url()), faded to nothing at every edge. */
+/* Clipped sideways only, so the accent ribbon never widens the page while the
+   color field still bleeds above and below. */
+.glow-zone {
+  position: relative;
+  isolation: isolate;
+  overflow-x: clip;
 }
 
-.downloads__heading {
+.glow-zone::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -80px 0 -40px;
+  background:
+    radial-gradient(38% 30% at 82% 22%, light-dark(oklch(0.78 0.11 262 / 0.42), oklch(0.5 0.16 265 / 0.32)), transparent 70%),
+    radial-gradient(34% 28% at 14% 48%, light-dark(oklch(0.8 0.1 295 / 0.36), oklch(0.48 0.15 295 / 0.28)), transparent 70%),
+    radial-gradient(42% 30% at 70% 80%, light-dark(oklch(0.82 0.08 240 / 0.38), oklch(0.5 0.13 245 / 0.26)), transparent 70%);
+  pointer-events: none;
+}
+
+/* ── Extension ───────────────────────────────────────────────────────────── */
+.extension {
+  display: grid;
+  grid-template-columns: minmax(0, 42fr) minmax(0, 58fr);
+  gap: 32px;
+  align-items: center;
+  margin-block: 40px 80px;
+  padding: 40px;
+  border-radius: 24px;
+  background: var(--glass);
+  box-shadow: var(--glass-edge), var(--panel-shadow);
+}
+
+.extension__copy > p:not(.eyebrow) {
+  margin-top: 14px;
+  color: var(--ink-muted);
+}
+
+.browser-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.browser-list li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: var(--r-pill);
+  background: var(--glass-strong);
+  box-shadow: var(--glass-edge);
+  color: var(--ink-strong);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.browser-list img {
+  width: 22px;
+  height: 22px;
+}
+
+.import-flow {
+  margin: 0;
+}
+
+.import-flow figcaption {
+  margin-top: 14px;
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+/* The import illustration is a generated raster with transparent margins;
+   its labels match the real popup (DESIGN.md). */
+.import-flow img {
+  width: 100%;
+  height: auto;
+}
+
+/* ── Privacy ─────────────────────────────────────────────────────────────── */
+.privacy {
+  padding-block: 0 80px;
+}
+
+.privacy__inner {
+  display: grid;
+  grid-template-columns: minmax(0, 38fr) minmax(0, 62fr);
+  gap: 48px;
   align-items: start;
 }
 
-.downloads__heading > div:last-child {
-  display: grid;
-  gap: 20px;
+.privacy__copy > p:not(.eyebrow) {
+  margin-top: 16px;
+  color: var(--ink-muted);
 }
 
-.release-status {
+.text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 20px;
+  color: var(--accent-deep);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.text-link:hover {
+  text-decoration: underline;
+}
+
+.text-link span {
+  font-size: 0.9em;
+}
+
+/* The accent ribbon runs behind the diagram's lower edge, under the glass. */
+.privacy__diagram {
+  position: relative;
+}
+
+.privacy__ribbon {
+  position: absolute;
+  z-index: -1;
+  left: -12%;
+  bottom: -18%;
+  width: 124%;
+  max-width: none;
+  height: auto;
+  opacity: calc(var(--ribbon-opacity) * 0.7);
+  filter: var(--ribbon-filter);
+  pointer-events: none;
+}
+
+.runtime {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 32px;
   margin: 0;
-  padding: 12px 14px;
-  border-radius: var(--r-md);
-  background: var(--card-soft);
+  padding: 0;
+  list-style: none;
+}
+
+.runtime li {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 6px;
+  padding: 22px 16px;
+  border-radius: var(--r-lg);
+  background: var(--glass);
+  box-shadow: var(--glass-edge), var(--shot-shadow);
+  text-align: center;
+}
+
+.runtime li + li::before {
+  content: "→" / "";
+  position: absolute;
+  top: 50%;
+  left: -16px;
+  color: var(--accent);
+  font-size: 1.3rem;
+  transform: translate(-50%, -50%);
+}
+
+.runtime__icon {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 6px;
+  place-items: center;
+  border-radius: var(--r-lg);
+  background: var(--brand-tile);
+  color: var(--accent);
+}
+
+.runtime__icon svg,
+.runtime__icon img {
+  width: 30px;
+  height: 30px;
+}
+
+.runtime__icon--browsers {
+  width: auto;
+  gap: 6px;
+  grid-auto-flow: column;
+  padding-inline: 12px;
+}
+
+.runtime__icon--browsers img {
+  width: 26px;
+  height: 26px;
+}
+
+.runtime strong {
+  color: var(--ink-strong);
+  font-size: 0.95rem;
+}
+
+.runtime span:not(.runtime__icon) {
   color: var(--ink-muted);
-  font-size: 0.86rem;
-  line-height: 1.5;
+  font-size: 0.84rem;
+}
+
+.privacy__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 20px 0 0;
+  padding: 18px 0;
+  border-radius: var(--r-lg);
+  background: var(--glass);
+  box-shadow: var(--glass-edge), var(--shot-shadow);
+  list-style: none;
+}
+
+.privacy__facts li {
+  display: flex;
+  gap: 14px;
+  padding: 0 22px;
+}
+
+.privacy__facts li + li {
+  box-shadow: inset 1px 0 0 var(--hairline);
+}
+
+.privacy__facts .icon {
+  width: 26px;
+  height: 26px;
+  color: var(--accent);
+}
+
+.privacy__facts div {
+  display: grid;
+  gap: 2px;
+  font-size: 0.84rem;
+}
+
+.privacy__facts strong {
+  color: var(--ink-strong);
+  font-size: 0.92rem;
+}
+
+.privacy__facts span {
+  color: var(--ink-muted);
+}
+
+/* ── Download ──────────────────────────────────────────────────────────────
+   A compact, centered card: the pitch, both platform buttons, the platform
+   line and the release status, then a quiet foot row for the checksum note
+   and archive links. */
+.download {
+  padding-block: 40px 56px;
+}
+
+.download__panel {
+  display: grid;
+  justify-items: center;
+  gap: 20px;
+  padding: 32px 32px 18px;
+  border-radius: var(--r-xl);
+  background: var(--glass-strong);
+  box-shadow: var(--glass-edge), var(--panel-shadow);
+  text-align: center;
+}
+
+.download__panel h2 {
+  font-size: clamp(1.6rem, 2.4vw, 2rem);
+}
+
+.download__copy > p:not(.eyebrow) {
+  margin-top: 8px;
+  color: var(--ink-muted);
+}
+
+.release-status[hidden] {
+  display: none;
+}
+
+/* Dot plus word, no box: the release state is a fact, not an alert. */
+.release-status {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: 36rem;
+  color: var(--ink-muted);
+  font-size: 0.8125rem;
 }
 
 .release-status--available {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   color: var(--ink);
-}
-
-.release-status--preview {
-  background: var(--warm-veil);
 }
 
 .release-status__dot {
@@ -838,250 +1106,140 @@ section[id] {
   flex: 0 0 auto;
   border-radius: 50%;
   background: var(--positive);
+  transform: translateY(-1px);
 }
 
 .release-status--preview .release-status__dot {
   background: var(--warm);
 }
 
-/* Ledger rows in one borderless group: platform, detail, an invisible leader,
-   format, then the action. */
-.download-list {
-  margin-top: 48px;
-  overflow: hidden;
-  border-radius: var(--r-lg);
-  background: var(--card);
-}
-
-.download-row {
+.download__actions {
   display: grid;
-  grid-template-columns: minmax(170px, 0.9fr) 9rem minmax(40px, 1fr) auto auto;
-  gap: 20px;
+  gap: 8px;
+  justify-items: center;
+}
+
+.download .platform-actions {
+  justify-content: center;
+}
+
+/* Fine print over the glass card uses the stronger muted tone so it keeps AA
+   contrast where the ribbon shows through. */
+.download__note {
+  color: var(--ink-muted);
+  font-size: 0.8125rem;
+}
+
+.download__foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-self: stretch;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 24px;
+  padding-top: 14px;
+  box-shadow: inset 0 1px 0 var(--hairline);
+  color: var(--ink-muted);
+  font-size: 0.8125rem;
+  text-align: left;
+}
+
+.download__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.download__links a {
+  color: var(--accent-deep);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.download__links a:hover {
+  text-decoration: underline;
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+.site-footer {
+  padding-bottom: 32px;
+}
+
+.site-footer__inner {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  min-height: 84px;
-  padding: 16px 20px 16px 24px;
+  gap: 16px 32px;
+  padding-block: 24px;
+  box-shadow: 0 1px 0 var(--hairline);
 }
 
-.download-row + .download-row {
-  border-top: 1px solid var(--hairline-soft);
+.site-footer__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-right: auto;
 }
 
-.download-row__platform span {
-  display: block;
-  color: var(--ink-soft);
+.site-footer__nav button,
+.site-footer__nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: var(--r-md);
+  color: var(--ink-muted);
+  font-size: 0.88rem;
+  text-decoration: none;
 }
 
-.download-row__platform strong {
-  display: block;
-  margin-top: 2px;
+.site-footer__nav button:hover,
+.site-footer__nav a:hover {
+  background: var(--control);
   color: var(--ink-strong);
-  font-size: 1.08rem;
-  font-weight: 650;
 }
 
-.download-row > p {
-  margin: 0;
+.site-footer__maker {
   color: var(--ink-muted);
   font-size: 0.88rem;
 }
 
-/* Same specificity as `.download-row > p`; source order lets this win. */
-p.download-row__format {
-  color: var(--ink);
-  font-size: 0.84rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.download-row__action {
-  display: inline-flex;
-  min-width: 132px;
-  min-height: 38px;
-  align-items: center;
-  justify-content: center;
-  padding: 0 16px;
-  border-radius: var(--r-md);
-  background: var(--control);
-  color: var(--ink-strong);
-  font-size: 0.86rem;
-  font-weight: 600;
+.site-footer__maker a,
+.site-footer__base a {
+  color: var(--accent-deep);
   text-decoration: none;
 }
 
-.download-row__action:hover {
-  background: var(--control-hover);
+.site-footer__maker a:hover,
+.site-footer__base a:hover {
+  text-decoration: underline;
 }
 
-.download-row__action.is-direct {
-  background: var(--accent);
-  color: var(--on-accent);
-}
-
-.downloads__footer {
-  display: flex;
-  justify-content: space-between;
-  gap: 30px;
-  padding-top: 20px;
-}
-
-.downloads__footer p {
-  max-width: 700px;
-  margin: 0;
-  color: var(--ink-muted);
-  font-size: 0.84rem;
-  line-height: 1.55;
-}
-
-.downloads__footer > div {
+.site-footer__base {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px 18px;
-}
-
-.downloads__footer a {
-  color: var(--ink-strong);
-  font-size: 0.86rem;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.downloads__footer a:hover,
-.site-footer a:hover {
-  color: var(--accent-deep);
-  text-decoration: underline;
-  text-underline-offset: 4px;
-}
-
-/* ── Colophon footer (shared maker close) ────────────────────────────────── */
-.site-footer {
-  background: var(--chrome);
-}
-
-.site-footer__inner {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 40px;
-  width: var(--page);
-  margin-inline: auto;
-  padding-block: 56px 32px;
-}
-
-.colophon__brand p,
-.colophon__col p {
-  max-width: 22rem;
-  margin: 14px 0 0;
-  color: var(--ink-muted);
-  font-size: 0.9rem;
-  line-height: 1.6;
-}
-
-.colophon__brand a {
-  color: var(--ink-strong);
-  text-decoration: underline;
-  text-decoration-color: var(--hairline-strong);
-  text-underline-offset: 4px;
-}
-
-.colophon__col h2 {
-  margin: 10px 0 0;
+  justify-content: space-between;
+  gap: 8px 24px;
+  padding-top: 18px;
   color: var(--ink-soft);
-}
-
-.colophon__siblings {
-  margin: 10px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.colophon__siblings a {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 10px 0;
-  color: var(--ink-muted);
-  font-size: 0.9rem;
-  text-decoration: none;
-}
-
-.colophon__siblings li + li a {
-  border-top: 1px solid var(--hairline);
-}
-
-.colophon__siblings strong {
-  color: var(--ink-strong);
-  font-weight: 600;
-}
-
-.colophon__siblings a:hover span {
-  color: var(--accent-deep);
-}
-
-.site-footer__base-inner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  width: var(--page);
-  margin-inline: auto;
-  padding-block: 20px 28px;
-}
-
-.site-footer__base p {
-  margin: 0;
-  color: var(--ink-faint);
-  font-size: 0.8rem;
-}
-
-.site-footer__base nav {
-  display: flex;
-  gap: 22px;
-}
-
-.site-footer__base a {
-  color: var(--ink-muted);
-  font-size: 0.82rem;
-  font-weight: 600;
-  text-decoration: none;
+  font-size: 0.8125rem;
 }
 
 /* ── Motion ──────────────────────────────────────────────────────────────────
-   One motion language shared with CareFlow's landing: a short fade + 16px lift
-   on the house ease, one-shot. Every rule here lives inside `no-preference` so
-   reduced motion — and, for the reveals, a missing `.reveal-ready` when JS is
-   absent — leaves content fully visible and unmoved. The one authored moment
-   is the edit card: it settles over the capture, then its marks are drawn. */
+   One-shot entrance motion on the house ease. Every rule here lives inside
+   `no-preference` so reduced motion — and, for the reveals, a missing
+   `.reveal-ready` when JS is absent — leaves content fully visible. */
 @media (prefers-reduced-motion: no-preference) {
   .hero__copy > *,
-  .hero__shot {
-    animation: enter 0.32s var(--ease) backwards;
+  .hero__device {
+    animation: enter 0.4s var(--ease) backwards;
   }
 
   .hero__copy > :nth-child(2) { animation-delay: 0.06s; }
   .hero__copy > :nth-child(3) { animation-delay: 0.12s; }
   .hero__copy > :nth-child(4) { animation-delay: 0.18s; }
   .hero__copy > :nth-child(5) { animation-delay: 0.24s; }
-  .hero__shot { animation-delay: 0.1s; }
-
-  .edit-card {
-    animation: settle 0.42s var(--ease) 0.45s backwards;
-  }
-
-  .edit-card del {
-    animation: strike 0.36s var(--ease) 0.95s backwards;
-  }
-
-  .edit-card del + ins {
-    animation: insert 0.3s var(--ease) 1.2s backwards;
-  }
-
-  .edit-card del ~ del {
-    animation-delay: 1.35s;
-  }
-
-  .edit-card del ~ del + ins {
-    animation-delay: 1.6s;
-  }
+  .hero__device { animation-delay: 0.14s; }
 
   /* Below-the-fold blocks lift into place the first time they enter view. The
      page script adds `.reveal-ready` only when it can drive the reveal, so with
@@ -1110,43 +1268,20 @@ p.download-row__format {
   }
 
   .site-nav button,
-  .header-actions > a,
+  .site-nav a,
+  .site-footer__nav button,
+  .site-footer__nav a,
   .header-download,
-  .button,
-  .download-row,
-  .download-row__action {
+  .platform-button,
+  .gallery-controls__button {
     transition: background-color 140ms var(--ease);
   }
-}
-
-.download-row:hover {
-  background: var(--card-hover);
 }
 
 @keyframes enter {
   from {
     opacity: 0;
-    transform: translateY(16px);
-  }
-}
-
-@keyframes settle {
-  from {
-    opacity: 0;
-    transform: translateY(14px);
-  }
-}
-
-@keyframes strike {
-  from {
-    background-size: 0% 1.5px;
-  }
-}
-
-@keyframes insert {
-  from {
-    opacity: 0;
-    transform: translateY(-3px);
+    transform: translateY(12px);
   }
 }
 
@@ -1156,49 +1291,68 @@ p.download-row__format {
   }
 }
 
-/* Windows High Contrast and similar: tone separation disappears, so restore
-   outlines on the groups and controls that rely on it. */
+/* Windows High Contrast and similar: shadows and tones disappear, so restore
+   outlines on the groups and controls that rely on them. */
 @media (forced-colors: active) {
-  .spec-strip,
-  .download-list,
-  .edit-card,
-  .release-status,
-  .runtime__flow li,
-  .button,
+  .platform-button,
   .header-download,
-  .download-row__action,
-  .edit-card__actions span {
+  .gallery-controls__button,
+  .feature-card,
+  .runtime li,
+  .privacy__facts,
+  .download__panel,
+  .extension,
+  .browser-list li {
     border: 1px solid CanvasText;
   }
 
-  /* The strike and wash are backgrounds, which forced colors drop. */
-  .edit-card del {
-    text-decoration: line-through;
+  .download__foot {
+    border-top: 1px solid CanvasText;
   }
 
-  .edit-card ins {
-    text-decoration: underline;
+  .gallery-controls__button[aria-disabled="true"] {
+    color: GrayText;
+  }
+
+  .section-art,
+  .section-ribbon,
+  .privacy__ribbon,
+  .download__art,
+  .glow-zone::before {
+    display: none;
   }
 }
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */
-/* Below 1240px the overlapping card would cover the caption and much of the
-   capture, so it drops into the flow under the shot. */
-@media (max-width: 1240px) {
-  .edit-card {
-    position: relative;
-    bottom: auto;
-    left: auto;
-    width: min(380px, 100%);
-    margin-top: 4px;
+@media (max-width: 940px) {
+  .hero__inner {
+    grid-template-columns: minmax(0, 1fr);
+    padding-block: 56px 48px;
+  }
+
+  .hero h1 {
+    max-width: 16ch;
+  }
+
+  .hero__device {
+    width: min(100%, 680px);
+    justify-self: center;
   }
 }
 
-@media (max-width: 980px) {
-  :root {
-    --page: min(100% - 36px, 860px);
+@media (max-width: 1080px) {
+
+  .gallery {
+    grid-auto-columns: calc((100% - 24px) / 2);
   }
 
+  .extension,
+  .privacy__inner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 860px) {
   .site-header__inner {
     grid-template-columns: 1fr auto;
   }
@@ -1207,181 +1361,117 @@ p.download-row__format {
     display: none;
   }
 
-  .hero {
-    grid-template-columns: 1fr;
-    padding-top: 56px;
+  .workflow__steps {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    row-gap: 32px;
   }
 
-  .hero__copy {
-    max-width: 700px;
-  }
-
-  .spec-strip {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .section-heading {
-    grid-template-columns: 1fr;
-    gap: 20px;
-    align-items: start;
-  }
-
-  .section-heading h2 {
-    max-width: 21ch;
-  }
-
-  .spread,
-  .spread--pair {
-    grid-template-columns: 1fr;
-    gap: 28px;
-  }
-
-  .spread--pair .spread__copy {
-    min-height: 0;
-  }
-
-  .spread__copy h3 {
-    max-width: 20ch;
-  }
-
-  .boundary {
-    grid-template-columns: 1fr;
-  }
-
-  .runtime__flow {
-    grid-template-columns: 1fr;
-    gap: 28px;
-  }
-
-  .runtime__flow li:not(:last-child)::after {
-    top: calc(100% + 4px);
-    left: 22px;
-    width: 1px;
-    height: 16px;
-  }
-
-  .runtime__flow li:not(:last-child)::before {
-    top: calc(100% + 18px);
-    left: 18px;
-    border-top: 6px solid var(--on-band-faint);
-    border-right: 4px solid transparent;
-    border-bottom: 0;
-    border-left: 4px solid transparent;
-  }
-
-  .site-footer__inner {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .colophon__brand {
-    grid-column: 1 / -1;
+  .workflow__steps li + li::before {
+    content: none;
   }
 }
 
 @media (max-width: 680px) {
   :root {
-    --page: calc(100% - 32px);
+    --page: calc(100vw - 32px);
   }
 
-  .site-header__inner {
-    min-height: 56px;
+  .hero__inner {
+    padding-block: 40px 32px;
   }
 
-  .masthead-id__rule,
-  .masthead-id__creator,
-  .header-actions > a {
-    display: none;
-  }
-
-  .header-download {
-    padding-inline: 12px;
-  }
-
-  .hero {
-    padding-block: 44px 32px;
-  }
-
-  .hero h1 {
-    font-size: clamp(2.35rem, 11.6vw, 3.3rem);
+  .hero .section-art {
+    opacity: calc(var(--art-opacity) * 0.7);
   }
 
   .hero__lede {
-    font-size: 1rem;
+    font-size: 1.02rem;
   }
 
-  .hero__actions {
-    display: grid;
-  }
-
-  .button {
+  .platform-actions,
+  .platform-button {
     width: 100%;
   }
 
-  .hero__note {
-    line-height: 1.55;
+  .workflow {
+    padding-block: 8px 0;
   }
 
-  .hero__caption {
+  /* Steps become rows: icon, then title and line. */
+  .workflow__steps {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 20px;
+  }
+
+  .workflow__steps li {
+    grid-template-columns: 48px minmax(0, 1fr);
+    justify-items: start;
+    column-gap: 16px;
+    row-gap: 0;
     text-align: left;
   }
 
-  .spec-strip {
-    margin-bottom: 80px;
+  .workflow__icon {
+    grid-row: 1 / 3;
+    margin: 0;
   }
 
-  .spec-strip > div {
-    padding: 14px 16px;
+  .workflow p {
+    max-width: none;
   }
 
-  .spread {
-    padding-block: 32px;
+  .features {
+    margin-top: 40px;
+    padding-block: 40px 72px;
   }
 
-  .product {
-    padding-bottom: 84px;
+  .features__head {
+    flex-direction: column;
+    align-items: stretch;
   }
 
-  .local-first__inner {
-    padding-block: 76px 72px;
+  .gallery-controls {
+    justify-content: flex-end;
   }
 
-  .downloads {
-    padding-block: 80px 78px;
+  .gallery {
+    grid-auto-columns: 86%;
+    gap: 16px;
   }
 
-  .download-row {
-    grid-template-columns: 1fr auto;
-    gap: 6px 16px;
-    padding: 16px;
+  .extension {
+    margin-block: 56px;
+    padding: 28px 20px;
+    border-radius: var(--r-xl);
   }
 
-  .download-row > p:first-of-type,
-  .download-row__leader {
-    display: none;
-  }
-
-  .download-row__format {
-    grid-column: 1;
-  }
-
-  .download-row__action {
-    grid-row: 1 / span 2;
-    grid-column: 2;
-    min-width: 116px;
-  }
-
-  .downloads__footer,
-  .site-footer__base-inner {
-    display: grid;
-  }
-
-  .downloads__footer > div {
-    justify-content: flex-start;
-  }
-
-  .site-footer__inner {
-    grid-template-columns: 1fr;
+  .runtime {
+    grid-template-columns: minmax(0, 1fr);
     gap: 28px;
-    padding-block: 44px 24px;
+  }
+
+  .runtime li + li::before {
+    content: "↓" / "";
+    top: -14px;
+    left: 50%;
+  }
+
+  .privacy__facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .privacy__facts li + li {
+    padding-top: 16px;
+    box-shadow: inset 0 1px 0 var(--hairline);
+  }
+
+  .download__panel {
+    padding: 28px 20px 18px;
+  }
+
+  .gallery-controls__note {
+    margin-right: auto;
+    text-align: left;
   }
 }

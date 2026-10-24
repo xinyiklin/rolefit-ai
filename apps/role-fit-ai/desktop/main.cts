@@ -70,9 +70,9 @@ import {
 import { findLoopbackListenerPid } from "./listener-process.cjs";
 
 // Preserve the existing runtime name because Electron derives the userData
-// directory from it. Packaging and window chrome use the public name RoleFit AI.
+// directory from it. Packaging and window chrome use the public name RoleFit.
 const INTERNAL_APP_NAME = "RoleFit Local Companion";
-const PUBLIC_APP_NAME = "RoleFit AI";
+const PUBLIC_APP_NAME = "RoleFit";
 const DEFAULT_HOST = "127.0.0.1" as const;
 const PROVIDER_SNAPSHOT_REFRESH_INTERVAL_MS = 5_000;
 const WORKSPACE_ACTIVITY_TIMEOUT_MS = 1_500;
@@ -1045,7 +1045,7 @@ async function inspectSmokeRenderer(
         connectionStatus,
         connectionStatusError,
         fullWorkspaceAbsent: !document.querySelector('main[aria-label="Output workspace"]'),
-        correctTitle: document.title === 'RoleFit AI'
+        correctTitle: document.title === 'RoleFit'
       });
     }, 900))
   `) as SmokeResult;

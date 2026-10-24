@@ -41,7 +41,10 @@ assert(files.includes("extension/background.js"));
 assert(files.includes("extension/bridge.js"));
 assert(files.includes("extension/settings.js"));
 assert(files.includes("extension/runtime-config.js"));
-assert(files.includes("extension/icons/icon.svg"));
+for (const size of [16, 32, 48, 128]) {
+  assert(files.includes(`extension/icons/icon${size}.png`));
+}
+assert(!files.includes("extension/icons/icon.svg"));
 
 const allowedRoots = new Set([
   "LICENSE",
@@ -66,7 +69,7 @@ for (const file of files) {
 
 const manifest = JSON.parse(await readFile(join(stageRoot, "package.json"), "utf8"));
 assert.equal(manifest.name, "rolefit-local-companion");
-assert.equal(manifest.productName, "RoleFit AI");
+assert.equal(manifest.productName, "RoleFit");
 assert.equal(manifest.main, "dist-electron/desktop/main.cjs");
 assert.equal(manifest.license, "MIT");
 assert.equal(manifest.config.forge, "./forge.config.cjs");

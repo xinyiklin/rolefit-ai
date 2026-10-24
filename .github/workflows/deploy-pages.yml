@@ -1,4 +1,4 @@
-name: RoleFit AI product site
+name: RoleFit product site
 
 # Publishes only the static product/download entry. The full RoleFit renderer,
 # loopback API, provider bridge, and workspace remain companion-served locally.

@@ -6,6 +6,7 @@ import {
   RELEASES_URL,
   type ReleaseCatalog,
 } from "./releaseCatalog";
+import { setupGallery } from "./gallery";
 import { setupReveal } from "./reveal";
 
 // In-page navigation without URL hashes: buttons carry data-scroll-to="<id>".
@@ -33,6 +34,7 @@ for (const trigger of document.querySelectorAll<HTMLElement>("[data-scroll-to]")
 }
 
 setupReveal();
+setupGallery(reducedMotion);
 
 // Release catalog: the static page links every row to the Releases page; a
 // valid catalog upgrades rows to direct, verified asset downloads.
@@ -54,7 +56,6 @@ function setStatus(text: string, available = false, preview = false): void {
 
 function setReleaseChannelCopy(preview: boolean): void {
   const channelLabel = document.getElementById("release-channel-label");
-  const downloadLabel = document.getElementById("release-download-label");
   const safetyNote = document.getElementById("release-safety-note");
 
   if (channelLabel) {
@@ -65,12 +66,9 @@ function setReleaseChannelCopy(preview: boolean): void {
     channelLabel.append(
       dot,
       preview
-        ? "Unsigned desktop preview · macOS + Windows"
-        : "Signed desktop release · macOS + Windows",
+        ? "Unsigned desktop preview · macOS (Apple silicon) and Windows (x64). No RoleFit account."
+        : "Signed desktop release · macOS (Apple silicon) and Windows (x64). No RoleFit account.",
     );
-  }
-  if (downloadLabel) {
-    downloadLabel.textContent = preview ? "Unsigned desktop preview" : "Desktop release";
   }
   if (safetyNote) {
     safetyNote.textContent = preview
@@ -92,17 +90,19 @@ function applyCatalog(catalog: ReleaseCatalog): void {
 
   for (const target of DOWNLOAD_TARGETS) {
     const asset = catalog.downloads[target.id];
-    const row = document.querySelector<HTMLElement>(`[data-download-target="${target.id}"]`);
-    if (!asset || !row) continue;
-    const action = row.querySelector<HTMLAnchorElement>("[data-action]");
-    const label = row.querySelector<HTMLElement>("[data-action-label]");
-    const format = row.querySelector<HTMLElement>("[data-format]");
-    if (!action || !label || !format) continue;
-    action.href = asset.url;
-    action.classList.add("is-direct");
-    action.setAttribute("aria-label", `Download RoleFit for ${target.platform} ${target.title}`);
-    label.textContent = "Download";
-    format.textContent = `${preview ? "Unsigned " : ""}${target.format} · ${formatFileSize(asset.size)}`;
+    if (!asset) continue;
+    // The hero and the download panel each carry one button per target.
+    for (const action of document.querySelectorAll<HTMLAnchorElement>(
+      `a[data-download-target="${target.id}"]`,
+    )) {
+      const format = action.querySelector<HTMLElement>("[data-format]");
+      if (!format) continue;
+      // The visible label stays the accessible name; the line below keeps the
+      // static requirement text and appends the verified format and size.
+      action.href = asset.url;
+      action.classList.add("is-direct");
+      format.textContent = `${format.textContent} · ${preview ? "Unsigned " : ""}${target.format} · ${formatFileSize(asset.size)}`;
+    }
   }
 
   const links = document.getElementById("release-links");
@@ -113,7 +113,11 @@ function applyCatalog(catalog: ReleaseCatalog): void {
     { name: "SHA-256 checksums", url: catalog.checksums.url },
   ];
   const allReleases = links.querySelector("a");
-  if (allReleases) allReleases.href = catalog.releaseUrl;
+  // Retargeted to the verified release, so the label names that page.
+  if (allReleases) {
+    allReleases.href = catalog.releaseUrl;
+    allReleases.textContent = "Release notes ↗";
+  }
   for (const archive of archives.reverse()) {
     const anchor = document.createElement("a");
     anchor.href = archive.url;

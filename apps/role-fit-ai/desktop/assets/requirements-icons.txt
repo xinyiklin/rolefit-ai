@@ -1,0 +1,4 @@
+# Brand-mark generator dependencies (generate_icons.py). CairoSVG also needs
+# the system cairo library (Homebrew `cairo` on macOS).
+pillow==12.3.0
+cairosvg==2.9.1

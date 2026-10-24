@@ -8,7 +8,7 @@ keeps usable AI output reviewable with bounded warnings, without an acknowledgme
 step. Security, structure, resource, mutation-target, persistence, and stale-response
 protections remain blocking. Generation prompts still require truthful source use.
 
-RoleFit AI's reusable server runtime (`server/runtime.ts`) serves the Vite
+RoleFit's reusable server runtime (`server/runtime.ts`) serves the Vite
 frontend in development, exposes a small set of local API routes, and owns all
 outbound AI provider calls. The thin web entry point (`server.ts`) supplies the
 current browser-host defaults and owns process-signal shutdown. The Electron

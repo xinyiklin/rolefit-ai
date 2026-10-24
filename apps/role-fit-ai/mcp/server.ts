@@ -11,7 +11,7 @@ import { createTools, roleFitBaseUrl, type Tool } from "./tools.ts";
 
 // Newest first; a client asking for another version is offered the newest.
 const PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
-const SERVER_INFO = { name: "rolefit", title: "RoleFit AI tracker", version: "1.0.0" };
+const SERVER_INFO = { name: "rolefit", title: "RoleFit tracker", version: "1.0.0" };
 const INSTRUCTIONS =
   "Records job applications in the user's local RoleFit tracker. Search before committing to avoid duplicates; " +
   "get_application reads one in full; commit_application saves a whole application atomically; " +

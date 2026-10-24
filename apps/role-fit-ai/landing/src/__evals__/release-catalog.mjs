@@ -32,7 +32,7 @@ function validPayload({ preview = false } = {}) {
     assets: [
       ...DOWNLOAD_TARGETS.map((target) =>
         asset(target.assetName(version), {}, releaseTag)),
-      asset(`RoleFit-AI-${version}-macos-arm64.zip`, {}, releaseTag),
+      asset(`RoleFit-${version}-macos-arm64.zip`, {}, releaseTag),
       asset("SHA256SUMS.txt", { size: 512 }, releaseTag),
     ],
   };
@@ -65,7 +65,7 @@ for (const mutation of [
   (payload) => { payload.assets.pop(); },
   (payload) => { payload.assets.push(payload.assets[0]); },
   (payload) => { payload.assets.push(asset("unexpected.bin")); },
-  (payload) => { payload.assets.push(asset(`RoleFit-AI-${version}-macos-x64.zip`)); },
+  (payload) => { payload.assets.push(asset(`RoleFit-${version}-macos-x64.zip`)); },
   (payload) => { payload.assets[0].size = 0; },
   (payload) => {
     payload.assets[0].browser_download_url =

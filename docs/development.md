@@ -1,4 +1,4 @@
-# RoleFit AI Repository Development And Verification
+# RoleFit Repository Development And Verification
 
 Run commands from the repository root. Use a named root command or an explicit
 workspace; there is no generic root `dev`, `build`, or `preview` script.
@@ -36,9 +36,11 @@ workspace; there is no generic root `dev`, `build`, or `preview` script.
   `packages/engine/scripts/requirements-fonts.txt` in an isolated environment;
   CI creates `.font-tools` and places it on `PATH`.
   `apps/role-fit-ai/desktop/assets/generate_icons.py`, which writes the
-  companion icons, both favicons, and the extension icon, needs fontTools (from
-  that file) plus Pillow; it is rerun by hand when the mark changes, never in
-  CI.
+  companion icons and inline favicon, both favicons, the landing touch icon, and
+  the extension icon, needs its pinned
+  `apps/role-fit-ai/desktop/assets/requirements-icons.txt` (Pillow, CairoSVG)
+  plus the system cairo library; it is rerun by hand when the mark changes,
+  never in CI.
 
 ## Dependency changes
 
@@ -305,7 +307,7 @@ unprivileged static server before deployment can proceed.
 ## Ports
 
 - Typeset: `5186`, strict; HMR socket `24686`.
-- RoleFit AI standalone development: `5181`, loopback by default; reserved
+- RoleFit standalone development: `5181`, loopback by default; reserved
   range `5181-5183`; `PORT` is the explicit standalone override.
 - RoleFit landing dev server and preview: `5182`, strict. The desktop smoke
   also tries `5182` first and checks only `127.0.0.1`, which misses the
@@ -368,7 +370,7 @@ npm run collect:desktop:artifacts --workspace apps/role-fit-ai -- --arch=arm64 -
 npm run make:rolefit:desktop -- --arch=x64 --platform=win32
 npm run test:rolefit:desktop:packaged -- --arch=x64 --platform=win32
 npm run collect:desktop:artifacts --workspace apps/role-fit-ai -- --arch=x64 --platform=win32 --checksums=false
-npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=.forge/release/RoleFit-AI-0.21.0-windows-x64.exe
+npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=.forge/release/RoleFit-X.Y.Z-windows-x64.exe
 ```
 
 Local package/make output is not publicly trusted (macOS is ad-hoc signed only)

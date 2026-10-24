@@ -21,7 +21,7 @@ if (
 ) {
   fail("the public landing must disclose both local workspace storage and direct provider input");
 }
-if (indexHtml.includes("Everything stays on your machine")) {
+if (/(?:everything|your data) stays (?:on|local)/i.test(normalizedIndexText)) {
   fail("the public landing contains an overbroad local-only privacy claim");
 }
 if (indexHtml.includes("/src/main.tsx") || indexHtml.includes("fonts.googleapis.com")) {

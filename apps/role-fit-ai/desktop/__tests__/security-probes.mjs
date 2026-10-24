@@ -31,7 +31,7 @@ assert.doesNotMatch(compiledMainSource, /allowLoadingUnsignedLibraries/);
 // osx-sign ignores top-level entitlement keys and signs with Chromium's
 // defaults, so evaluate the real macOS release config as osx-sign would.
 const releaseSignOptions = loadMacReleaseSignOptions();
-const appPath = "/build/RoleFit AI-darwin-arm64/RoleFit AI.app";
+const appPath = "/build/RoleFit-darwin-arm64/RoleFit.app";
 assert.equal(releaseSignOptions.continueOnError, false);
 for (const key of ["entitlements", "entitlementsInherit", "hardenedRuntime"]) {
   assert.equal(key in releaseSignOptions, false, `osxSign.${key} is ignored by osx-sign`);
@@ -41,7 +41,7 @@ assert.deepEqual(releaseSignOptions.optionsForFile(appPath), {
   entitlements: resolve(desktopRoot, "assets/entitlements.mac.plist")
 });
 for (const nested of [
-  `${appPath}/Contents/Frameworks/RoleFit AI Helper (Renderer).app`,
+  `${appPath}/Contents/Frameworks/RoleFit Helper (Renderer).app`,
   `${appPath}/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework`
 ]) {
   assert.deepEqual(releaseSignOptions.optionsForFile(nested), {

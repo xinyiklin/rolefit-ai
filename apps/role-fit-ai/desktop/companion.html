@@ -8,10 +8,10 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'none'; base-uri 'none'; form-action 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'"
     />
-    <title>RoleFit AI</title>
+    <title>RoleFit</title>
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230064dc'/%3E%3Cpath fill='%23fdfdff' d='M18.47 49.28V14.72H31.94Q35.89 14.72 38.65 16.11Q41.41 17.5 42.86 20.03Q44.3 22.56 44.3 25.97Q44.3 29.38 42.83 31.85Q41.36 34.32 38.56 35.63Q35.77 36.94 31.78 36.94H22.64V31.21H30.64Q32.82 31.21 34.22 30.62Q35.61 30.03 36.3 28.86Q37 27.69 37 25.97Q37 24.21 36.3 23.01Q35.61 21.82 34.2 21.19Q32.8 20.57 30.62 20.57H25.54V49.28ZM37.69 49.28 29.27 33.55H36.95L45.53 49.28Z'/%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22RoleFit%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22rf-top%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20stop-color%3D%22%2360AAFF%22%2F%3E%3Cstop%20offset%3D%220.42%22%20stop-color%3D%22%23367EF7%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%232853E9%22%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D%22rf-stem%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220.9%22%20y2%3D%221%22%3E%3Cstop%20stop-color%3D%22%233D9BFF%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23325BEA%22%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D%22rf-leg%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220.9%22%20y2%3D%221%22%3E%3Cstop%20stop-color%3D%22%237475F9%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%233857DE%22%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D%22tile%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20stop-color%3D%22%23FFFFFF%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23E9F1FF%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20x%3D%220%22%20y%3D%220%22%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2214%22%20fill%3D%22url%28%23tile%29%22%2F%3E%3Cg%20transform%3D%22translate%2810.24%2010.24%29%20scale%280.34%29%22%3E%3Cpath%20d%3D%22M24%2023C24%2014%2031%2010%2039%2010H78C100%2010%20113%2024%20113%2045C113%2062%20104%2073%2086%2078L70%2060C83%2055%2090%2051%2090%2044C90%2037%2085%2033%2077%2033H48C35%2033%2027%2036%2024%2039Z%22%20fill%3D%22url%28%23rf-top%29%22%2F%3E%3Cpath%20d%3D%22M45%2038C26%2046%2016%2057%2016%2074V104Q16%20111%2023%20111H39Q49%20111%2049%20101V42Q49%2037%2045%2038Z%22%20fill%3D%22url%28%23rf-stem%29%22%2F%3E%3Cpath%20d%3D%22M69%2062C66%2065%2063%2067%2062%2072C61%2076%2064%2080%2067%2084L85%20107Q88%20111%2095%20111H113Q119%20111%20115%20105L88%2064C82%2068%2077%2068%2069%2062Z%22%20fill%3D%22url%28%23rf-leg%29%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E"
     />
     <link rel="stylesheet" href="./companion.css" />
     <script src="./companion-renderer.js" defer></script>
@@ -19,9 +19,9 @@
   <body data-companion-root data-status="loading">
     <div class="companion-shell">
       <aside class="companion-sidebar" aria-label="RoleFit desktop navigation">
-        <div class="brand" aria-label="RoleFit AI desktop app">
-          <span class="brand__mark" aria-hidden="true">R</span>
-          <span>RoleFit AI</span>
+        <div class="brand" aria-label="RoleFit desktop app">
+          <svg class="brand__mark" aria-hidden="true" viewBox="0 0 128 128"><defs><linearGradient id="brand-rf-top" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#60AAFF" /><stop offset="0.42" stop-color="#367EF7" /><stop offset="1" stop-color="#2853E9" /></linearGradient><linearGradient id="brand-rf-stem" x1="0" y1="0" x2="0.9" y2="1"><stop stop-color="#3D9BFF" /><stop offset="1" stop-color="#325BEA" /></linearGradient><linearGradient id="brand-rf-leg" x1="0" y1="0" x2="0.9" y2="1"><stop stop-color="#7475F9" /><stop offset="1" stop-color="#3857DE" /></linearGradient></defs><path fill="url(#brand-rf-top)" d="M24 23C24 14 31 10 39 10H78C100 10 113 24 113 45C113 62 104 73 86 78L70 60C83 55 90 51 90 44C90 37 85 33 77 33H48C35 33 27 36 24 39Z" /><path fill="url(#brand-rf-stem)" d="M45 38C26 46 16 57 16 74V104Q16 111 23 111H39Q49 111 49 101V42Q49 37 45 38Z" /><path fill="url(#brand-rf-leg)" d="M69 62C66 65 63 67 62 72C61 76 64 80 67 84L85 107Q88 111 95 111H113Q119 111 115 105L88 64C82 68 77 68 69 62Z" /></svg>
+          <span>RoleFit</span>
         </div>
 
         <nav class="companion-nav" aria-label="RoleFit sections">
@@ -181,7 +181,7 @@
                           <button class="extension-install__copy extension-install__copy--path" id="copy-extension-directory" type="button" data-extension-copy-target="directory" data-copy-feedback="Copy path"><span class="copy-field__icon" aria-hidden="true"><svg class="copy-icon copy-icon--idle" viewBox="0 0 16 16"><rect x="3.5" y="3" width="9" height="11.5" rx="1.5" /><rect x="5.75" y="1.5" width="4.5" height="3" rx="1" /></svg><svg class="copy-icon copy-icon--done" viewBox="0 0 16 16"><path d="m4 8.5 2.75 2.75L12 5.5" /></svg></span><span>Copy path</span></button>
                         </div>
                       </div></div></li>
-                      <li><span class="extension-steps__number" aria-hidden="true">3</span><div><p>Open the RoleFit AI extension on a job page, then approve it under <em>Access</em>.</p></div></li>
+                      <li><span class="extension-steps__number" aria-hidden="true">3</span><div><p>Open the RoleFit extension on a job page, then approve it under <em>Access</em>.</p></div></li>
                     </ol>
                   </div>
 
@@ -189,7 +189,7 @@
                     <ol class="extension-steps">
                       <li><span class="extension-steps__number" aria-hidden="true">1</span><div><p>Paste this address into Edge, then turn on <em>Developer mode</em>.</p><div class="extension-steps__field"><button class="extension-install__copy copy-field copy-field--block" type="button" data-extension-copy-target="edge" data-copy-feedback="Copy address"><span class="visually-hidden">Copy </span><code class="copy-field__value">edge://extensions</code><span class="copy-field__icon" aria-hidden="true"><svg class="copy-icon copy-icon--idle" viewBox="0 0 16 16"><rect x="3.5" y="3" width="9" height="11.5" rx="1.5" /><rect x="5.75" y="1.5" width="4.5" height="3" rx="1" /></svg><svg class="copy-icon copy-icon--done" viewBox="0 0 16 16"><path d="m4 8.5 2.75 2.75L12 5.5" /></svg></span></button></div></div></li>
                       <li><span class="extension-steps__number" aria-hidden="true">2</span><div><p>Choose <em>Load unpacked</em> and select the RoleFit extension folder.</p><div class="extension-steps__slot" data-extension-folder-slot></div></div></li>
-                      <li><span class="extension-steps__number" aria-hidden="true">3</span><div><p>Open the RoleFit AI extension on a job page, then approve it under <em>Access</em>.</p></div></li>
+                      <li><span class="extension-steps__number" aria-hidden="true">3</span><div><p>Open the RoleFit extension on a job page, then approve it under <em>Access</em>.</p></div></li>
                     </ol>
                   </div>
 
@@ -197,7 +197,7 @@
                     <ol class="extension-steps">
                       <li><span class="extension-steps__number" aria-hidden="true">1</span><div><p>Paste this address into Firefox.</p><div class="extension-steps__field"><button class="extension-install__copy copy-field copy-field--block" type="button" data-extension-copy-target="firefox" data-copy-feedback="Copy address"><span class="visually-hidden">Copy </span><code class="copy-field__value">about:debugging#/runtime/this-firefox</code><span class="copy-field__icon" aria-hidden="true"><svg class="copy-icon copy-icon--idle" viewBox="0 0 16 16"><rect x="3.5" y="3" width="9" height="11.5" rx="1.5" /><rect x="5.75" y="1.5" width="4.5" height="3" rx="1" /></svg><svg class="copy-icon copy-icon--done" viewBox="0 0 16 16"><path d="m4 8.5 2.75 2.75L12 5.5" /></svg></span></button></div></div></li>
                       <li><span class="extension-steps__number" aria-hidden="true">2</span><div><p>Choose <em>Load Temporary Add-on&#8230;</em> and select <code>manifest.json</code> in the RoleFit extension folder.</p><div class="extension-steps__slot" data-extension-folder-slot></div></div></li>
-                      <li><span class="extension-steps__number" aria-hidden="true">3</span><div><p>Open the RoleFit AI extension on a job page, then approve it under <em>Access</em>.</p></div></li>
+                      <li><span class="extension-steps__number" aria-hidden="true">3</span><div><p>Open the RoleFit extension on a job page, then approve it under <em>Access</em>.</p></div></li>
                     </ol>
                     <p class="extension-install__note">Firefox removes temporary add-ons when it quits. Load it again after a restart.</p>
                   </div>

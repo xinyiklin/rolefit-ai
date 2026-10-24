@@ -1,4 +1,4 @@
-# RoleFit AI Continuity
+# RoleFit Continuity
 
 Cross-workspace handoff state, capped at 160 lines. Rules in force live in
 [docs/decisions.md](docs/decisions.md) (read before changing a rule); resolved
@@ -38,6 +38,22 @@ D-entries in `docs/decisions.md`.
   repeat. Until a release with that asset set exists, the landing page links
   every row to GitHub Releases (it rejects Intel-carrying releases), so tag a
   preview soon after merge.
+
+- 2026-10-23 [USER+CODE] The release that ships D097 must say: the app is
+  now RoleFit; macOS installs `RoleFit.app`, so delete the old `RoleFit AI.app`
+  (it shares the same data and, launched from the Dock, would run the old
+  build); Windows updates in place but leaves a stale `RoleFit AI` shortcut
+  beside the new `RoleFit` one; download file names drop "AI"; the extension
+  keeps its pairing. Its notes heading becomes `# RoleFit X.Y.Z:`, so update
+  the frozen heading assertion in `scripts/desktop-release-contract.test.mjs`
+  with that version bump. No published release (all `RoleFit-AI-*`) parses in
+  the new landing catalog, so tag a preview soon after merge. The four
+  product screenshots (landing and README twins) were retaken 2026-10-24 from
+  a freshly seeded synthetic workspace (Alex Morgan / LumenDesk, built through
+  the app's own codecs and tracker sanitizer, served on 5183); the companion
+  shot `desktop-app.png` was not retaken and is no longer used on the page. An
+  installed-upgrade check (0.21.0 with a saved API key, then this build) is
+  still unrun.
 
 ## Deferred backlog
 
@@ -108,6 +124,19 @@ D-entries in `docs/decisions.md`.
   `docs/continuity/2026-10.md`): white vs gray workspace plane and stacked
   state labels (user's call); unverified Firefox/Safari, print, forced colors,
   macOS, native window-control rendering, and real unpacked popup installs.
+
+## 2026-10-24
+
+- [USER+CODE+TOOL] **RoleFit rename, ribbon-R brand, landing redesign** (D097):
+  visible name, packaged app, and release assets are RoleFit (internal IDs
+  kept); `generate_icons.py` renders the vector mark (extension now ships PNG
+  icons); landing follows the user's mockup with brand ribbons, frosted glass
+  cards, Codex-generated accent art, and retaken synthetic screenshots.
+  Verified: `npm run check` (202/202), landing build guard, headless Chromium
+  at 1440/1280/1024/900/390 in light and dark (no overflow, AA contrast over
+  glass), three independent reviews. Unverified: reduced-transparency and
+  no-blur fallbacks in a real browser, Firefox/Safari rendering, Windows
+  installer, the new extension icon in an installed browser.
 
 ## 2026-10-23
 

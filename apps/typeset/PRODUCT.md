@@ -26,7 +26,7 @@ Typeset is the standalone, browser-only host for the shared Typeset engine and
 editor packages. It owns file lifecycle, browser autosave, product identity,
 and static deployment. The packages own the resume model, `.resume` contract,
 layout, PDF output, editing behavior, and formatting controls shared with
-RoleFit AI.
+RoleFit.
 
 RoleFit concepts do not belong in this product: no job intake, AI providers,
 tailoring stages, review verdicts, application tracker, local server, or remote

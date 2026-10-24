@@ -1,6 +1,6 @@
 # RoleFit Workspace
 
-Local, ignored storage for the RoleFit AI app.
+Local, ignored storage for the RoleFit app.
 
 - `resumes/<variant>.resume` stores strict, editable resume variants. For
   example, `fullstack.resume` appears as “Fullstack” in the app.

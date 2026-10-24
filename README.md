@@ -1,6 +1,6 @@
-# RoleFit AI
+# RoleFit
 
-The RoleFit AI repository is an npm-workspaces monorepo containing the
+The RoleFit repository is an npm-workspaces monorepo containing the
 browser-primary local application-materials workbench, its desktop companion
 and public download page, and the standalone Typeset resume editor. Both
 products share one deterministic document engine and one reusable editing
@@ -8,12 +8,12 @@ surface.
 
 ```text
 @typeset/engine -> @typeset/editor -> Typeset
-                                  -> RoleFit AI
+                                  -> RoleFit
 ```
 
 | Workspace | Responsibility |
 | --- | --- |
-| [`apps/role-fit-ai`](apps/role-fit-ai) | **RoleFit AI**: the companion-launched, browser-primary local resume and cover-letter workbench with a loopback server, portable workspace backup, tracker, paired browser extension, and four-provider manager. [Product site and downloads](https://rolefit.xinyiklin.com/) |
+| [`apps/role-fit-ai`](apps/role-fit-ai) | **RoleFit**: the companion-launched, browser-primary local resume and cover-letter workbench with a loopback server, portable workspace backup, tracker, paired browser extension, and four-provider manager. [Product site and downloads](https://rolefit.xinyiklin.com/) |
 | [`apps/typeset`](apps/typeset) | **Typeset**: the standalone browser-only editor at [typeset.xinyiklin.com](https://typeset.xinyiklin.com). |
 | [`packages/engine`](packages/engine) | `@typeset/engine`: resume and constrained cover-letter document models, strict `.resume` and `.cover` codecs, fonts, deterministic layout, DOM/print rendering, and PDF emission. |
 | [`packages/editor`](packages/editor) | `@typeset/editor`: direct editing, history/style hooks, document toolbar/popovers, and shared editor styles. |
@@ -66,9 +66,9 @@ Use the named root command or an explicit workspace command.
 - [Architecture and ownership](docs/architecture.md)
 - [Development and verification](docs/development.md)
 - [Git workflow](docs/git-workflow.md)
-- [RoleFit AI product docs](apps/role-fit-ai/README.md)
-- [RoleFit AI product contract](apps/role-fit-ai/PRODUCT.md)
-- [RoleFit AI design contract](apps/role-fit-ai/DESIGN.md)
+- [RoleFit product docs](apps/role-fit-ai/README.md)
+- [RoleFit product contract](apps/role-fit-ai/PRODUCT.md)
+- [RoleFit design contract](apps/role-fit-ai/DESIGN.md)
 - [Typeset product docs](apps/typeset/README.md)
 - [Agent guidance](AGENTS.md)
 

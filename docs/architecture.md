@@ -1,8 +1,8 @@
-# RoleFit AI Repository Architecture
+# RoleFit Repository Architecture
 
 ## System shape
 
-This RoleFit AI repository uses npm workspaces because its shared Typeset
+This RoleFit repository uses npm workspaces because its shared Typeset
 engine and editor are still evolving together and are consumed by RoleFit and
 the standalone Typeset app. The packages remain private source packages; the
 repository lockfile and TypeScript base are the integration boundary.

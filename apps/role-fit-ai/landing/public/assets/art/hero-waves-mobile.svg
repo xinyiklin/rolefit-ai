@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 980" width="780" height="980"><title>RoleFit design asset</title><desc>Mobile hero ribbons kept to upper corners and lower edge for clear text legibility</desc><defs>
+ <linearGradient id="rfA" x1="0" y1="0" x2="1" y2="0.72"><stop stop-color="#B7D5FF" stop-opacity=".02"/><stop offset=".54" stop-color="#6EABFF" stop-opacity=".27"/><stop offset="1" stop-color="#6383F7" stop-opacity=".48"/></linearGradient>
+ <linearGradient id="rfB" x1="0" y1=".2" x2="1" y2=".7"><stop stop-color="#DCEAFF" stop-opacity=".08"/><stop offset=".65" stop-color="#B4C5FF" stop-opacity=".25"/><stop offset="1" stop-color="#9875F3" stop-opacity=".40"/></linearGradient>
+ <linearGradient id="rfC" x1=".1" y1="1" x2="1" y2="0"><stop stop-color="#9CC6FC" stop-opacity=".11"/><stop offset=".6" stop-color="#638BF5" stop-opacity=".29"/><stop offset="1" stop-color="#836AF4" stop-opacity=".28"/></linearGradient>
+ <linearGradient id="rfD" x1="0" y1=".3" x2="1" y2=".8"><stop stop-color="#E6EFFD" stop-opacity=".05"/><stop offset="1" stop-color="#B9CAF8" stop-opacity=".56"/></linearGradient>
+ <radialGradient id="rfGlow"><stop stop-color="#C3D6FF" stop-opacity=".20"/><stop offset="1" stop-color="#F2F6FF" stop-opacity="0"/></radialGradient>
+</defs><ellipse cx="690" cy="365" rx="310" ry="440" fill="url(#rfGlow)"/>
+<path d="M220 -60 C460 5 540 178 810 97 L810 550 C570 482 465 340 345 240 C295 200 240 163 150 148 Z" fill="url(#rfB)"/>
+<path d="M360 -60 C558 55 637 245 810 218 L810 640 C616 553 544 474 442 377 C366 307 297 256 208 243 Z" fill="url(#rfA)"/>
+<path d="M-60 725 C100 635 160 728 284 700 C425 667 547 586 820 670 L820 960 L-60 960Z" fill="url(#rfD)"/>
+<path d="M-30 838 C156 764 260 790 397 779 C540 761 678 727 818 793 L818 960 L-30 960Z" fill="url(#rfC)"/></svg>

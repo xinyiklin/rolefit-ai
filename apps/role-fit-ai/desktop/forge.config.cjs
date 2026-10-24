@@ -2,7 +2,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { flipFuses, FuseV1Options, FuseVersion } = require("@electron/fuses");
 
-const PRODUCT_NAME = "RoleFit AI";
+const PRODUCT_NAME = "RoleFit";
 const WINDOWS_IDENTITY = "RoleFitLocalCompanion";
 const releaseBuild = process.env.ROLEFIT_RELEASE_BUILD === "1";
 const assets = path.join(__dirname, "assets");
@@ -80,7 +80,7 @@ module.exports = {
       AppleEvents: "RoleFit can open a fixed provider sign-in command in Terminal when you request it."
     },
     win32metadata: {
-      CompanyName: "RoleFit AI",
+      CompanyName: "RoleFit",
       FileDescription: PRODUCT_NAME,
       InternalName: WINDOWS_IDENTITY,
       OriginalFilename: `${WINDOWS_IDENTITY}.exe`,
@@ -146,10 +146,10 @@ module.exports = {
       platforms: ["win32"],
       config: {
         name: WINDOWS_IDENTITY,
-        authors: "RoleFit AI",
-        description: "Local provider companion for RoleFit AI.",
+        authors: "RoleFit",
+        description: "Local provider companion for RoleFit.",
         exe: `${WINDOWS_IDENTITY}.exe`,
-        setupExe: "RoleFit-AI-Setup.exe",
+        setupExe: "RoleFit-Setup.exe",
         setupIcon: path.join(assets, "icon.ico"),
         noDelta: true,
         noMsi: true,

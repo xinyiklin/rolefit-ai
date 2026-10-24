@@ -150,7 +150,7 @@ settles. Navigation stays available; refreshes preserve existing content. Empty
 states appear only after loading settles, and an initial load failure exposes
 recovery instead of leaving an indefinite placeholder or zero-data analytics.
 
-RoleFit AI can turn a prepared job posting, a base resume, and a
+RoleFit can turn a prepared job posting, a base resume, and a
 candidate-authored cover letter or base variant into honest, tailored
 application materials. Prepare is the first/default page and the sole job-intake
 surface: the paired browser extension is primary, with URL fetch and pasted text
