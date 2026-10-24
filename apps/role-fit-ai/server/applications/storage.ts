@@ -218,18 +218,22 @@ export async function writeApplications(
  * revision is null when the file on disk could not be confirmed as this
  * write's own, so callers send the full tracker and the next read re-validates.
  */
-export async function writeApplicationsSnapshot(
-  workspaceDir: string,
-  applications: unknown
-): Promise<{ applications: StoredApplications; revision: string | null }> {
-  await mkdir(workspaceDir, { recursive: true });
-  const path = applicationsFilePath(workspaceDir);
+export function assertTrackerCapacity(applications: unknown): asserts applications is unknown[] {
   if (!Array.isArray(applications) || applications.length > MAX_APPLICATIONS) {
     throw new ApplicationsStorageError(
       `The tracker supports at most ${MAX_APPLICATIONS.toLocaleString("en-US")} applications. No tracker changes were saved.`,
       400
     );
   }
+}
+
+export async function writeApplicationsSnapshot(
+  workspaceDir: string,
+  applications: unknown
+): Promise<{ applications: StoredApplications; revision: string | null }> {
+  await mkdir(workspaceDir, { recursive: true });
+  const path = applicationsFilePath(workspaceDir);
+  assertTrackerCapacity(applications);
   // Records still in the validated snapshot are canonical already; only new or
   // edited records (always new objects) need sanitizing.
   const pending = applications.filter((application) => !isValidatedRecord(application));

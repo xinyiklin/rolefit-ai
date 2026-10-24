@@ -3,11 +3,15 @@
 //
 // Locked here: version negotiation, notifications get no reply, tool errors
 // surface the server's issues with isError, search uses the tracker's duplicate
-// matcher and filters, tool calls hit the intended routes, and ROLEFIT_URL is
-// loopback-only.
+// matcher and filters, tool calls hit the intended routes, resume reads return
+// the app's own plain text beside the source, and ROLEFIT_URL is loopback-only.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+
+import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
+import { serializeResumeData } from "../../src/lib/resumeText.ts";
 
 import { handleMcpMessage } from "../server.ts";
 import { createTools, roleFitBaseUrl } from "../tools.ts";
@@ -17,6 +21,7 @@ const records = [
   { id: "a1", title: "Backend Engineer at Acme", company: "Acme, Inc.", role: "Backend Engineer", status: "applied", jobUrl: "https://boards.greenhouse.io/acme/jobs/4012345", createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-01T00:00:00.000Z", appliedAt: "2026-10-01T00:00:00.000Z", jobDescription: "private text" },
   { id: "b2", title: "Data Analyst at Globex", company: "Globex", role: "Data Analyst", status: "rejected", jobUrl: "https://globex.example/jobs/9", createdAt: "2026-10-05T00:00:00.000Z", updatedAt: "2026-10-06T00:00:00.000Z" }
 ];
+const resumeSource = await readFile(new URL("../../server/starter.resume", import.meta.url), "utf8");
 const calls = [];
 async function fakeFetch(url, init = {}) {
   calls.push({ url, method: init.method, body: init.body ? JSON.parse(init.body) : undefined });
@@ -31,6 +36,13 @@ async function fakeFetch(url, init = {}) {
   if (path === "/api/applications/a1/status") return json(200, { application: { id: "a1", status: "interviewing" }, changed: true });
   if (path === "/api/applications/a1/answers") return json(200, { application: { id: "a1" }, added: 1 });
   if (path === "/api/applications/a1/events") return json(200, { application: { id: "a1" }, statusChanged: true });
+  if (path === "/api/workspace" && init.method === "GET") {
+    return json(200, { baseResume: { text: "private" }, baseResumeOptions: [{ fileName: "default.resume", label: "Base resume", kind: "resume" }, { fileName: "data.resume", label: "data", kind: "resume" }] });
+  }
+  if (path === "/api/workspace/base-resume/candidates") {
+    const [fileName] = JSON.parse(init.body).fileNames;
+    return json(200, { candidates: fileName === "default.resume" ? [{ fileName, label: "Base resume", kind: "resume", text: resumeSource }] : [] });
+  }
   return json(404, { error: "API route not found." });
 }
 const tools = createTools(base, fakeFetch);
@@ -52,7 +64,7 @@ const call = async (name, args) => (await rpc("tools/call", { name, arguments: a
   assert.equal((await handleMcpMessage({ jsonrpc: "2.0", id: null, method: "ping" }, tools)).error.code, -32600, "MCP request ids are never null");
   assert.equal(await handleMcpMessage({ jsonrpc: "2.0", id: 7, result: {} }, tools), null, "a client response gets no reply");
   const listed = (await rpc("tools/list")).result.tools;
-  assert.deepEqual(listed.map((tool) => tool.name), ["search_applications", "get_application", "commit_application", "update_application_status", "log_application_event", "add_application_answers"]);
+  assert.deepEqual(listed.map((tool) => tool.name), ["search_applications", "get_application", "commit_application", "update_application_status", "log_application_event", "add_application_answers", "list_resumes", "get_resume"]);
   for (const tool of listed) {
     assert.equal(tool.inputSchema.type, "object");
     assert.ok(tool.description.length > 40);
@@ -61,7 +73,9 @@ const call = async (name, args) => (await rpc("tools/call", { name, arguments: a
     assert.match(listed.find((tool) => tool.name === name).description, /read the record .* before retrying/, `${name} warns against blind retries`);
   }
   const commitSchema = listed.find((tool) => tool.name === "commit_application").inputSchema;
-  assert.deepEqual(commitSchema.properties.application.properties.status.enum, ["applied", "not_applying"]);
+  assert.deepEqual(commitSchema.properties.application.properties.status.enum, ["applied", "not_applying", "draft"]);
+  assert.equal(commitSchema.properties.dryRun.type, "boolean");
+  assert.equal(commitSchema.properties.acknowledgedDuplicates.items.type, "string");
   assert.ok(!commitSchema.properties.application.properties.notApplyingReasons.items.enum.includes("constraints"), "retired skip reason is not offered");
 }
 
@@ -116,12 +130,35 @@ const call = async (name, args) => (await rpc("tools/call", { name, arguments: a
   assert.equal(calls[0].url, `${base}/api/applications/a1/events`);
   assert.deepEqual(calls[0].body, { type: "interview", kind: "technical", date: "2026-10-30" });
 
+  calls.length = 0;
+  const checked = await call("commit_application", { application: { title: "Role", status: "draft" }, dryRun: true, acknowledgedDuplicates: ["a1"] });
+  assert.equal(checked.isError, false);
+  assert.deepEqual(calls[0].body, { application: { title: "Role", status: "draft" }, dryRun: true, acknowledgedDuplicates: ["a1"] }, "sent through unchanged");
+
   const record = await call("get_application", { id: "a1" });
   assert.equal(record.isError, false);
   assert.equal(record.structuredContent.jobDescription, "private text", "the full record");
   const missing = await call("get_application", { id: "zz" });
   assert.equal(missing.isError, true);
   assert.match(missing.content[0].text, /No application has id zz/);
+}
+
+// list_resumes and get_resume.
+{
+  const listed = await call("list_resumes", {});
+  assert.equal(listed.isError, false);
+  assert.deepEqual(listed.structuredContent, { resumes: [{ fileName: "default.resume", label: "Base resume" }, { fileName: "data.resume", label: "data" }] }, "names only, no resume text");
+  calls.length = 0;
+  const resume = await call("get_resume", { fileName: "default.resume" });
+  assert.equal(resume.isError, false);
+  assert.deepEqual(calls[0].body, { fileNames: ["default.resume"] });
+  assert.equal(resume.structuredContent.sourceText, resumeSource);
+  assert.equal(resume.structuredContent.text, serializeResumeData(parseResumeFile(resumeSource).data), "the plain text RoleFit sends to Fit");
+  assert.doesNotMatch(resume.structuredContent.text, /<\/?[a-z]+>/, "no inline markup");
+  const missing = await call("get_resume", { fileName: "data.resume" });
+  assert.equal(missing.isError, true);
+  assert.match(missing.structuredContent.error, /No readable saved resume is named data\.resume/);
+  assert.equal((await call("get_resume", {})).isError, true);
 }
 
 // Unreachable server and the loopback-only base URL.

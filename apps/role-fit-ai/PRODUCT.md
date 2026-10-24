@@ -987,10 +987,13 @@ discard it.") and never starts from an import.
 
 An outside AI agent may record applications through the local MCP server in
 `mcp/` (README: Agent access). It changes the tracker only as the app would:
-one atomic commit of a submitted or skipped job with its editable documents,
-later answers appended without changing saved ones, timeline events through the
-Log buttons' rules, and stage moves the row menu offers. A value the tracker
-would drop or alter refuses the whole write with the field named; nothing is
-guessed. The agent receives whatever tracker data it reads, so its own model
-provider sees that personal data; RoleFit itself sends nothing to the agent's
+one atomic commit of a submitted or skipped job with its editable documents (or
+a Draft without them), later answers appended without changing saved ones,
+timeline events through the Log buttons' rules, and stage moves the row menu
+offers. A commit whose posting matches a saved record is refused until the
+agent names each match as reviewed, as Prepare's duplicate check asks the user;
+a dry run reports the same outcome without saving. A value the tracker would
+drop or alter refuses the whole write with the field named; nothing is guessed.
+The agent may also read the saved base resumes. It receives whatever tracker
+and resume data it reads, so its own model provider sees that personal data; RoleFit itself sends nothing to the agent's
 provider and keeps the server loopback-only.

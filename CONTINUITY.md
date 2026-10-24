@@ -118,6 +118,11 @@ D-entries in `docs/decisions.md`.
   then ~1 ms), tripping main's 1 s pairing fetch. Failures before any success
   now keep Loading and retry 4x at 1.5 s. This explains the 0.11.1/0.12.0
   smoke flake; the 750 ms health probe can still read "unreachable".
+- [USER+CODE+TOOL] **Agent commit: Drafts, duplicate guard, dry run; MCP
+  resume reads** (D100) on `feature/rolefit-mcp-agent-commit`. Verified:
+  server tsc, commit and MCP probes, `npm run check` (202/202), read tools over
+  the real workspace handlers. Open: no MCP tool attaches documents to a
+  submitted Draft (the route exists); real MCP clients not re-run.
 - [USER+CODE+TOOL] **Landing download buttons and resize guard**: equal-width
   buttons with Apple/Windows glyphs; file type, size, and "Unsigned" moved to
   a caption linked by `aria-describedby`. `resizeGuard.ts` drops the glass blur

@@ -46,7 +46,10 @@ for provider, prompt, sanitizer, and review work.
   `documentService.ts` owns the strict document file + tracker metadata
   transaction; the focused document, attachment, and tracker route modules own
   only their HTTP workflows. `commitService.ts` owns the atomic agent commit
-  (record + editable sources, folder removed if the tracker write fails) and
+  (record + editable sources, folder removed if the tracker write fails; a
+  Draft carries no dates or documents; the tracker's duplicate matcher refuses
+  unacknowledged matches under the lock; a dry run stops before any write,
+  D100) and
   `statusService.ts` the server-side stage change, which shares the row menu's
   `stageMenuMoveAllowed` and `withStatusChange`; `answerService.ts` owns
   answer stamping for both the commit and the later-answers append, and

@@ -2,8 +2,9 @@
 // the running RoleFit server's loopback routes: the server owns validation,
 // locking and storage, so this process never touches the workspace itself.
 
+import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import { MAX_APPENDED_ANSWERS } from "../server/applications/answerService.ts";
-import { COMMIT_STATUSES } from "../server/applications/commitService.ts";
+import { COMMIT_STATUSES, MAX_ACKNOWLEDGED_DUPLICATES } from "../server/applications/commitService.ts";
 import { APPLICATION_EVENT_TYPES } from "../server/applications/eventService.ts";
 import { APPLICATION_SOURCES } from "../server/applications/schema.ts";
 import { INTERVIEW_KINDS, STAGE_HISTORY_NOTE_MAX_LENGTH } from "../shared/applicationStageHistoryContract.ts";
@@ -15,6 +16,7 @@ import {
   type DuplicateCandidate
 } from "../src/lib/jobIdentity.ts";
 import { LEGACY_NOT_APPLYING_REASONS, NOT_APPLYING_REASONS } from "../src/lib/notApplying.ts";
+import { serializeResumeData } from "../src/lib/resumeText.ts";
 
 export type ToolResult = { ok: boolean; value: unknown };
 
@@ -198,12 +200,16 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
       title: "Commit application",
       description:
         "Create one tracker record, with its tailored resume and cover letter, in a single atomic save. Use status " +
-        "`applied` for a submitted application or `not_applying` for a job you decided to skip. Check " +
-        "search_applications for duplicates first. The server assigns id, createdAt and updatedAt, builds the " +
-        "document metadata, and stamps applicationId on full answer revisions. Every value you send is stored " +
-        "exactly as sent or the whole commit is refused with `issues` naming each field; nothing is saved on a " +
-        "refusal. Omit a field rather than sending null. Unlisted tracker fields (location, salaryMin, contacts, " +
-        "aiUsage, ...) are accepted under the same rule." + CHECK_BEFORE_RETRY,
+        "`applied` for a submitted application, `not_applying` for a job you decided to skip, or `draft` for one " +
+        "you started but have not submitted (no documents or dates; submit it later with update_application_status). " +
+        "The server runs the tracker's duplicate matcher and refuses with status 409 and `duplicates` while any " +
+        "match is not listed in acknowledgedDuplicates; if the match is the same application (often your own " +
+        "draft), change that record instead. Send dryRun: true to get the same answer without saving anything. " +
+        "The server assigns id, createdAt and updatedAt, builds the document metadata, and stamps applicationId " +
+        "on full answer revisions. Every value you send is stored exactly as sent or the whole commit is refused " +
+        "with `issues` naming each field; nothing is saved on a refusal. Omit a field rather than sending null. " +
+        "Unlisted tracker fields (location, salaryMin, contacts, aiUsage, ...) are accepted under the same rule." +
+        CHECK_BEFORE_RETRY,
       inputSchema: {
         type: "object",
         required: ["application"],
@@ -253,6 +259,13 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
               },
               applicationAnswers: answerList("Answers given in the application.")
             }
+          },
+          dryRun: { type: "boolean", description: "Validate everything, including documents and duplicates, and save nothing." },
+          acknowledgedDuplicates: {
+            type: "array",
+            maxItems: MAX_ACKNOWLEDGED_DUPLICATES,
+            items: { type: "string" },
+            description: "Ids of matching records you reviewed and are keeping separate from this one."
           },
           documents: {
             type: "object",
@@ -366,6 +379,50 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
       run: ({ id, ...body }) => typeof id === "string"
         ? request("POST", `/api/applications/${encodeURIComponent(id)}/answers`, body)
         : Promise.resolve({ ok: false, value: { error: "id: required string" } })
+    },
+    {
+      name: "list_resumes",
+      title: "List resumes",
+      description:
+        "List the base resumes saved in the RoleFit workspace (default.resume first), by fileName and label. " +
+        "Read one with get_resume.",
+      inputSchema: { type: "object", additionalProperties: false, properties: {} },
+      async run() {
+        const workspace = await request("GET", "/api/workspace");
+        if (!workspace.ok) return workspace;
+        const { baseResumeOptions } = workspace.value as { baseResumeOptions: { fileName: string; label: string }[] };
+        return { ok: true, value: { resumes: baseResumeOptions.map(({ fileName, label }) => ({ fileName, label })) } };
+      }
+    },
+    {
+      name: "get_resume",
+      title: "Get resume",
+      description:
+        "Read one saved base resume. `text` is the plain text RoleFit itself sends to Fit Assessment and Polish " +
+        "(headings, entry rows, bullets; no formatting markup); `sourceText` is the complete .resume file, the " +
+        "starting point for a tailored copy to send with commit_application.",
+      inputSchema: {
+        type: "object",
+        required: ["fileName"],
+        additionalProperties: false,
+        properties: { fileName: { type: "string", description: "A fileName from list_resumes, e.g. default.resume." } }
+      },
+      async run({ fileName }) {
+        if (typeof fileName !== "string" || !fileName) return { ok: false, value: { error: "fileName: required string" } };
+        const read = await request("POST", "/api/workspace/base-resume/candidates", { fileNames: [fileName] });
+        if (!read.ok) return read;
+        const [resume] = (read.value as { candidates: { fileName: string; label: string; text: string }[] }).candidates;
+        if (!resume) return { ok: false, value: { error: `No readable saved resume is named ${fileName}. List them with list_resumes.` } };
+        return {
+          ok: true,
+          value: {
+            fileName: resume.fileName,
+            label: resume.label,
+            text: serializeResumeData(parseResumeFile(resume.text).data),
+            sourceText: resume.text
+          }
+        };
+      }
     }
   ];
 }
