@@ -61,9 +61,9 @@ updates:
     ignore:
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
-      # @electron/packager, @electron/universal, and electron-winstaller all
-      # require ^3, so a major here installs a second copy beside theirs rather
-      # than replacing it. It moves when the Forge packaging stack moves.
+      # The packaged smoke test reads archives with the asar major that
+      # @electron/packager writes (^4 under Forge 8; deps:check enforces it),
+      # so a major here moves only when the Forge packaging stack moves.
       - dependency-name: "@electron/asar"
         update-types: ["version-update:semver-major"]
       # react-pdf pins pdfjs-dist to an exact version, so any standalone bump

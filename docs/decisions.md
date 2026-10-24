@@ -21,11 +21,14 @@ later entry wins.
   stay `*`), published by the Typeset static-container deploy from `main`; that
   milestone's PR checks, `Typeset CI and Deploy` run, and live-site receipt are
   UNCONFIRMED.
-- 2026-07-29 [USER+CODE+TOOL] D003 ACTIVE: Toolchain: Node 24.18+ below 25 (`.node-version`:
-  24.18.0), npm 11.16.0, root-owned TypeScript 7.0.2/Vite/React tooling, a
-  pinned install-script allowlist, and the dependency-contract gate; Electron
-  43.7.9 (bundled Node 24.21.0; superseded 43.2.0 on 2026-10-09, see that day).
-  Actions are SHA-pinned; Dependabot has no auto-merge and checks npm monthly
+- 2026-07-29 [USER+CODE+TOOL] D003 ACTIVE: Toolchain: Node 24.22+ below 25 (`.node-version`:
+  24.22.1, CI and the Typeset image), npm 11.19.1 (the npm that Node bundles),
+  root-owned TypeScript 7.0.2/Vite/React tooling, a pinned install-script
+  allowlist, and the dependency-contract gate; Electron 44.9.3 (bundled Node
+  24.22.0) packaged by Electron Forge 8.0.1 with `@electron/asar` 4, whose major
+  must match `@electron/packager`'s (`electron-winstaller` keeps its own asar
+  3). 2026-10-23: superseded Node 24.18.0 / npm 11.16.0, Electron 43.7.9, and
+  Forge 7.11.2. Actions are SHA-pinned; Dependabot has no auto-merge and checks npm monthly
   (2026-10-09); Vite, TypeScript, Electron, PDF/font, and Python bumps stay
   manual.
 - 2026-07-29..07-31 [USER+CODE+TOOL] D004 ACTIVE: PDF dependencies stay `pdf-lib` 1.17.1,
@@ -714,6 +717,14 @@ and lives in the app ledger.
   and copy fields. Contract: `apps/role-fit-ai/desktop/AGENTS.md`. UNCONFIRMED:
   a live extension install against the real companion and
   screen-reader/forced-colors rendering.
+- 2026-10-23 [USER+CODE+TOOL] D096 ACTIVE: **Desktop targets are macOS Apple
+  silicon (macOS 13+) and Windows x64.** Dropping Intel macOS builds is a
+  product choice made with the Electron 44 upgrade, not an Electron limit
+  (Electron 44 still ships darwin-x64); Electron 44 does require macOS 13.
+  Release and preview workflows, the
+  asset contract, Forge and collector target checks, and the landing catalog
+  accept only that set; the landing page fails closed on a release that still
+  carries Intel assets. Releases through 0.21.0 keep their Intel downloads.
 
 ### Process and workflow decisions
 

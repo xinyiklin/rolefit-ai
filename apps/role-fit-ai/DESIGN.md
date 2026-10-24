@@ -182,7 +182,7 @@ including Careflow, and wears the workspace's calm native look: it imports
 preference with no override control, sets everything in the system UI face,
 and separates regions by tone rather than rules. It may use a larger display
 hero and shows real product captures, the local runtime boundary, and explicit
-macOS Apple silicon, macOS Intel, and Windows x64 download rows. Unlike the
+macOS Apple silicon and Windows x64 download rows. Unlike the
 Drafting Desk, which rejects decorative motion, the landing carries the
 restrained entrance motion shared across the portfolio: a one-shot
 fade-and-lift as sections scroll into view (never looping), plus a one-shot

@@ -386,7 +386,7 @@ offers 30 bundled families; each loads only when a document uses it.
 ## Stack
 
 React 19 · TypeScript · Vite · Node.js (reusable `server/runtime.ts`) ·
-Electron 43 desktop companion · shared `@typeset/engine` / `@typeset/editor`
+Electron 44 desktop companion · shared `@typeset/engine` / `@typeset/editor`
 workspaces · custom CSS · `lucide-react` icons
 
 No hosted RoleFit backend, database, or account system. Supported provider integrations: Claude · CLI (Claude Code) · Claude · API · OpenAI · CLI (Codex) · OpenAI · API.
@@ -450,8 +450,8 @@ the non-termination choices because it cannot provide the same graceful
 signal. If the listener does not identify itself as compatible RoleFit, the
 companion offers only another port or Quit and never signals that process.
 
-Distribution scaffolding can build native macOS arm64/x64 DMG and ZIP artifacts
-and a Windows x64 Squirrel installer. Stable public releases fail closed unless
+Distribution scaffolding can build native macOS arm64 (macOS 13+) DMG and ZIP
+artifacts and a Windows x64 Squirrel installer. Stable public releases fail closed unless
 the native signing credentials are available. A separate
 `rolefit-preview-vX.Y.Z-beta.N` workflow may publish checksum-covered unsigned
 GitHub prereleases while those identities are unavailable: macOS receives only
@@ -675,7 +675,7 @@ averages, benchmark-run subtotals and explicit gaps in historical usage.
 An AI agent can record applications in the tracker through a local MCP
 server. It speaks MCP over stdio, calls the running RoleFit server on
 loopback, and never edits workspace files itself. It runs from a source
-checkout with Node 24.18+ (installers do not include it). Start RoleFit
+checkout with Node 24.22+ (installers do not include it). Start RoleFit
 first, then register the server with your agent, for example in Claude Code:
 
 ```bash

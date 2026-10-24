@@ -32,6 +32,12 @@ D-entries in `docs/decisions.md`.
   carries a format version; this build and later open a workspace saved by a
   newer RoleFit with an update notice and leave it unchanged, while earlier
   builds still report such files as unreadable. It changes no other format.
+- 2026-10-23 [USER+CODE] The release that ships Electron 44 (D003, D096) must
+  say the desktop app now needs macOS 13+ on Apple silicon, with no Intel
+  macOS build, and drop the "Apple silicon and Intel" line the earlier notes
+  repeat. Until a release with that asset set exists, the landing page links
+  every row to GitHub Releases (it rejects Intel-carrying releases), so tag a
+  preview soon after merge.
 
 ## Deferred backlog
 
@@ -88,13 +94,16 @@ D-entries in `docs/decisions.md`.
   preamble loses focus, the server links on a clipped scope, and an oversized
   first brief item renders its placeholder (2026-10-06); a declined typed-link
   or paste source stays "stopped" (2026-10-07).
-- 2026-10-17..18 [TOOL] Unverified from merged work: #235's packaged smoke on
-  macOS (win32 only); D087's OpenAI API live calls, its Models page in
-  Firefox, and the Background view switch.
+- 2026-10-17..18 [TOOL] Unverified from merged work: D087's OpenAI API live
+  calls, its Models page in Firefox, and the Background view switch. (#235's
+  packaged smoke passed on macOS arm64 on 2026-10-23.)
 - 2026-10-20..22 [USER+TOOL] Open from #257/#258 (entries rotated to
   `docs/continuity/2026-10.md`): a bare Rejected move is not counted as a
   reply; Ghosted to Applied skips back past Interviewing; the Timeline count
   includes automatic stage entries; timeline and Analytics unchecked in Firefox.
+- 2026-10-23 [TOOL] Unverified from D095 (#268): a real downgrade between
+  installed builds. From D094 (#266): the installed companion and a
+  non-default port.
 - 2026-10-22..23 [USER+TOOL] Open from #260-#262 (entries rotated to
   `docs/continuity/2026-10.md`): white vs gray workspace plane and stacked
   state labels (user's call); unverified Firefox/Safari, print, forced colors,
@@ -102,39 +111,17 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-23
 
-- [USER+CODE+TOOL] **Workspace schema versioning** (D095): `applications.json`
-  carries `schemaVersion: 1`; unversioned trackers migrate once through
-  `server/applications/trackerVersion.ts` (one fixture per legacy shape); a
-  tracker or preferences file newer than the build answers `423
-  workspace-newer` on every route, backup, and restore, never written, with a
-  Drafting Desk notice. Verified: types, focused probes (each tracker route
-  leaves a newer workspace byte-identical), the RoleFit check, two independent
-  reviews and a follow-up review of the fixes. Browser QA (user-authorized, a
-  throwaway workspace, in-app pane at 1280/730/375px in light and dark; contrast
-  by computed color because pane screenshots timed out) found and fixed three
-  gaps: a settings-only lock showed no notice, Applications looked empty, and
-  Prepare said to retry. Unverified: a real downgrade between installed builds.
-- [USER+TOOL] **0.21.0 preview prepared** (minor: agent tracker writes and
-  MCP server, #266; extension 1.5.1 for #265's popup fixes; no stored-format
-  change); notes `apps/role-fit-ai/docs/releases/0.21.0-beta.1.md`. The MCP
-  server also ran under a real Claude Code and Codex 0.162.1 client against a
-  throwaway server.
-- [USER+CODE+TOOL] **Agent tracker writes** (D094): atomic
-  `POST /api/applications/commit` with field-path refusals, server-side
-  `POST /api/applications/<id>/status` sharing the row menu's rule and
-  transform, later-answers and timeline-event routes, and a dependency-free
-  stdio MCP server (six tools) in `apps/role-fit-ai/mcp/`.
-  Verified: types, new probes, the RoleFit check, a throwaway-server stdio run,
-  the packaged bundle; two independent reviews and a follow-up review of the
-  fixes. Unverified: the installed companion and a non-default port.
-- [USER+CODE+TOOL] **Redesign leftovers** fixed after the 0.20.0 preview: the
-  extension failure badge uses the new `--danger`; the popup's Offer and
-  Withdrawn dots match the tracker; hovering a field no longer fades the
-  increased-contrast outline (Prepare brief rows, companion key and port
-  fields); one off-hue PDF-preview color; stale doc wording. Verified: the
-  RoleFit check (197/197) and Firefox 158 computed-style probes in light, dark
-  and increased contrast. Chrome automation is blocked on this machine by a
-  DeveloperToolsDisabled policy. Ships as extension 1.5.1 in 0.21.0.
+- [USER+CODE+TOOL] **Toolchain upgrade** (D003, D096): Electron 44.9.3, Node
+  24.22.1 / npm 11.19.1, Forge 8.0.1 + asar 4, patch and audit fixes (dev audit
+  33 to 4 no-fix `image-size`), Intel macOS dropped, async `writeText`
+  awaited, landing pinned to 5182. Signed macOS now gets the app's entitlements
+  via `osxSign.optionsForFile` (Chromium defaults without Apple Events before;
+  the stable workflow asserts them), narrowed to `allow-jit` (a hardened-runtime
+  smoke passed; a no-JIT control crashed). Verified on macOS arm64: `npm run
+  check`, `make`, packaged smoke, codesign/ZIP/DMG, ad-hoc osx-sign runs, the
+  Typeset image, landing in a browser; reviewed. Unverified: Windows `make`/
+  installer on Forge 8 and a Developer ID signature (release CI only), a
+  43-encrypted API key under 44 on macOS, lucide icon redraws.
 
 ## 2026-10-18
 

@@ -146,9 +146,9 @@ install is needed to use it. To work on it locally:
 
 Requirements:
 
-- Node.js 24.18 or newer in the Node 24 line (matches CI, Docker, and the
+- Node.js 24.22 or newer in the Node 24 line (matches CI, Docker, and the
   workspace runtime contract)
-- npm 11.16.0
+- npm 11.19.1
 
 ```bash
 npm install
@@ -286,7 +286,7 @@ docker build -f apps/typeset/Dockerfile -t typeset .
 docker run --rm -p 127.0.0.1:5186:8080 typeset
 ```
 
-The multi-stage image builds with Node 24.18.0 and serves only the compiled
+The multi-stage image builds with Node 24.22.1 and serves only the compiled
 assets from unprivileged Nginx, with the server config in `nginx.conf`: a
 Content Security Policy that allows only the app's own origin (plus `blob:` and
 `data:` where the editor needs them), `nosniff`, frame denial, no referrer,

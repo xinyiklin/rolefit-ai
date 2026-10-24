@@ -141,9 +141,11 @@ change.
 
 | Platform | Architecture | Public artifact | Purpose |
 | --- | --- | --- | --- |
-| macOS | arm64 | signed/notarized DMG and ZIP | Apple silicon install plus future update-feed compatibility |
-| macOS | x64 | signed/notarized DMG and ZIP | Intel install plus future update-feed compatibility |
+| macOS | arm64 | signed/notarized DMG and ZIP | Apple silicon install (macOS 13+) plus future update-feed compatibility |
 | Windows | x64 | signed Squirrel installer package | per-user install/uninstall and future update-feed compatibility |
+
+Intel macOS builds were dropped on 2026-10-23 by product choice (D096);
+Electron 44 still ships darwin-x64.
 
 Linux packaging is deferred until its credential-encryption UX, desktop CLI
 PATH discovery, package format, and signing/repository expectations are tested
@@ -315,7 +317,15 @@ macOS CI requires:
 - a Developer ID Application certificate and password;
 - an ephemeral keychain created for the job and deleted at job end;
 - Apple notarization credentials scoped to the app/team;
-- hardened runtime and notarization before artifact upload.
+- hardened runtime and notarization before artifact upload;
+- the app's own entitlements, passed per file through `osxSign.optionsForFile`
+  (`entitlements.mac.plist` for the app: `allow-jit` plus Apple Events;
+  `entitlements.mac.inherit.plist` for nested code: `allow-jit` only, since V8
+  needs MAP_JIT but not unsigned executable memory). osx-sign ignores
+  top-level entitlement keys and would sign with Chromium's defaults, which lack Apple Events (the Terminal sign-in) and add
+  device access the app never uses. The stable workflow asserts the signed
+  app's runtime flag and entitlements, and `continueOnError: false` makes a
+  signing failure fatal.
 
 Windows CI requires a publicly trusted code-signing identity backed by a
 hardware token, HSM, or managed signing service. The checked-in
@@ -431,10 +441,11 @@ monorepo may publish products other than RoleFit. It prefers the newest
 complete non-draft, non-prerelease `rolefit-vX.Y.Z` entry. When none exists, it
 may accept the newest complete `rolefit-preview-vX.Y.Z-beta.N` prerelease and
 must disclose its unsigned status and expected platform warnings. Both channels
-require a canonical release URL and the exact macOS arm64/x64 DMG + ZIP,
+require a canonical release URL and the exact macOS arm64 DMG + ZIP,
 Windows x64 EXE, and checksum asset set. A 404-equivalent empty list, rate
-limit, network failure, malformed tag, wrong origin, duplicate, unexpected, or
-partial asset set leaves all three platform rows visible but links them to the
+limit, network failure, malformed tag, wrong origin, duplicate, unexpected
+(including a pre-D096 release's Intel assets), or partial asset set leaves both
+platform rows visible but links them to the
 Releases page instead of constructing a broken asset URL.
 
 ## Failure, rollback, and recovery
@@ -504,7 +515,7 @@ an authorized tag.
 ### D4 - Hosted download handoff
 
 1. Build a separate static product/download entry, never a hosted Drafting Desk.
-2. Show explicit macOS Apple silicon, macOS Intel, and Windows x64 choices.
+2. Show explicit macOS Apple silicon and Windows x64 choices.
 3. Resolve direct links only from a complete canonical GitHub Release and keep
    the Releases-page fallback in every unavailable/error state.
 4. Guard the output marker, entry manifest, and forbidden loopback/API strings.
@@ -543,7 +554,7 @@ git diff --check
 
 Use Node 24 for Forge packaging and making. The wrapper rejects every other
 host Node major, rejects cross-compilation, and supports
-only native macOS arm64/x64 or Windows x64 targets. Pass an explicit native
+only native macOS arm64 or Windows x64 targets. Pass an explicit native
 target when needed, for example:
 
 ```bash
@@ -563,7 +574,7 @@ Generated staging, unpacked applications, maker output, normalized artifacts,
 and CI downloads live under `apps/role-fit-ai/.forge/` and are ignored. The
 collector writes deterministic names such as
 `RoleFit-AI-0.21.0-macos-arm64.dmg` and a local
-`SHA256SUMS.txt`; the publication job creates one checksum file over all five
+`SHA256SUMS.txt`; the publication job creates one checksum file over all three
 release artifacts.
 
 Inspect the packaged application to confirm it contains no `.env`, ignored

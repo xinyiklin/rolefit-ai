@@ -27,7 +27,7 @@ export function copyRoleFitExtensionSetupValue(
   target: RoleFitExtensionSetupCopyTarget,
   extensionDirectory: string,
   activePort: number,
-  writeText: (value: string) => void
-): void {
-  writeText(resolveRoleFitExtensionSetupCopyValue(target, extensionDirectory, activePort));
+  writeText: (value: string) => Promise<void>
+): Promise<void> {
+  return writeText(resolveRoleFitExtensionSetupCopyValue(target, extensionDirectory, activePort));
 }

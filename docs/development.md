@@ -5,13 +5,13 @@ workspace; there is no generic root `dev`, `build`, or `preview` script.
 
 ## Requirements
 
-- Node.js 24.18 or newer in the Node 24 line. `.node-version` pins 24.18.0,
+- Node.js 24.22 or newer in the Node 24 line. `.node-version` pins 24.22.1,
   matching CI and Docker; direct `.ts` launchers use its built-in type
   stripping. The desktop companion instead runs on Electron's bundled Node,
   which `apps/role-fit-ai/desktop/runtime-versions.mjs` pins and the packaged
   smoke checks.
-- npm 11.16.0, declared by the root `packageManager` field, with the root
-  lockfile. The root `devEngines` block fails the runtime and package-manager
+- npm 11.19.1 (the version Node 24.22.1 bundles), declared by the root
+  `packageManager` field, with the root lockfile. The root `devEngines` block fails the runtime and package-manager
   check before `install`, `ci`, or `run` proceeds, so a mismatched toolchain
   stops earlier than the dependency gate. `npm run deps:check` validates both
   runtime versions and the installed dependency contracts, including a
@@ -30,8 +30,7 @@ workspace; there is no generic root `dev`, `build`, or `preview` script.
 - TypeScript 7.0.2 is the root-owned workspace compiler. Its platform package
   supplies the native `tsc` executable, so dependency CI must execute it on
   every supported runner rather than treating one host's lockfile entries as
-  cross-platform proof. Electron Forge's nested TypeScript 5 compiler is
-  private implementation detail and is not a workspace compiler.
+  cross-platform proof. No other TypeScript compiler may install.
 - Python 3 only for engine font-generation/check scripts and RoleFit's brand-mark
   generator. Install the font scripts' pinned dependencies from
   `packages/engine/scripts/requirements-fonts.txt` in an isolated environment;
@@ -299,7 +298,7 @@ changes remain manual review decisions.
 
 All third-party Actions use immutable commit SHAs with readable release
 comments so Dependabot can advance both together. The Typeset Dockerfile pins
-Node 24.18.0 and unprivileged Nginx by multi-architecture digest. Its PR
+Node 24.22.1 and unprivileged Nginx by multi-architecture digest. Its PR
 workflow builds that exact image and requires an HTTP response from the
 unprivileged static server before deployment can proceed.
 
@@ -308,6 +307,9 @@ unprivileged static server before deployment can proceed.
 - Typeset: `5186`, strict; HMR socket `24686`.
 - RoleFit AI standalone development: `5181`, loopback by default; reserved
   range `5181-5183`; `PORT` is the explicit standalone override.
+- RoleFit landing dev server and preview: `5182`, strict. The desktop smoke
+  also tries `5182` first and checks only `127.0.0.1`, which misses the
+  landing's IPv6 `localhost` bind, so do not run the two together.
 - The companion defaults to `5181` and can save a validated integer local-site
   port from `1` through `65535` under Electron `userData`. `Apply & restart`
   checks loopback availability and relaunches through clean server shutdown;
@@ -352,8 +354,8 @@ terminating an unrelated process.
 ## RoleFit companion packaging and release
 
 Forge commands use Node 24 and a matching native host. Supported targets are
-macOS arm64/x64 and Windows x64; cross-compilation and Linux packages fail
-closed. Examples:
+macOS arm64 (macOS 13+) and Windows x64; Intel macOS, cross-compilation, and
+Linux packages fail closed. Examples:
 
 ```bash
 # Apple silicon macOS

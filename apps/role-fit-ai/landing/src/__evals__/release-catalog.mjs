@@ -33,7 +33,6 @@ function validPayload({ preview = false } = {}) {
       ...DOWNLOAD_TARGETS.map((target) =>
         asset(target.assetName(version), {}, releaseTag)),
       asset(`RoleFit-AI-${version}-macos-arm64.zip`, {}, releaseTag),
-      asset(`RoleFit-AI-${version}-macos-x64.zip`, {}, releaseTag),
       asset("SHA256SUMS.txt", { size: 512 }, releaseTag),
     ],
   };
@@ -46,7 +45,7 @@ assert.equal(parsed.tag, tag);
 assert.equal(parsed.channel, "signed");
 assert.equal(parsed.previewLabel, undefined);
 assert.equal(parsed.downloads["macos-arm64"].name.endsWith(".dmg"), true);
-assert.equal(parsed.downloads["macos-x64"].name.endsWith(".dmg"), true);
+assert.equal("macos-x64" in parsed.downloads, false);
 assert.equal(parsed.downloads["windows-x64"].name.endsWith(".exe"), true);
 assert.equal(parsed.archives.macosArm64.name.endsWith("arm64.zip"), true);
 assert.equal(parsed.checksums.name, "SHA256SUMS.txt");
@@ -66,6 +65,7 @@ for (const mutation of [
   (payload) => { payload.assets.pop(); },
   (payload) => { payload.assets.push(payload.assets[0]); },
   (payload) => { payload.assets.push(asset("unexpected.bin")); },
+  (payload) => { payload.assets.push(asset(`RoleFit-AI-${version}-macos-x64.zip`)); },
   (payload) => { payload.assets[0].size = 0; },
   (payload) => {
     payload.assets[0].browser_download_url =

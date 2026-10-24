@@ -22,11 +22,8 @@ function option(name, fallback) {
 const platform = option("platform", process.platform);
 const arch = option("arch", process.arch);
 const explicitExecutable = option("executable", "");
-if (!new Set(["darwin", "win32"]).has(platform)) {
-  throw new Error("Packaged smoke supports only darwin and win32.");
-}
-if (!new Set(["arm64", "x64"]).has(arch)) {
-  throw new Error("Packaged smoke supports only arm64 and x64.");
+if ((platform !== "darwin" || arch !== "arm64") && (platform !== "win32" || arch !== "x64")) {
+  throw new Error("Packaged smoke supports only darwin/arm64 and win32/x64.");
 }
 if (platform !== process.platform) {
   throw new Error("Packaged smoke must run on the same native platform as its package.");

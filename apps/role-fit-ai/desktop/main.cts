@@ -1764,7 +1764,7 @@ async function startDesktop(): Promise<void> {
       if (errorMessage) throw new Error("Could not open the RoleFit browser-extension folder.");
     },
     copyExtensionSetupValue: async (target: RoleFitExtensionSetupCopyTarget) => {
-      copyRoleFitExtensionSetupValue(
+      await copyRoleFitExtensionSetupValue(
         target,
         extensionDirectory,
         activePort,
