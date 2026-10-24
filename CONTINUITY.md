@@ -7,7 +7,7 @@ operational detail belongs in the affected app documentation.
 
 ## Current state
 
-Current: extension 1.5.1, desktop bridge API 13. The published RoleFit release
+Current: extension 1.5.2, desktop bridge API 13. The published RoleFit release
 is the newest `rolefit-*` entry in `gh release list` (not recorded here;
 see `docs/git-workflow.md`). Release history: `docs/continuity/2026-10.md` and
 D-entries in `docs/decisions.md`.
@@ -28,35 +28,15 @@ D-entries in `docs/decisions.md`.
   required changes are in
   `apps/role-fit-ai/docs/engineering/distribution-cloud-plan.md` (Browser
   extension distribution). Nothing is decided or changed.
-- 2026-10-23 [USER+CODE] The release that ships D095 must say: the tracker now
-  carries a format version; this build and later open a workspace saved by a
-  newer RoleFit with an update notice and leave it unchanged, while earlier
-  builds still report such files as unreadable. It changes no other format.
-- 2026-10-23 [USER+CODE] The release that ships Electron 44 (D003, D096) must
-  say the desktop app now needs macOS 13+ on Apple silicon, with no Intel
-  macOS build, and drop the "Apple silicon and Intel" line the earlier notes
-  repeat. Until a release with that asset set exists, the landing page links
-  every row to GitHub Releases (it rejects Intel-carrying releases), so tag a
-  preview soon after merge.
-
-- 2026-10-23 [USER+CODE] The release that ships D097 must say: the app is
-  now RoleFit; macOS installs `RoleFit.app`, so delete the old `RoleFit AI.app`
-  (it shares the same data and, launched from the Dock, would run the old
-  build); Windows updates in place but leaves a stale `RoleFit AI` shortcut
-  beside the new `RoleFit` one; download file names drop "AI"; the extension
-  keeps its pairing but must be reloaded once to pick up the new PNG toolbar
-  icons and its bumped version. Bump `extension/manifest.json` past 1.5.1 and,
-  in `scripts/desktop-release-contract.test.mjs`, `EXTENSION_VERSION` and the
-  frozen notes heading (now `# RoleFit X.Y.Z:`) together in that release. No
-  published release (all `RoleFit-AI-*`) parses in the new landing catalog,
-  so tag a preview soon after merge. The four
-  product screenshots (landing and README twins) were retaken 2026-10-24 from
-  a freshly seeded synthetic workspace (Alex Morgan / LumenDesk, built through
-  the app's own codecs and tracker sanitizer, served on 5183), plus the three
-  README tracker shots on 2026-10-24; the unused `desktop-app.png` is deleted.
-  The installed-upgrade check (0.21.0 with a saved API key, then this build)
-  is unrun and not a release blocker: 2026-10-24 [USER] re-entering a key that
-  does not carry over is acceptable; the release notes should say so.
+- 2026-10-24 [USER+CODE] **0.22.0 preview prepared** (minor: tracker format
+  version D095 #268, Electron 44 and no Intel macOS D096 #269, RoleFit rename
+  D097 #272/#275/#276); extension 1.5.2 (name, PNG icons, newer-workspace
+  message), desktop API 13; notes
+  `apps/role-fit-ai/docs/releases/0.22.0-beta.1.md` carry the three
+  release notices rotated to `docs/continuity/2026-10.md` today. Tag
+  `rolefit-preview-v0.22.0-beta.1` only after the release PR merges and the
+  user approves it; until a release with `RoleFit-*` assets exists, the
+  landing page links every download to GitHub Releases.
 
 ## Deferred backlog
 

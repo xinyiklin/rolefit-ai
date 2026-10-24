@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "RoleFit",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "Prepare job postings in RoleFit for AI-powered resume tailoring and review.",
   "minimum_chrome_version": "123",
   "action": {
