@@ -14,9 +14,10 @@ const PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05
 const SERVER_INFO = { name: "rolefit", title: "RoleFit tracker", version: "1.0.0" };
 const INSTRUCTIONS =
   "Records job applications in the user's local RoleFit tracker. Search before committing to avoid duplicates; " +
-  "get_application reads one in full; commit_application saves a whole application atomically; " +
+  "get_application reads one in full; commit_application saves a whole application or a Draft atomically, " +
+  "refuses unacknowledged duplicates, and validates without saving on dryRun; " +
   "add_application_answers adds later answers; log_application_event records interviews, responses and " +
-  "follow-ups; update_application_status moves its stage.";
+  "follow-ups; update_application_status moves its stage. list_resumes and get_resume read the saved base resumes.";
 
 type JsonRpcId = string | number | null;
 type JsonRpcResponse =

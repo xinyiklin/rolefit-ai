@@ -701,17 +701,23 @@ another port; only loopback origins are accepted. Tools:
 - `get_application` — one record in full: notes, answers, Fit snapshot,
   timeline, and saved documents.
 - `commit_application` — one Applied or Skipped record with its `.resume` and
-  `.cover` sources, saved atomically. A value the tracker would drop, clip, or
-  normalize refuses the whole commit with field-level `issues`.
+  `.cover` sources, or a Draft without documents, saved atomically. A value the
+  tracker would drop, clip, or normalize refuses the whole commit with
+  field-level `issues`. A posting that matches a saved record is refused with
+  the matches until the agent lists their ids in `acknowledgedDuplicates`.
+  `dryRun: true` returns the same answer without saving.
 - `add_application_answers` — answers given after the commit, appended as
   new entries; saved answers never change.
 - `log_application_event` — an interview, employer response, or follow-up on
   a submitted application's timeline, exactly as the Log buttons add it.
 - `update_application_status` — a stage change, applied by the server with the
   same history entry the tracker row's stage menu adds.
+- `list_resumes` and `get_resume` — the saved base resumes; `get_resume`
+  returns the `.resume` source and the plain text RoleFit sends to Fit
+  Assessment.
 
-The agent receives the tracker data it reads, so its own model provider sees
-that personal data.
+The agent receives the tracker and resume data it reads, so its own model
+provider sees that personal data.
 
 ## Browser extension
 

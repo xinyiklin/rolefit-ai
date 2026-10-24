@@ -622,7 +622,7 @@ later entry wins.
   builds (0.18.x included) reject a tracker or backup carrying `ghosted`, and
   reject the workspace preferences file for every user of this build, since it
   always writes the two new keys (confirmed by reading 0.18's code, not run).
-- 2026-10-23 [USER+CODE+TOOL] D094 ACTIVE: **Agents write the tracker only
+- 2026-10-23 [USER+CODE+TOOL] D094 AMENDED by D100: **Agents write the tracker only
   through server routes.** `POST /api/applications/commit` stores one Applied or
   Skipped record with its `.resume`/`.cover` sources atomically and refuses,
   with field-path `issues`, any sent value the sanitizer would drop, clip, or
@@ -660,6 +660,21 @@ later entry wins.
   0.20/0.21 read its files and drop only the version, which reads back as
   version 0. Builds before it still report newer files as corrupt. Contract:
   `apps/role-fit-ai/docs/engineering/workspace-backup.md#schema-versions-and-newer-files`.
+- 2026-10-24 [USER+CODE+TOOL] D100 ACTIVE: **The agent commit also saves
+  Drafts, refuses unacknowledged duplicates, and has a dry run.**
+  `POST /api/applications/commit` accepts `status: "draft"` with no
+  `appliedAt`, `notApplyingAt`, or documents (submitted later through the
+  status route). Under the tracker lock it runs `findDuplicateApplications` on
+  the record's posting fields (raw posting text first, as the Prepare guard
+  does) and answers `409` with `duplicates` summaries until every matching id is
+  listed in `acknowledgedDuplicates`; an acknowledgment is a gate only and
+  stores or links nothing. `dryRun: true` gives the same answer without writing
+  (`200 { dryRun: true, valid: true }` when the commit would save). The MCP
+  server adds `list_resumes` and `get_resume` over the existing base-resume
+  routes; `get_resume.text` is `serializeResumeData`, the text the app sends to
+  Fit Assessment. The user chose this batch from an agent's five proposals;
+  an MCP Fit snapshot, field-level updates, documents on an existing record,
+  and server-side PDF rendering are undecided.
 
 ### Extension
 
