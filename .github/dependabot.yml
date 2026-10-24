@@ -127,3 +127,15 @@ updates:
     ignore:
       - dependency-name: "fonttools"
       - dependency-name: "brotli"
+
+  # Brand-mark generator (apps/role-fit-ai/desktop/assets/generate_icons.py);
+  # it runs by hand, so a bump only matters the next time the mark changes.
+  - package-ecosystem: pip
+    directory: /apps/role-fit-ai/desktop/assets
+    schedule:
+      interval: monthly
+      time: "09:00"
+      timezone: America/New_York
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(icons)"

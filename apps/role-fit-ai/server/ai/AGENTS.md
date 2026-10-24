@@ -1,4 +1,4 @@
-# RoleFit AI Runtime Guide
+# RoleFit Runtime Guide
 
 Applies to `apps/role-fit-ai/server/ai/` and `server/ai-cli/`. Prompt and
 sanitizer code is executable product behavior and anti-fabrication-critical.

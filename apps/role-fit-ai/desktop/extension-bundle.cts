@@ -17,7 +17,10 @@ export const EXTENSION_FILES = Object.freeze([
   "bridge.js",
   "settings.js",
   "runtime-config.js",
-  "icons/icon.svg"
+  "icons/icon16.png",
+  "icons/icon32.png",
+  "icons/icon48.png",
+  "icons/icon128.png"
 ] as const);
 
 export const ROLEFIT_EXTENSION_DIRECTORY_NAME = "browser-extension";

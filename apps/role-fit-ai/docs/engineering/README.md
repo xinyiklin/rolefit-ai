@@ -1,4 +1,4 @@
-# RoleFit AI Engineering Docs
+# RoleFit Engineering Docs
 
 These notes own RoleFit-specific implementation contracts:
 

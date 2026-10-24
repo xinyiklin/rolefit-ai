@@ -47,7 +47,7 @@ function pdfExportFailureMessage(error: unknown): string {
     return "PDF export failed. The bundled document fonts could not be loaded. Try again.";
   }
   if (/dynamically imported module|Outdated Optimize Dep/i.test(detail)) {
-    return "PDF export failed. The export tools could not be loaded. Refresh RoleFit AI and try again.";
+    return "PDF export failed. The export tools could not be loaded. Refresh RoleFit and try again.";
   }
   return "PDF export failed. Try again.";
 }

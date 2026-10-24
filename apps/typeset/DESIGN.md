@@ -204,7 +204,7 @@ measurement contract is owned by `@typeset/engine`. Typeset composes those
 surfaces with its own file/status row and product identity.
 
 - Put reusable editor behavior and base styles in the owning package, then
-  verify both Typeset and RoleFit AI.
+  verify both Typeset and RoleFit.
 - Keep autosave copy, filename lifecycle, file actions, and Typeset-only
   responsive composition in this app.
 - Prefer narrow values, callbacks, and deliberate slots over app-mode flags.

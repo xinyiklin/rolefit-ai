@@ -1,6 +1,6 @@
 # Testing
 
-RoleFit AI testing should prove the changed behavior, protect API key
+RoleFit testing should prove the changed behavior, protect API key
 isolation, and avoid wasting time on broad checks when a targeted one
 gives stronger feedback. The lightweight gates below are what the project
 relies on. Run commands below from the repository root unless stated otherwise.

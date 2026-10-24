@@ -1,7 +1,7 @@
 # @typeset/editor
 
 Private React workspace package containing the direct structured-document
-editor and shared document chrome used by Typeset and RoleFit AI. It depends on
+editor and shared document chrome used by Typeset and RoleFit. It depends on
 `@typeset/engine` and has no app-specific provider, tracker, file-lifecycle, or
 navigation behavior.
 

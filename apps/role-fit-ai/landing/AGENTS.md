@@ -34,15 +34,50 @@ root and RoleFit app guides first.
 
 ## Design and verification
 
-- Wear the workspace's look without copying the Drafting Desk shell:
+- Wear the RoleFit brand direction (DESIGN.md § Public product/download page,
+  D097) over the workspace tokens without copying the Drafting Desk shell:
   `landing.css` imports `../../src/styles/tokens.css` (CSS only, never app
-  code), so token changes reach this page; landing-only values (the band, the
-  capture shadow, page width) stay in `landing.css`. Light and dark follow the
-  OS with no override; no webfonts, glass, or blur. Product claims must stay
+  code), so token changes reach this page; landing-only values (brand tints,
+  art opacity, shadows, page width) stay in `landing.css`. Light and dark follow
+  the OS with no override; no webfonts. Cards and panels share one frosted
+  glass recipe (`--glass*` tokens in `landing.css`) with opaque fallbacks for
+  no `backdrop-filter` and `prefers-reduced-transparency`; keep text contrast at
+  AA over the brightest art behind any glass. Product claims must stay
   short, concrete, and consistent with the local-first trust boundary.
+- Brand art lives in `public/assets/art/`: the user-supplied transparent
+  `waves-sides.webp` (hero) and `ribbon.webp` (download band, cropped to its own
+  bounds), `ribbon-low.webp` (behind the workspace gallery: derived from
+  `ribbon.webp`, flattened to 58% height, mirrored, with both ends faded to
+  transparent, so every ribbon shares one art style), `ribbon-accent.webp`
+  (behind the privacy diagram; generated, accepted only after a side-by-side
+  match with `ribbon.webp`), and the kit's
+  mobile hero SVG. `rolefit-social-preview.png` and `extension-import.webp`
+  were also generated that way; check their text by eye whenever they are
+  regenerated, and never accept invented UI labels. Decorative art enters as
+  `aria-hidden` images, never a stylesheet `url()` (the build guard rejects
+  `url()` in the bundled CSS); the import illustration is content, with alt
+  text and a figcaption. The hero art is masked to a wash behind the copy and fades at the
+  hero's edge. The ribbon is always shown whole, never cropped or masked, and
+  always passes behind content: the low-profile ribbon under the workspace
+  gallery's lower edge (the cards sit on it), and the band ribbon behind the
+  download card. The user chose this placement over a standalone band and over no
+  mid-page ribbon (2026-10-24). `public/assets/logo-symbol.svg`
+  is the bare ribbon-R mark; the favicons and touch icon come from
+  `desktop/assets/generate_icons.py`. `public/assets/browsers/` holds the
+  Chrome and Firefox logos, cut from the browsers' own installed app icons;
+  use them only to name supported browsers, never restyled.
+- `.device-laptop` is the reusable laptop frame: put any image or element in
+  `.device-laptop__screen`; `public/assets/device/laptop.webp` has a transparent
+  screen whose measured insets live in that CSS block. A new frame asset needs
+  its screen insets re-measured.
+- Platform buttons appear in the hero and the download panel; every
+  `a[data-download-target]` is upgraded by `main.ts`, and each carries a
+  `[data-format]` line that names an unsigned preview. Keep the visible text
+  as the accessible name (no `aria-label` override), so the format line and
+  "Unsigned" reach screen readers.
 - Preserve semantic landmarks, keyboard focus, WCAG AA contrast, useful image
   alternatives, and reduced-motion behavior at desktop and narrow widths.
-- The section scroll-reveal and the hero edit-card draw are progressive enhancements,
+- The section scroll-reveal and the hero entrance are progressive enhancements,
   not required layout. Keep them one-shot, collapse them fully under
   `prefers-reduced-motion`, and never let a `[data-reveal]` block stay hidden
   without JavaScript: the hidden state is gated behind the script-added

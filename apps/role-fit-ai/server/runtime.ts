@@ -709,7 +709,7 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
 
   const origin = `http://${originHost(host)}:${listeningPort}`;
   try {
-    logger?.info(`RoleFit AI running at ${origin}/`);
+    logger?.info(`RoleFit running at ${origin}/`);
     if (!isLoopbackBindHost(host)) {
       logger?.warn(`Bound to ${host} (HOST override): potentially reachable from the network. This app has no auth.`);
     }

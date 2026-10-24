@@ -1,4 +1,4 @@
-# RoleFit AI Local Provider Companion Architecture Plan
+# RoleFit Local Provider Companion Architecture Plan
 
 Status: Phases P0-P4 and P5/D0-D4 implemented locally; P5/D5 deferred
 Date: 2026-07-19

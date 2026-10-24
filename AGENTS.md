@@ -1,9 +1,9 @@
-# RoleFit AI Repository Agent Guide
+# RoleFit Repository Agent Guide
 
-Provider-agnostic working agreements for the RoleFit AI npm-workspaces
+Provider-agnostic working agreements for the RoleFit npm-workspaces
 repository. It contains two products over two private shared packages:
 
-- **RoleFit AI** is a local-first resume-tailoring workbench with a loopback
+- **RoleFit** is a local-first resume-tailoring workbench with a loopback
   Node server, AI providers, local workspace storage, and a browser extension.
 - **Typeset** is a static, browser-only resume editor.
 

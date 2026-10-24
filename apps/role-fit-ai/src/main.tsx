@@ -35,9 +35,9 @@ class AppErrorBoundary extends React.Component<
     if (this.state.error) {
       return (
         <div className="app-error" role="alert">
-          <p className="app-error__title">Something went wrong. RoleFit AI hit an unexpected error.</p>
+          <p className="app-error__title">Something went wrong. RoleFit hit an unexpected error.</p>
           <p className="app-error__body">
-            Reload to continue. If a recent autosave exists, RoleFit AI will offer it after reload.
+            Reload to continue. If a recent autosave exists, RoleFit will offer it after reload.
           </p>
           <button
             type="button"

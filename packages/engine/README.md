@@ -2,7 +2,7 @@
 
 Private workspace package containing the canonical resume domain, constrained
 cover-letter document adapter, and deterministic typesetting engine shared by
-Typeset and RoleFit AI.
+Typeset and RoleFit.
 
 ## Owns
 

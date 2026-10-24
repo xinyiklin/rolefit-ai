@@ -120,7 +120,9 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   fuses, identity, and immutable package layout. Generated staging and outputs
   stay under ignored `.forge/`.
 - The installed product, window title, release title, and public artifacts use
-  **RoleFit AI**. Preserve the legacy `rolefit-local-companion`, Windows
+  **RoleFit** (renamed from RoleFit AI, D097; a Mac upgraded from an earlier
+  build keeps the old `RoleFit AI.app` beside `RoleFit.app` until the user
+  removes it). Preserve the legacy `rolefit-local-companion`, Windows
   executable/Squirrel identity `RoleFitLocalCompanion`, AppUserModelID, bundle
   ID, and Electron runtime name as internal compatibility identities so
   upgrades and user data stay in place.
@@ -286,7 +288,7 @@ npm run test:desktop:package-layout --workspace apps/role-fit-ai
 npm run package:rolefit:desktop
 npm run test:rolefit:desktop:packaged
 npm run make:rolefit:desktop
-npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=.forge/release/RoleFit-AI-0.21.0-windows-x64.exe
+npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=.forge/release/RoleFit-X.Y.Z-windows-x64.exe
 npm run test:rolefit:release
 ```
 

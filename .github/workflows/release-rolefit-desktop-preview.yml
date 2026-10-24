@@ -137,22 +137,22 @@ jobs:
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
         run: |
           set -euo pipefail
-          app_path="apps/role-fit-ai/.forge/out/RoleFit AI-darwin-${RELEASE_ARCH}/RoleFit AI.app"
+          app_path="apps/role-fit-ai/.forge/out/RoleFit-darwin-${RELEASE_ARCH}/RoleFit.app"
           test -d "$app_path"
           codesign --verify --deep --strict --verbose=2 "$app_path"
           codesign --display --verbose=4 "$app_path" 2>&1 | grep -F "Signature=adhoc"
 
-          zip_path="apps/role-fit-ai/.forge/release/RoleFit-AI-${RELEASE_VERSION}-macos-${RELEASE_ARCH}.zip"
+          zip_path="apps/role-fit-ai/.forge/release/RoleFit-${RELEASE_VERSION}-macos-${RELEASE_ARCH}.zip"
           zip_verify_root="$RUNNER_TEMP/rolefit-preview-zip-verify"
           test -s "$zip_path"
           mkdir "$zip_verify_root"
           ditto -x -k "$zip_path" "$zip_verify_root"
-          zip_app_path="$zip_verify_root/RoleFit AI.app"
+          zip_app_path="$zip_verify_root/RoleFit.app"
           test -d "$zip_app_path"
           codesign --verify --deep --strict --verbose=2 "$zip_app_path"
           codesign --display --verbose=4 "$zip_app_path" 2>&1 | grep -F "Signature=adhoc"
 
-          dmg_path="apps/role-fit-ai/.forge/release/RoleFit-AI-${RELEASE_VERSION}-macos-${RELEASE_ARCH}.dmg"
+          dmg_path="apps/role-fit-ai/.forge/release/RoleFit-${RELEASE_VERSION}-macos-${RELEASE_ARCH}.dmg"
           test -s "$dmg_path"
 
       - name: Verify macOS preview assets
@@ -168,8 +168,8 @@ jobs:
         with:
           name: rolefit-preview-macos-${{ matrix.arch }}
           path: |
-            apps/role-fit-ai/.forge/release/RoleFit-AI-${{ needs.validate.outputs.version }}-macos-${{ matrix.arch }}.dmg
-            apps/role-fit-ai/.forge/release/RoleFit-AI-${{ needs.validate.outputs.version }}-macos-${{ matrix.arch }}.zip
+            apps/role-fit-ai/.forge/release/RoleFit-${{ needs.validate.outputs.version }}-macos-${{ matrix.arch }}.dmg
+            apps/role-fit-ai/.forge/release/RoleFit-${{ needs.validate.outputs.version }}-macos-${{ matrix.arch }}.zip
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
@@ -241,7 +241,7 @@ jobs:
         env:
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
         run: |
-          $installer = "apps/role-fit-ai/.forge/release/RoleFit-AI-$env:RELEASE_VERSION-windows-x64.exe"
+          $installer = "apps/role-fit-ai/.forge/release/RoleFit-$env:RELEASE_VERSION-windows-x64.exe"
           if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) {
             throw "Expected Windows preview installer is missing: $installer"
           }
@@ -254,7 +254,7 @@ jobs:
         shell: pwsh
         run: >-
           npm run test:desktop:windows-installer --workspace apps/role-fit-ai --
-          --installer=.forge/release/RoleFit-AI-${{ needs.validate.outputs.version }}-windows-x64.exe
+          --installer=.forge/release/RoleFit-${{ needs.validate.outputs.version }}-windows-x64.exe
 
       - name: Verify Windows preview asset
         shell: pwsh
@@ -269,7 +269,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: rolefit-preview-windows-x64
-          path: apps/role-fit-ai/.forge/release/RoleFit-AI-${{ needs.validate.outputs.version }}-windows-x64.exe
+          path: apps/role-fit-ai/.forge/release/RoleFit-${{ needs.validate.outputs.version }}-windows-x64.exe
           if-no-files-found: error
           compression-level: 0
           retention-days: 7

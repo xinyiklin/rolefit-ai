@@ -1,6 +1,6 @@
-# RoleFit AI
+# RoleFit
 
-RoleFit AI is a local-first workspace for preparing job applications. Import a
+RoleFit is a local-first workspace for preparing job applications. Import a
 posting from the browser extension, a URL, or pasted text; choose a resume and
 cover-letter variant; create a grounded resume proposal; review document
 proposals; export the final files; and save the application record.
@@ -33,12 +33,12 @@ provider under Settings; it initially copies Fit settings once. It never accepts
 proposals, changes files, or gates Apply. Content-poor postings now show
 **Insufficient job information** without a negative candidate-fit verdict.
 
-![RoleFit AI prepare workspace](docs/prepare.png)
+![RoleFit prepare workspace](docs/prepare.png)
 
 The **resume editor** is the export page itself, with the document workflow
 rail beside it:
 
-![RoleFit AI resume workspace](docs/screenshot.png)
+![RoleFit resume workspace](docs/screenshot.png)
 
 Entry context menus add/remove title and subtitle rows. Enter at the end of
 Title right adds or focuses the subtitle; Backspace from Subtitle left removes
@@ -48,7 +48,7 @@ persist in `.resume`; older builds reject files containing removed rows.
 The **cover-letter editor** keeps the source letter, job evidence, named
 variants, proposal review, and final export page together:
 
-![RoleFit AI cover-letter workspace](docs/cover-letter.png)
+![RoleFit cover-letter workspace](docs/cover-letter.png)
 
 The on-disk **application tracker** includes a sortable, paginated table,
 right-click actions, and a calendar for submissions, interviews, and follow-ups.
@@ -721,7 +721,7 @@ approved, it sends a bounded local request. Open the companion and select
 reopen the popup. That exact origin remains paired until removed (**Remove**,
 then **Confirm removal**). Once approved, the popup brings RoleFit
 preparation and duplicate checking to the job board. On any posting, click the
-**RoleFit AI** toolbar icon to see:
+**RoleFit** toolbar icon to see:
 
 - whether you've **already tracked or applied** to that posting. A shared ATS or
   requisition id is definitive; a normalized URL is exact unless explicit ids
@@ -854,10 +854,10 @@ Known limits:
 
 ## Install and local data
 
-The macOS DMG lets the user place `RoleFit AI.app` where they choose, normally
+The macOS DMG lets the user place `RoleFit.app` where they choose, normally
 `/Applications`. The Windows Squirrel installer is per-user and normally installs beneath
 `%LOCALAPPDATA%\RoleFitLocalCompanion\app-<version>\`. Installation files and
-personal data are separate. The public application name is **RoleFit AI**;
+personal data are separate. The public application name is **RoleFit**;
 Windows upgrade and cross-version data directories retain their original
 internal identity so an update does not create a second installation or lose
 saved settings.

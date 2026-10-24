@@ -1,4 +1,4 @@
-# RoleFit AI Repository — Claude Code Adapter
+# RoleFit Repository — Claude Code Adapter
 
 @AGENTS.md
 

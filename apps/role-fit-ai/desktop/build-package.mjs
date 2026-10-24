@@ -96,11 +96,11 @@ const serverResult = await build({
 
 const stagedManifest = {
   name: "rolefit-local-companion",
-  productName: "RoleFit AI",
+  productName: "RoleFit",
   version: packageJson.version,
   private: true,
-  description: "Local provider companion for RoleFit AI.",
-  author: "RoleFit AI",
+  description: "Local provider companion for RoleFit.",
+  author: "RoleFit",
   license: "MIT",
   main: "dist-electron/desktop/main.cjs",
   config: {

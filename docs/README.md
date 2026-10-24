@@ -1,4 +1,4 @@
-# RoleFit AI Repository Documentation
+# RoleFit Repository Documentation
 
 Use the narrowest document that owns the question.
 

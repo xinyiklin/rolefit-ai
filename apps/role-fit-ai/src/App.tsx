@@ -342,7 +342,7 @@ function documentTitleForHeader(kind: DocumentTitleKind, data: ResumeData, compa
 function browserTabTitle(tracking: ExtractedJobTracking): string {
   const company = (tracking.company || "").trim();
   const role = (tracking.role || "").trim();
-  return [...(company ? [company] : []), ...(role ? [role] : []), "RoleFit AI"].join(" - ");
+  return [...(company ? [company] : []), ...(role ? [role] : []), "RoleFit"].join(" - ");
 }
 
 // ============ App ============
@@ -1015,11 +1015,11 @@ function App() {
 
   // Keep browser tabs distinguishable when several applications are open.
   // The shared analyzed metadata is authoritative, so imported and manually
-  // entered jobs use the same Company - Role - RoleFit AI format.
+  // entered jobs use the same Company - Role - RoleFit format.
   useEffect(() => {
     document.title = browserTabTitle(jobTracking);
     return () => {
-      document.title = "RoleFit AI";
+      document.title = "RoleFit";
     };
   }, [jobTracking.company, jobTracking.role]);
 

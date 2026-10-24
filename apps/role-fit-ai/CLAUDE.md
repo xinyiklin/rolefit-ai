@@ -1,4 +1,4 @@
-# RoleFit AI — Claude Overrides
+# RoleFit — Claude Overrides
 
 The app `AGENTS.md` is canonical and imported below; the root guide already
 loads from the repository root. The import does not load nested guides; read

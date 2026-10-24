@@ -1,5 +1,5 @@
 ---
-name: RoleFit AI
+name: RoleFit
 description: Calm native workspace design system for a local-first resume-tailoring studio
 colors:
   # Every value is a light-dark() pair in src/styles/tokens.css; light shown first.
@@ -113,13 +113,13 @@ components:
     padding: "0 8px"
 ---
 
-# Design System: RoleFit AI
+# Design System: RoleFit
 
 ## 1. Overview
 
 **Creative North Star: "A calm native workspace"**
 
-RoleFit AI should feel like a well-made desktop app, in the lineage of Apple's
+RoleFit should feel like a well-made desktop app, in the lineage of Apple's
 own apps and Things 3: hierarchy comes from type, space, and alignment, not
 from containers. A full-height, collapsible soft gray sidebar headed by the
 brand sits beside a slightly lighter workspace plane that runs to the top of
@@ -175,47 +175,75 @@ the primary canvas; content wraps rather than clips below it.
 ### Public product/download page
 
 `landing/` is a separate public composition, not a route or mode of the
-Drafting Desk. It shares the compact creator-level masthead, screenshot-led
-product framing, and clear project boundary used across Xinyi Lin's portfolio,
-including Careflow, and wears the workspace's calm native look: it imports
-`src/styles/tokens.css` (the one token source), follows the OS light/dark
-preference with no override control, sets everything in the system UI face,
-and separates regions by tone rather than rules. It may use a larger display
-hero and shows real product captures, the local runtime boundary, and explicit
-macOS Apple silicon and Windows x64 download rows. Unlike the
-Drafting Desk, which rejects decorative motion, the landing carries the
-restrained entrance motion shared across the portfolio: a one-shot
-fade-and-lift as sections scroll into view (never looping), plus a one-shot
-mark draw on the hero's edit card — a progressive enhancement that collapses
-under `prefers-reduced-motion` and never leaves content hidden when scripting
-is unavailable. It must not imitate the working app shell, use gradients,
-glass or blur, or template-style feature cards, imply hosted execution, guess
-the user's architecture, or attempt native-install detection. At a missing or
-invalid release, it keeps the platform choices visible and states that no
-complete verified installer set is available instead of rendering a broken
-primary action.
+Drafting Desk. It follows the user-selected RoleFit brand direction (2026-10-23,
+D097): the ribbon-R mark beside a bold "RoleFit" wordmark, a bold display
+headline with tight tracking, and blue-to-lavender wave art (the user's
+supplied wave images and the kit's SVGs) as section backgrounds that fade at
+section edges and drop to a wash behind the hero copy. It still imports `src/styles/tokens.css` (the one
+token source), follows the OS light/dark preference with no override control,
+sets everything in the system UI face, and keeps blue for action and focus.
+Brand-only tints (`--brand-ink`, `--brand-mist`, `--brand-tile`) and the art
+opacity live in `landing.css`; the art dims in dark mode. Unlike the Drafting
+Desk, which rejects decorative motion, the landing carries the restrained
+entrance motion shared across the portfolio: a one-shot hero entrance and a
+one-shot fade-and-lift as sections scroll into view (never looping), both a
+progressive enhancement that collapses under `prefers-reduced-motion` and never
+leaves content hidden when scripting is unavailable. It must not imitate the
+working app shell, imply hosted execution, guess the user's architecture, or
+attempt native-install detection. Unlike the workspace, the landing's cards and
+panels are frosted glass (user direction, 2026-10-24): a translucent tint
+(`--glass`, about 58% white in light and 50% deep slate in dark; `--glass-strong`,
+80% in both, for the text-dense download card and browser chips, whose fine
+print uses `--ink-muted` to hold AA over the ribbon), a 22px backdrop blur with
+1.6 saturation, and a light inset top edge, over the page's brand art and a
+soft CSS color field behind the extension and privacy sections (`.glow-zone`).
+Browsers without `backdrop-filter`, and visitors who ask for reduced
+transparency, get the opaque card tone instead. The sticky header is a lighter
+frost (86% paper, 16px blur). Gallery screenshots sit inset 8px in their glass
+card. A third ribbon from the same family (`ribbon-accent.webp`, generated with
+Codex image generation and compared against `ribbon.webp` before use) runs
+behind the privacy diagram's lower edge. At a missing or invalid
+release, it keeps both platform choices visible and states that no complete
+verified installer set is available instead of rendering a broken primary
+action.
 
-**Composition.** The hero sets the real resume-editor capture as a borderless,
-softly ringed shot with a one-line caption, overlapped by an edit card: one
-proposed edit on a floating `--card-elev` layer in the app's diff vocabulary
-(removed words faint with a warm strike, inserted words on the accent wash,
-reason, Accept · Edit · Discard). The card is a labeled illustration on a
-synthetic resume line, never a mock of the app shell, and it never shows an
-invented figure. The workflow reads as spreads separated by space
-(01 Prepare → 04 Track), not feature cards. A deep neutral band (a raised tone
-in dark mode) carries the local runtime boundary with the companion capture and
-the runtime diagram; downloads are ledger rows in one borderless group with an
-invisible leader. Blue appears only on actions, focus, and the brand tile;
-status is a dot beside a word (green for a signed release, amber for an
-unsigned preview). The CSP stays `font-src 'self'`; the page loads no fonts.
-
-**Shared maker house** (kept in step with CareFlow's landing in structure):
-creator tag in the masthead, a one-line spec strip under the hero, section heads
-with the heading left and lede right, an inverse boundary band with a
-node-and-wire runtime diagram, action ledger rows, and a colophon footer listing
-the real stack and the sibling projects. Labels are sentence case without
-tracking, as in the app; CareFlow's landing still uses the earlier uppercase
-mono label voice.
+**Composition.** A header with the mark, section navigation, GitHub, and one
+Download action. The hero pairs the headline, lede, and both explicit platform
+buttons (macOS Apple silicon, Windows x64) with the real resume-editor capture
+inside the reusable laptop frame (`.device-laptop`: the screen is a slot for
+any image, the frame image's screen is transparent). A five-step strip
+(Prepare, Assess fit, Polish, Export, Track) uses the brand kit's line icons on
+a tinted disc. "Everything you need in one focused workspace" is a scroll-snap
+gallery of real captures (Prepare, Resume, Cover letter, Applications) with
+arrow buttons; each card zooms its capture to the working area. The extension
+section shows the real Chrome and Firefox logos (taken from the installed
+browsers' own app icons, used only to name supported browsers) on a quiet
+tinted panel, beside a generated import illustration (`extension-import.webp`,
+made with Codex image generation) whose only labels are the popup's real
+wording: Prepare in RoleFit and Opened in RoleFit from the popup, then Job
+brief, Responsibilities, and Required qualifications from Prepare. It is captioned as an illustration, never a screenshot claim;
+regenerate it rather than ship invented UI text. Type follows a fixed scale:
+a 52px hero heading, 36px section headings, 11px tracked eyebrows, and 16px
+card titles, with 40 to 80px between sections and no standalone spacers. The
+privacy section shows the runtime as three nodes (extension, desktop companion,
+your AI provider) plus two short facts; it must keep the build-checked
+disclosures that the workspace stays on this machine and that AI input goes
+directly to the chosen provider, and never claim that all data stays local
+(the build rejects "your data stays on/local"). The download card is one
+compact, centered column: the pitch, both platform buttons, the platform line,
+a dot-plus-word release status, and a quiet foot row with the checksum note and
+archive links. Ribbons are never cropped and always pass behind content: the
+band ribbon (`ribbon.webp`) runs full-width behind the download card, sized
+from the section's height so it shows above and below the card; a flattened,
+mirrored copy of the same ribbon (`ribbon-low.webp`, ends faded to
+transparent, so all ribbon art shares one style) runs
+behind the workspace gallery's lower edge so the cards sit on it, a layered
+transition rather than a standalone divider. The hero's wave art fades at the
+hero's edge (a CSS mask) rather than ending in a line. The footer
+carries the mark, section links, the maker, and the sibling projects. Status is
+a dot beside a word (green for a signed release, amber for an unsigned
+preview). The CSP stays `font-src 'self'`; the page loads no fonts, and the
+stylesheet holds no `url()` (decorative art is an `aria-hidden` image layer).
 
 ### Shared editor boundary
 
@@ -269,13 +297,18 @@ and never imports the browser app's CSS; change both together. It follows the OS
 dark` (it has no Appearance override), and the window's pre-paint background
 picks the matching `--chrome` tone from `nativeTheme`.
 
-The brand mark outside the page (the companion's `.ico`/`.icns`, the browser
-app's `public/favicon.svg`, the landing page's `landing/public/assets/favicon.svg`,
-and the extension's `icons/icon.svg`) is the
-light `--accent` tile with an Inter Bold "R" in `--on-accent`, drawn as a path.
-`desktop/assets/generate_icons.py` writes all of them from that one glyph
-(Pillow + fontTools); rerun it instead of editing an asset by hand. The three
-SVG favicons/icons are byte-identical outputs.
+The brand mark is the ribbon R from the RoleFit brand kit (2026-10-23, D097):
+three gradient paths (blue top bowl, blue stem, indigo leg). The desktop
+`.ico`/`.icns` put it on a navy tile; the browser app's `public/favicon.svg`,
+the landing page's `landing/public/assets/favicon.svg`, the companion's inline
+favicon, and the extension's `icons/icon{16,32,48,128}.png` put it on a light
+tile (PNG because Chrome and Edge do not render SVG manifest icons), and the
+landing's touch icon is the same light tile full-bleed.
+`desktop/assets/generate_icons.py` writes all of them from those paths
+(Pillow + CairoSVG); rerun it instead of editing an asset by hand. The two SVG
+favicons are byte-identical outputs. In page
+chrome (the browser masthead, the companion brand row, the landing header)
+the mark appears bare, without a tile, beside the "RoleFit" wordmark.
 
 ### Extension popup
 
@@ -586,11 +619,11 @@ interactive control shares the same focus treatment: 2px accent outline,
 
 ### Navigation
 
-- **Masthead:** the head of the full-height studio rail: a 22px accent app
-  tile with the initial beside the sans wordmark (the one place the accent is
-  identity, not action). The brand is the rail's collapse toggle (a button
+- **Masthead:** the head of the full-height studio rail: the 22px ribbon-R
+  mark beside the sans wordmark (the one place brand color is identity, not
+  action). The brand is the rail's collapse toggle (a button
   named Collapse/Expand sidebar, `aria-expanded`); on hover or keyboard focus
-  its tile shows the sidebar icon. The `<h1>RoleFit AI</h1>` is visually
+  the mark gives way to the sidebar icon on a `--control` tile. The `<h1>RoleFit</h1>` is visually
   hidden beside it. No job input or Inputs group lives in the masthead.
 - **Floating Apply action** (`ApplyAction`): a `--card-elev` pill with
   `--shadow-lift`, fixed at the workspace's bottom-right on every tab. With a

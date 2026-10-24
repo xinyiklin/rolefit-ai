@@ -1,7 +1,7 @@
-# RoleFit AI Agent Guide
+# RoleFit Agent Guide
 
 Applies to `apps/role-fit-ai/`. Follow the repository root `AGENTS.md` first.
-RoleFit AI is the local-first resume-tailoring host over shared
+RoleFit is the local-first resume-tailoring host over shared
 `@typeset/engine` and `@typeset/editor` packages. It adds a loopback Node
 server, AI workflow, local workspace/tracker, and browser extension; it does not
 own a second resume model, editor, layout engine, or PDF implementation.

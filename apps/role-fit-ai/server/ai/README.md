@@ -1,4 +1,4 @@
-# RoleFit AI Provider Runtime
+# RoleFit Provider Runtime
 
 This directory owns provider dispatch, prompts, response parsing, grounding, and
 sanitization for RoleFit's AI stages. The broader loopback and trust boundary is
