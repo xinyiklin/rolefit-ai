@@ -47,6 +47,19 @@
   }
 }
 
+/* Set by resizeGuard.ts while the window width changes. */
+html.is-resizing {
+  --glass: var(--card);
+  --glass-strong: var(--panel);
+  --glass-blur: none;
+}
+
+html.is-resizing .site-header {
+  background: var(--paper);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --art-opacity: 0.32;
@@ -92,6 +105,15 @@ h2,
 h3,
 p {
   margin: 0;
+}
+
+/* The longhand, so it never resets a nowrap set elsewhere. */
+p {
+  text-wrap-style: pretty;
+}
+
+.nowrap {
+  white-space: nowrap;
 }
 
 kbd {
@@ -420,18 +442,32 @@ h2 {
 }
 
 /* ── Platform buttons (hero and download panel) ──────────────────────────── */
+/* Equal columns that stack once both no longer fit; each button carries only
+   the platform and architecture, and the file details sit in the caption. */
 .platform-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
   gap: 12px;
+  width: min(100%, 33rem);
+}
+
+.platform-choice {
+  display: grid;
+  gap: 6px;
+}
+
+.platform-format {
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+  text-align: center;
 }
 
 .platform-button {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 12px;
-  min-height: 52px;
-  padding: 8px 20px 8px 18px;
+  gap: 10px;
+  min-height: 56px;
+  padding: 8px 14px;
   border-radius: var(--r-lg);
   background: var(--glass);
   box-shadow: var(--glass-edge), var(--shot-shadow);
@@ -451,8 +487,9 @@ h2 {
 }
 
 .platform-button .icon {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
 }
 
 .platform-button span {
@@ -470,8 +507,7 @@ h2 {
   opacity: 0.86;
 }
 
-/* Full strength on the accent fill keeps the format line (it carries
-   "Unsigned") above AA contrast. */
+/* Full strength on the accent fill keeps the platform line above AA contrast. */
 .platform-button--primary small {
   opacity: 1;
 }
@@ -507,7 +543,7 @@ h2 {
 /* The script colors the dot for a signed release or an unsigned preview. */
 .hero__note {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 8px;
   margin-top: 16px;
   color: var(--ink-soft);
@@ -519,6 +555,7 @@ h2 {
   height: 7px;
   flex: 0 0 auto;
   border-radius: 50%;
+  transform: translateY(-1px);
 }
 
 .hero__note span:not([class]) {
@@ -672,6 +709,7 @@ h2 {
 
 .gallery-controls__note {
   max-width: 13rem;
+  text-wrap: balance;
   margin-right: 8px;
   color: var(--ink-soft);
   font-size: 0.86rem;
@@ -1011,6 +1049,7 @@ h2 {
 .runtime span:not(.runtime__icon) {
   color: var(--ink-muted);
   font-size: 0.84rem;
+  text-wrap-style: pretty;
 }
 
 .privacy__facts {
@@ -1053,6 +1092,7 @@ h2 {
 
 .privacy__facts span {
   color: var(--ink-muted);
+  text-wrap-style: pretty;
 }
 
 /* ── Download ──────────────────────────────────────────────────────────────
@@ -1118,10 +1158,6 @@ h2 {
   display: grid;
   gap: 8px;
   justify-items: center;
-}
-
-.download .platform-actions {
-  justify-content: center;
 }
 
 /* Fine print over the glass card uses the stronger muted tone so it keeps AA
@@ -1362,9 +1398,16 @@ h2 {
     display: none;
   }
 
+  /* Three over two, centered, so no step is left alone on a row. */
   .workflow__steps {
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     row-gap: 32px;
+  }
+
+  .workflow__steps li {
+    flex: 0 0 calc((100% - 48px) / 3);
   }
 
   .workflow__steps li + li::before {
@@ -1389,8 +1432,7 @@ h2 {
     font-size: 1.02rem;
   }
 
-  .platform-actions,
-  .platform-button {
+  .platform-actions {
     width: 100%;
   }
 
@@ -1400,6 +1442,7 @@ h2 {
 
   /* Steps become rows: icon, then title and line. */
   .workflow__steps {
+    display: grid;
     grid-template-columns: minmax(0, 1fr);
     row-gap: 20px;
   }
@@ -1474,5 +1517,11 @@ h2 {
   .gallery-controls__note {
     margin-right: auto;
     text-align: left;
+  }
+
+  /* Pull back the link padding so, once the links wrap under the wordmark,
+     the first label lines up with it. */
+  .site-footer__nav {
+    margin-left: -10px;
   }
 }
