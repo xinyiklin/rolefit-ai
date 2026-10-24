@@ -37,6 +37,8 @@ const EXTENSION_COPY_FEEDBACK_FADE_MS = 120;
 const ACTIVE_TAB_STORAGE_KEY = "rolefit:desktop:active-tab";
 const EXTENSION_BROWSER_STORAGE_KEY = "rolefit:desktop:extension-browser";
 const REMOVE_CONFIRM_GUARD_MS = 500;
+const EXTENSION_PAIRING_STARTUP_RETRIES = 4;
+const EXTENSION_PAIRING_STARTUP_RETRY_MS = 1_500;
 const bridge = window.roleFitDesktop;
 const EXTENSION_COPY_ACTIONS = Object.freeze({
   directory: Object.freeze({
@@ -153,6 +155,8 @@ let sitePortApplyPending = false;
 let sitePortConfirmValue = null;
 let extensionPairingSettings = null;
 let extensionPairingLoadState = "loading";
+let extensionPairingStartupRetriesLeft = EXTENSION_PAIRING_STARTUP_RETRIES;
+let extensionPairingRetryTimer = 0;
 let extensionPairingPending = false;
 let extensionPairingRenderKey = "";
 let renderingExtensionPairings = false;
@@ -663,7 +667,21 @@ async function loadExtensionPairingSettings() {
     }
     extensionPairingSettings = settings;
     extensionPairingLoadState = "ok";
+    window.clearTimeout(extensionPairingRetryTimer);
+    extensionPairingRetryTimer = 0;
   } catch {
+    // A just-started server can stall for seconds (dev mode compiles the app
+    // on first load), so failures before any success keep Loading and retry.
+    if (extensionPairingLoadState === "loading" && extensionPairingStartupRetriesLeft > 0) {
+      if (!extensionPairingRetryTimer && document.visibilityState !== "hidden") {
+        extensionPairingRetryTimer = window.setTimeout(() => {
+          extensionPairingRetryTimer = 0;
+          extensionPairingStartupRetriesLeft -= 1;
+          void loadExtensionPairingSettings();
+        }, EXTENSION_PAIRING_STARTUP_RETRY_MS);
+      }
+      return;
+    }
     extensionPairingSettings = null;
     extensionPairingLoadState = "error";
   }
@@ -1381,6 +1399,8 @@ document.addEventListener("visibilitychange", () => {
     workspacePollTimer = 0;
     window.clearTimeout(connectionPollTimer);
     connectionPollTimer = 0;
+    window.clearTimeout(extensionPairingRetryTimer);
+    extensionPairingRetryTimer = 0;
     return;
   }
   if (hasUsableBridge()) {
