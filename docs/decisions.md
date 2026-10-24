@@ -736,6 +736,19 @@ and lives in the app ledger.
   page follows the user-selected brand direction (wave art, bold display type)
   described in `apps/role-fit-ai/DESIGN.md`; the icon set is generated from the
   vector mark by `desktop/assets/generate_icons.py`.
+- 2026-10-24 [USER+CODE] D098 ACTIVE: **Typeset joins RoleFit's product line
+  with a ribbon-T mark and its own coral-rose palette.** The user chose the
+  Sweep ribbon T in coral to amber (designed with Codex) so both marks share one
+  construction with different letters and hues. Typeset owns its palette in
+  `apps/typeset/src/styles/theme.css` over the shared editor's default tokens,
+  so the package and RoleFit are unchanged; light mode only (dark mode is
+  undecided). `apps/typeset/DESIGN.md` owns the system.
+- 2026-10-24 [USER+CODE] D099 ACTIVE: **Shared editor menus keep focus distinct
+  from selection, and editor zoom reaches 30%.** Chosen by the user for both
+  apps: in toolbar menus and keyboard-opened panels, focus never looks like the
+  selected item (treatment in each app's `DESIGN.md`). The engine zoom floor
+  (`DOC_STYLE_BOUNDS.zoom.min`) is 0.3 so Fit shows a whole page on a phone;
+  zoom stays a view preference, never in files.
 
 ### Process and workflow decisions
 

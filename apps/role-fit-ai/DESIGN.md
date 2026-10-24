@@ -463,6 +463,12 @@ Component character: calm and native; filled controls without outlines,
 borderless groups, and one accent-filled primary action per view. Every
 interactive control shares the same focus treatment: 2px accent outline,
 2px offset (or a 3px `--accent-veil` ring plus accent border on text fields).
+Two shared-editor exceptions keep focus distinct from selection: toolbar list
+menus (font, size, zoom, alignment, line spacing) give a hovered or focused row
+a neutral `--card-hover` wash, adding a 2px inset accent ring for keyboard focus,
+while the selected row is accent text with a check or bold weight; a
+keyboard-opened popover panel takes a 2px `--ink-muted` outline, never an accent
+frame.
 
 ### Buttons
 

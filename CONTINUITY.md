@@ -122,6 +122,13 @@ D-entries in `docs/decisions.md`.
   Plus visual-QA polish (wrap and alignment fixes). Verified: landing build,
   browser QA at 1440/1024/768/390/320 in light and dark, two independent
   reviews. Unverified: forced colors, Firefox/Safari, a real screen reader.
+- [USER+CODE+TOOL] **Typeset brand refresh + Preview A touch-ups** (D098,
+  D099). Verified: browser 1280 to 390px, RoleFit tokens via the editor
+  harness, editor/Typeset/engine checks, RoleFit build, independent reviews.
+  Unverified: `npm run test:editor:browser` locally (Chrome refuses CDP attach),
+  the real RoleFit app and dark mode, Firefox/Safari, print, forced colors. The
+  shared default `--shadow-rest` (`packages/editor` tokens) still clips if a
+  host keeps it.
 - [USER+CODE+TOOL] **RoleFit rename, ribbon-R brand, landing redesign** (D097):
   visible name, packaged app, and release assets are RoleFit (internal IDs
   kept); `generate_icons.py` renders the vector mark (extension now ships PNG

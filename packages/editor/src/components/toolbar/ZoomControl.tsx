@@ -12,8 +12,8 @@ export type ZoomControlProps = {
   fitViewportRef?: RefObject<HTMLElement | null>;
 };
 
-const MIN_ZOOM_PERCENT = DOC_STYLE_BOUNDS.zoom.min * 100;
-const MAX_ZOOM_PERCENT = DOC_STYLE_BOUNDS.zoom.max * 100;
+const MIN_ZOOM_PERCENT = Math.round(DOC_STYLE_BOUNDS.zoom.min * 100);
+const MAX_ZOOM_PERCENT = Math.round(DOC_STYLE_BOUNDS.zoom.max * 100);
 
 function displayZoom(zoom: number) {
   return `${Number((zoom * 100).toFixed(1))}%`;
