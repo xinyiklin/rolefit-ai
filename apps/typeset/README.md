@@ -318,7 +318,8 @@ and Vite build.
 
 Typeset targets modern desktop and tablet browsers, but it does not block
 smaller viewports. The editor auto-fits at compact widths and remains available
-inside its scrollable workspace; file actions are hidden at 400px and below.
+inside its scrollable workspace; Fit shows the whole page on a phone, and the
+Open and Save menus stay visible at every width.
 
 ## License
 

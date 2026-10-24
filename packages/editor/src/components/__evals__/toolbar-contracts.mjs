@@ -5,6 +5,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
+import { DOC_ZOOM_OPTIONS, nextZoomOption } from "@typeset/engine/lib/documentStyle.ts";
+
 import { isInsideToolbarPortal } from "../toolbarPortal.ts";
 import { numericDraftCommit } from "../toolbar/numericDraft.ts";
 
@@ -107,5 +109,13 @@ assert.match(
   /if \(nextPt === null\) \{\s*setDraft\(formatMarginInches\(valuePt\)\);\s*return;/,
   "a reverted margin draft never flips the preset to custom"
 );
+
+// ----- Zoom steps below the smallest preset (a phone's Fit) -----
+{
+  const smallest = DOC_ZOOM_OPTIONS[0];
+  assert.equal(nextZoomOption(0.42, -1), 0.42, "zooming out below every preset stays put");
+  assert.equal(nextZoomOption(0.42, 1), smallest, "zooming in from a phone Fit reaches the smallest preset");
+  assert.equal(nextZoomOption(0.75, -1), smallest, "zooming out between presets still steps down");
+}
 
 console.log("toolbar contract probes: PASS");

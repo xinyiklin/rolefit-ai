@@ -2,18 +2,21 @@
 name: Typeset
 description: A calm, local-first document editor for precise resume typesetting.
 colors:
-  canvas: "#eef1ef"
-  surface: "#fbfcfb"
-  surface-subtle: "#f4f6f4"
-  ink: "#242826"
-  ink-strong: "#171a19"
-  ink-muted: "#626965"
-  line: "#d9dedb"
-  line-strong: "#bec6c1"
-  accent: "#176b5c"
-  accent-hover: "#12594d"
-  accent-soft: "#e4f1ed"
-  danger: "#a5413d"
+  canvas: "#f0f2f5"
+  surface: "#fbfbfd"
+  surface-subtle: "#f0f2f6"
+  ink: "#3a4250"
+  ink-strong: "#1d2430"
+  ink-muted: "#525d6d"
+  line: "#e0e4eb"
+  line-strong: "#bbc4d0"
+  accent: "#b73847"
+  accent-hover: "#982a38"
+  accent-soft: "#fdecef"
+  on-accent: "#ffffff"
+  surface-raised: "#ffffff"
+  positive: "#1e7a4c"
+  danger: "#b3261e"
 typography:
   title:
     fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
@@ -43,7 +46,7 @@ spacing:
 components:
   button-primary:
     backgroundColor: "{colors.accent}"
-    textColor: "{colors.surface}"
+    textColor: "{colors.on-accent}"
     rounded: "{rounded.md}"
     padding: "8px 12px"
     height: "34px"
@@ -58,7 +61,7 @@ components:
     textColor: "{colors.ink}"
     height: "96px"
   popover:
-    backgroundColor: "{colors.surface}"
+    backgroundColor: "{colors.surface-raised}"
     textColor: "{colors.ink}"
     rounded: "{rounded.lg}"
     padding: "12px"
@@ -84,35 +87,60 @@ appears when requested, close to the command that revealed it.
 
 - A centered paper canvas with quiet cool-neutral surroundings.
 - A compact two-row toolbar using standard document-editor grammar.
-- One low-chroma teal accent reserved for primary actions and active state.
+- One coral-rose accent, taken from the ribbon-T mark, reserved for the
+  primary action and active state.
 - Anchored formatting popovers that keep the changing page visible.
 - Dense enough for expert control, calm enough for long editing sessions.
 
 ## 2. Colors
 
-The palette is tinted graphite and paper with a single drafting-teal accent.
+The palette is cool slate and paper with a single coral-rose accent. Typeset
+owns it in `src/styles/theme.css`, which overrides the shared editor's default
+tokens; the shared package and RoleFit are unaffected. Light mode only; every
+text step clears WCAG AA (4.5:1) on every chrome surface.
+
+### Brand Mark
+
+The ribbon T: a curved cap ribbon over a separate tapered stem, built like
+RoleFit's ribbon R (separate filled ribbons, diagonal gradients, an open tuck
+seam) so the two read as one product line. Cap `#FFB45B → #FF7658 → #E64259`,
+stem `#FF795B → #D84462`. `public/favicon.svg` sets it on a 64px white →
+`#FFF0EC` tile (rx 14); `src/styles/typeset-mark.svg` is the bare mark that
+precedes the toolbar wordmark at 22px, as RoleFit's rail shows its R.
+`public/apple-touch-icon.png` is the favicon's geometry on a full-bleed square
+tile (iOS rounds it itself) rasterized at 180px; re-render it whenever the mark
+changes. The mark carries the only gradients in the interface.
 
 ### Primary
 
-- **Drafting Teal** (`#176b5c`): Primary export actions, selected controls,
-  focus emphasis, and active document state.
-- **Deep Drafting Teal** (`#12594d`): Hover and pressed treatment for the
-  primary accent.
-- **Washed Teal** (`#e4f1ed`): Selected backgrounds and quiet success state.
+- **Coral Rose** (`#b73847`): The filled Save action, selected controls, focus
+  emphasis, and active document state.
+- **Deep Coral Rose** (`#982a38`): Hover, pressed, and open-menu treatment for
+  the primary accent.
+- **Washed Rose** (`#fdecef`): Selected backgrounds.
 
 ### Neutral
 
-- **Desk Canvas** (`#eef1ef`): Workspace around the document.
-- **Toolbar Paper** (`#fbfcfb`): Toolbar, popover, and control surfaces.
-- **Quiet Surface** (`#f4f6f4`): Hover, inset, and grouped-control background.
-- **Graphite** (`#242826`): Default application text and icons.
-- **Deep Graphite** (`#171a19`): Titles and strongest emphasis.
-- **Muted Graphite** (`#626965`): Status, metadata, and secondary labels.
-- **Hairline** (`#d9dedb`): Default dividers and control borders.
-- **Strong Hairline** (`#bec6c1`): Hovered controls and structural boundaries.
-- **Proofing Red** (`#a5413d`): Destructive actions and file errors only.
+- **Desk Canvas** (`#f0f2f5`): Workspace around the document.
+- **Toolbar Paper** (`#fbfbfd`): Toolbar and control surfaces; popovers sit on
+  white.
+- **Quiet Surface** (`#f0f2f6`): Hover, inset, and grouped-control background.
+- **Slate** (`#3a4250`): Default application text and icons.
+- **Deep Slate** (`#1d2430`): Titles and strongest emphasis.
+- **Muted Slate** (`#525d6d`): Status, metadata, and secondary labels.
+- **Hairline** (`#e0e4eb`): Default dividers and control borders.
+- **Strong Hairline** (`#bbc4d0`): Hovered controls and structural boundaries.
 
-**The One-Ink Rule.** Drafting Teal occupies less than ten percent of the
+### Status
+
+- **Saved Green** (`#1e7a4c`): Only the check beside "Saved locally". The
+  status text stays neutral, because a rose "saved" would read as an error.
+- **Unsaved Amber** (`#8a6224`, the shared default `--warm`): "Unsaved
+  changes" status text and icon.
+- **Proofing Red** (`#b3261e`): Destructive actions and file errors only, always
+  paired with an icon and literal text.
+
+**The One-Ink Rule.** Coral Rose occupies less than ten percent of the
 interface. Its rarity identifies action and state rather than decoration.
 
 ## 3. Typography
@@ -185,8 +213,14 @@ popovers that genuinely float above the canvas.
 
 ### Shadow Vocabulary
 
-- **Paper** (`0 1px 2px rgba(21, 29, 25, 0.08), 0 18px 48px rgba(21, 29, 25, 0.10)`): The resume page only.
-- **Popover** (`0 12px 32px rgba(21, 29, 25, 0.14), 0 2px 6px rgba(21, 29, 25, 0.08)`): Anchored menus and format panels.
+- **Paper** (`--shadow-rest`: `0 2px 10px rgb(29 36 48 / 12%)`, plus a 1px
+  `rgb(29 36 48 / 8%)` border): The resume page only, matching RoleFit's soft
+  page shadow. The page's wrapper clips everything outside the page except its
+  16px bottom margin, so the edge is a border (an outer ring would be clipped)
+  and the blur must fade within 16px; a longer blur is cut into a hard band.
+- **Popover** (`--shadow-lift`: `0 2px 6px rgb(29 36 48 / 8%), 0 12px 32px rgb(29 36 48 / 14%)`):
+  Anchored menus and format panels. A few package-owned popover and tooltip
+  shadows keep their own faint hard-coded tint.
 
 **The Flat-Until-Floating Rule.** Resting application surfaces do not cast
 shadows. Elevation appears only when an object is physically above the canvas.
@@ -214,16 +248,19 @@ surfaces with its own file/status row and product identity.
 ### Buttons
 
 - **Shape:** Compact rounded rectangle (6px), never a decorative pill.
-- **Primary:** Drafting Teal background, Toolbar Paper text, 34px height.
-- **Hover / Focus:** Darker teal on hover; a visible two-pixel offset focus ring.
-- **Secondary:** Toolbar Paper surface, Hairline border, Graphite content.
+- **Primary:** Coral Rose background, white text. The toolbar Save menu
+  trigger is the one filled control; it stays Deep Coral Rose while its menu is
+  open.
+- **Hover / Focus:** Deep Coral Rose on hover; keyboard focus adds a 2px Coral
+  Rose outline offset by 2px.
+- **Secondary:** Toolbar Paper surface, Hairline border, Slate content.
 - **Ghost:** Transparent at rest with Quiet Surface on hover.
 
 ### Chips
 
 - **Style:** Used only for mutually exclusive presets or pressed formatting
   state. Default state is neutral with a one-pixel boundary.
-- **State:** Selected state uses Washed Teal plus Drafting Teal text and icon.
+- **State:** Selected state uses Washed Rose plus Coral Rose text and icon.
 
 ### Cards / Containers
 
@@ -237,7 +274,32 @@ surfaces with its own file/status row and product identity.
 
 - **Style:** 32px minimum height, Toolbar Paper background, Hairline border,
   6px corners.
-- **Focus:** Drafting Teal border and a visible offset focus ring.
+- **Focus:** Coral Rose border and a visible offset focus ring.
+- **Sliders:** Muted Slate at rest; Coral Rose only while hovered,
+  keyboard-focused, or dragged, so a dense Spacing or Paragraph panel keeps the
+  One-Ink Rule.
+
+### Menus and Secondary States
+
+- **List menus** (font, size, zoom, alignment, line spacing): a hovered or
+  focused row takes the neutral `--card-hover` wash (`#ebeef2`), and keyboard
+  focus adds a 2px inset Coral Rose ring; the selected row is Coral Rose text
+  with a check (bold weight instead in the compact size and zoom lists, which
+  have no check column). Focus and selection never look the same.
+- **Panels** opened from the keyboard take a 2px Muted Slate outline, not an
+  accent frame.
+- **Neutral secondary states:** Open/Save menu row icons are Muted Slate; the
+  Header visibility toggle and pressed marks in the Styles grid use Deep Slate
+  on `--paper-deep` (`#e8ebf0`). Pressed marks add a Muted Slate border, since
+  they have no icon change, and keep the shared accent border while
+  keyboard-focused; a mixed mark is Muted Slate with a dashed border. Coral Rose
+  stays for Save, live toolbar marks, and interaction.
+- **Toolbar surface:** both toolbar rows share Toolbar Paper.
+- **Footer:** one 12px storage line, "Saved only in this browser · Download a
+  .resume file to keep a copy", readable by assistive technology. At 520px and
+  below it stacks into two lines instead of truncating.
+- **Short windows:** the app has no minimum height, so the workspace is the only
+  scroller.
 - **Error / Disabled:** Proofing Red is paired with literal error text; disabled
   controls retain readable contrast and remove pointer affordance.
 
@@ -252,11 +314,22 @@ shrinks only when the remaining row width truly requires it. A blank filename re
 `Untitled resume` on blur. New and Open share one visible Open menu, while Save
 and Export PDF share one visible Save menu; the menu rows carry the detailed
 file actions. The second row owns document commands, formatting, and zoom.
-Typeset does not hard-gate compact viewports. At 400px and below the file-action
-cluster is hidden, the document remains editable, and the initial view auto-fits
-the page within the scrollable workspace.
+Typeset does not hard-gate compact viewports. At 900px and below the Open/Save
+triggers and the Header/Section menus drop to icons together, so the filename
+keeps its room (a full "Untitled resume" at 390px); below 720px the mark and
+wordmark go. Open and Save stay visible at every width. The document remains
+editable, and the initial view auto-fits the page within the scrollable
+workspace.
 Zoom is a conventional editable percent combobox before the selected font,
-accepting custom values from 50–200% as well as Fit page and common presets.
+accepting custom values from 30–200% as well as Fit page and common presets.
+Fit measures the real workspace and editor gutters (narrowed to 4px and 20px at
+480px and below), so on a 390px phone it shows the whole page width (about 41%)
+with no sideways scroll. Zooming out from a Fit below 50% stays put rather than
+jumping up to the 50% preset.
+The Open menu's "Choose a file" and the Save menu's "Save .resume" rows show
+their Ctrl/⌘O and Ctrl/⌘S shortcuts. Export PDF has none: every free-looking
+combination collides with a browser shortcut (Firefox's Ctrl+Shift+E and
+Ctrl+Shift+S, and print's Ctrl+P).
 The formatting row never scrolls and is never cropped. Disclosure is a measured
 ladder: formatting-menu labels compact first, then those menu icons move into an
 anchored More overlay, then selected-text typography, then paragraph alignment,

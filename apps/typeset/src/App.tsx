@@ -15,6 +15,7 @@ import { useDocStyle } from "@typeset/editor/hooks/useDocStyle.ts";
 import { createHistoryClock } from "@typeset/editor/hooks/historyClock.ts";
 import {
   DOC_PAGE_WIDTH_PX,
+  DOC_STYLE_BOUNDS,
   DOC_STYLE_DEFAULTS,
   nextZoomOption,
   toDocumentStyle,
@@ -372,10 +373,21 @@ export default function App() {
   }, [docStyle.style, documentTitle, isExporting, resume]);
 
   const fitPage = useCallback(() => {
-    const width = workspaceRef.current?.clientWidth ?? window.innerWidth;
-    const availableWidth = Math.max(320, width - 120);
-    const fit = Math.min(1.25, Math.max(0.5, availableWidth / DOC_PAGE_WIDTH_PX));
-    docStyle.set("zoom", Math.round(fit * 100) / 100);
+    const workspace = workspaceRef.current;
+    // A workspace not laid out yet (a hidden or zero-size window) has no width
+    // to fit; fitting it would persist the zoom floor.
+    if (!workspace?.clientWidth) return;
+    // Fit the room left after the workspace and editor gutters (both set in
+    // app.css and narrower on phones) and the page's 1px border on each side.
+    const inlinePadding = (element: Element | null) => {
+      if (!element) return 0;
+      const style = getComputedStyle(element);
+      return parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+    };
+    const availableWidth =
+      workspace.clientWidth - inlinePadding(workspace) - inlinePadding(workspace.querySelector(".typeset-editor")) - 2;
+    const fit = Math.min(1.25, Math.max(DOC_STYLE_BOUNDS.zoom.min, availableWidth / DOC_PAGE_WIDTH_PX));
+    docStyle.set("zoom", Math.floor(fit * 100) / 100);
   }, [docStyle]);
 
   // At compact widths, start with the whole sheet visible. Desktop
@@ -646,11 +658,10 @@ export default function App() {
         )}
       </main>
 
-      <div className="workspace-footnote" aria-hidden="true">
-        <span>Click the page to edit</span>
-        <span>Drag beside an item to reorder</span>
-        <span>Saved only in this browser unless you download a .resume file</span>
-      </div>
+      <footer className="workspace-footnote">
+        <span>Saved only in this browser</span>
+        <span>Download a .resume file to keep a copy</span>
+      </footer>
 
       {resume ? <ResumePrintLayer resume={resume} docStyle={docStyle.style} /> : null}
 

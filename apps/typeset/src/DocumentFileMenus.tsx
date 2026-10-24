@@ -7,18 +7,21 @@ type ActionRowProps = {
   icon: ReactNode;
   title: string;
   description?: string;
+  /** Ctrl/⌘ plus this letter, matching App's document shortcut handler. */
+  shortcutKey?: "O" | "S";
   disabled?: boolean;
   busy?: boolean;
   onClick: () => void;
 };
 
-function ActionRow({ icon, title, description, disabled = false, busy = false, onClick }: ActionRowProps) {
+function ActionRow({ icon, title, description, shortcutKey, disabled = false, busy = false, onClick }: ActionRowProps) {
   return (
     <button
       type="button"
       className="document-action-row"
       disabled={disabled}
       aria-busy={busy || undefined}
+      aria-keyshortcuts={shortcutKey ? `Control+${shortcutKey} Meta+${shortcutKey}` : undefined}
       onClick={onClick}
     >
       {icon}
@@ -26,6 +29,7 @@ function ActionRow({ icon, title, description, disabled = false, busy = false, o
         <strong>{title}</strong>
         {description ? <small>{description}</small> : null}
       </span>
+      {shortcutKey ? <kbd aria-hidden="true">Ctrl/⌘{shortcutKey}</kbd> : null}
     </button>
   );
 }
@@ -77,6 +81,7 @@ export function DocumentFileMenus({
               icon={<Upload size={15} aria-hidden="true" />}
               title="Choose a file"
               description="Open a .resume file from your device."
+              shortcutKey="O"
               onClick={() => {
                 fileInputRef.current?.click();
                 close();
@@ -90,6 +95,7 @@ export function DocumentFileMenus({
         label="Save"
         tooltip="Save the resume"
         icon={<Save size={16} />}
+        tone="primary"
         disabled={saveDisabled && exportDisabled}
       >
         {({ close }) => (
@@ -102,6 +108,7 @@ export function DocumentFileMenus({
               icon={<Save size={15} aria-hidden="true" />}
               title={isSaving ? "Saving…" : "Save .resume"}
               description="Download the editable source file."
+              shortcutKey="S"
               disabled={saveDisabled || isSaving}
               busy={isSaving}
               onClick={() => {
