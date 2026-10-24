@@ -57,8 +57,10 @@
   right: 0;
 }
 
+/* A keyboard-opened panel takes focus itself; its ring is neutral so the whole
+   panel never reads as one accent-framed (selected or alarming) object. */
 .popover__surface:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--ink-muted);
   outline-offset: 2px;
 }
 
@@ -162,7 +164,7 @@
 
 .alignment-menu__option {
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
+  grid-template-columns: 16px minmax(0, 1fr) 13px;
   gap: 8px;
   align-items: center;
   min-height: 30px;
@@ -182,15 +184,6 @@
   color: var(--ink-muted);
 }
 
-.alignment-menu__option:hover,
-.alignment-menu__option:focus-visible,
-.alignment-menu__option.is-selected {
-  color: var(--accent-deep);
-  background: var(--accent-veil);
-}
-
-.alignment-menu__option:hover > svg,
-.alignment-menu__option:focus-visible > svg,
 .alignment-menu__option.is-selected > svg {
   color: inherit;
 }
@@ -233,15 +226,51 @@
   cursor: pointer;
 }
 
-.line-spacing-menu__option:hover,
-.line-spacing-menu__option:focus-visible {
-  color: var(--accent-deep);
-  background: var(--accent-veil);
+.line-spacing-menu__option.is-selected {
+  font-weight: 600;
 }
 
-.line-spacing-menu__option.is-selected {
+/* Menu option states, shared by every toolbar list menu. Pointer and keyboard
+   focus get a neutral wash (focus adds an inset accent ring), so they never
+   look like the selection, which is accent text plus a check or bold weight.
+   Keep the three selector lists below in sync. */
+:is(
+    .font-family-control__menu button,
+    .font-size-control__menu button,
+    .zoom-control__menu button,
+    .alignment-menu__option,
+    .line-spacing-menu__option
+  ):is(:hover, :focus-visible) {
+  color: var(--ink-strong);
+  background: var(--card-hover);
+}
+
+:is(
+    .font-family-control__menu button,
+    .font-size-control__menu button,
+    .zoom-control__menu button,
+    .alignment-menu__option,
+    .line-spacing-menu__option
+  ):focus-visible {
+  /* Transparent rather than none: forced-colors mode drops the box-shadow ring
+     and paints this outline instead. */
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+:is(
+    .font-family-control__menu button,
+    .font-size-control__menu button,
+    .zoom-control__menu button,
+    .alignment-menu__option,
+    .line-spacing-menu__option
+  ).is-selected {
   color: var(--accent-deep);
-  font-weight: 600;
+}
+
+:is(.font-size-control__menu button, .zoom-control__menu button).is-selected {
+  font-weight: 650;
 }
 
 .line-spacing-menu__check {

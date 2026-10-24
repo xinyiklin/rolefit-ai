@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 
 import type { BodyAlign } from "@typeset/engine/lib/documentStyle.ts";
 import { Popover } from "../Popover";
@@ -64,6 +64,7 @@ export function AlignmentControl({ value, onChange, disabled = false }: Alignmen
             >
               <Icon size={15} aria-hidden="true" />
               <span>{label}</span>
+              {optionValue === value ? <Check size={13} aria-hidden="true" /> : null}
             </button>
           ))}
         </div>

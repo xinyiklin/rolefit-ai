@@ -1,0 +1,37 @@
+/* Typeset's brand palette over the shared editor's default tokens: cool desk
+   neutrals and one coral-rose ink taken from the ribbon-T mark. Every text
+   step clears WCAG AA (4.5:1) on every chrome surface. */
+:root {
+  --paper: #f0f2f5;
+  --paper-deep: #e8ebf0;
+  --card: #fbfbfd;
+  --card-soft: #f0f2f6;
+  --card-elev: #ffffff;
+  --card-hover: #ebeef2;
+
+  --ink: #3a4250;
+  --ink-strong: #1d2430;
+  --ink-muted: #525d6d;
+  --ink-soft: #5a6575;
+  --ink-faint: #606b7b;
+
+  --hairline: #e0e4eb;
+  --hairline-soft: #e8ebf0;
+  --hairline-strong: #bbc4d0;
+
+  --accent: #b73847;
+  --accent-deep: #982a38;
+  --accent-soft: #fdecef;
+  --accent-veil: rgb(183 56 71 / 14%);
+  --accent-glow: rgb(183 56 71 / 24%);
+  --on-accent: #ffffff;
+
+  --positive: #1e7a4c;
+  --danger: #b3261e;
+  --danger-soft: #fcedec;
+  --danger-line: rgb(179 38 30 / 28%);
+
+  /* The page's wrapper clips 16px below the sheet: this blur must fade by then. */
+  --shadow-rest: 0 2px 10px rgb(29 36 48 / 12%);
+  --shadow-lift: 0 2px 6px rgb(29 36 48 / 8%), 0 12px 32px rgb(29 36 48 / 14%);
+}
