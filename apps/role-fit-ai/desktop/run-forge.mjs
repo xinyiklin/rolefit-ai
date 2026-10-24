@@ -1,4 +1,3 @@
-import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,7 +6,6 @@ import {
   assertForgeHostNodeVersion,
 } from "./runtime-versions.mjs";
 
-const require = createRequire(import.meta.url);
 const desktopRoot = dirname(fileURLToPath(import.meta.url));
 const stageRoot = resolve(desktopRoot, "..", ".forge", "app");
 
@@ -29,8 +27,8 @@ function parseTarget(argumentsList) {
   if (platform !== "darwin" && platform !== "win32") {
     fail("only native macOS and Windows targets are supported");
   }
-  if (arch !== "arm64" && arch !== "x64") {
-    fail("only arm64 and x64 targets are supported");
+  if (platform === "darwin" && arch !== "arm64") {
+    fail("the macOS release target is arm64");
   }
   if (platform === "win32" && arch !== "x64") {
     fail("the Windows release target is x64");
@@ -59,7 +57,7 @@ async function main() {
     fail("the first argument must be package or make");
   }
   const target = parseTarget(argumentsList);
-  const { api } = require("@electron-forge/core");
+  const { api } = await import("@electron-forge/core");
   const options = {
     dir: stageRoot,
     interactive: false,
@@ -68,7 +66,7 @@ async function main() {
   };
 
   if (command === "package") await api.package(options);
-  else await api.make({ ...options, skipPackage: false });
+  else await api.make(options);
 }
 
 main().catch((error) => {

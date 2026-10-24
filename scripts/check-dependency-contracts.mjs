@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { builtinModules, createRequire } from "node:module";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -26,7 +26,7 @@ const forgePackages = [
   "@electron-forge/maker-zip",
 ];
 const expectedInstallScriptPolicy = {
-  "electron@43.7.9": true,
+  "electron@44.9.3": true,
   "electron-winstaller@5.4.4": true,
   "esbuild@0.28.2": true,
   "fs-xattr@0.3.1": true,
@@ -69,16 +69,16 @@ console.log(`Dependency contract runtime: Node ${nodeVersion}, npm ${npmVersion}
 
 const [nodeMajor, nodeMinor] = versionParts(nodeVersion);
 check(
-  nodeMajor === 24 && nodeMinor >= 18,
-  `Node ${nodeVersion} is unsupported; use Node >=24.18 <25 (.node-version pins 24.18.0).`,
+  nodeMajor === 24 && nodeMinor >= 22,
+  `Node ${nodeVersion} is unsupported; use Node >=24.22 <25 (.node-version pins 24.22.1).`,
 );
 check(
-  rootPackage.engines?.node === ">=24.18 <25",
-  'The root Node engine must remain ">=24.18 <25".',
+  rootPackage.engines?.node === ">=24.22 <25",
+  'The root Node engine must remain ">=24.22 <25".',
 );
 check(
-  expectedNpmVersion === "11.16.0",
-  'The root packageManager must remain pinned to "npm@11.16.0".',
+  expectedNpmVersion === "11.19.1",
+  'The root packageManager must remain pinned to "npm@11.19.1".',
 );
 check(
   npmVersion === expectedNpmVersion,
@@ -145,23 +145,11 @@ check(
   `The project compiler must resolve once at TypeScript ${expectedCompilerVersion}; found`
     + ` ${formatInstallations(projectCompilers)}.`,
 );
-const unexpectedCompilers = typescriptInstallations.filter(({ path }) => (
-  path !== "node_modules/typescript"
-  && path !== "node_modules/@electron-forge/template-webpack-typescript/node_modules/typescript"
-));
+const unexpectedCompilers = typescriptInstallations.filter(({ path }) => path !== "node_modules/typescript");
 check(
   unexpectedCompilers.length === 0,
   `Unexpected TypeScript compiler installations: ${formatInstallations(unexpectedCompilers)}.`,
 );
-const forgeTemplateCompiler = typescriptInstallations.find(({ path }) => (
-  path === "node_modules/@electron-forge/template-webpack-typescript/node_modules/typescript"
-));
-if (forgeTemplateCompiler) {
-  notices.push(
-    `Electron Forge retains its internal TypeScript ${forgeTemplateCompiler.version};`
-      + " it is not a workspace compiler.",
-  );
-}
 check(
   resolvedVersion("typescript", ".") === expectedCompilerVersion,
   `The executable project compiler does not match TypeScript ${expectedCompilerVersion}.`,
@@ -248,7 +236,17 @@ check(
   Boolean(roleFitPackage.devDependencies?.["@electron/asar"]),
   "RoleFit must declare @electron/asar directly; the packaged smoke test imports it.",
 );
-checkSingleMajor(lockfileInstallations("@electron/asar"), "@electron/asar");
+// The smoke test must read archives with the major @electron/packager writes;
+// electron-winstaller still pins its own asar 3 for the Squirrel installer.
+const packagerAsarSpecifier = packageLock.packages["node_modules/@electron/packager"]
+  ?.dependencies?.["@electron/asar"];
+const roleFitAsarVersion = resolvedVersion("@electron/asar", "apps/role-fit-ai");
+check(
+  roleFitAsarVersion !== undefined
+    && versionParts(roleFitAsarVersion)[0] === specifierMajor(packagerAsarSpecifier),
+  `RoleFit @electron/asar ${roleFitAsarVersion ?? "(missing)"} must match the major`
+    + ` @electron/packager requires (${packagerAsarSpecifier ?? "(unknown)"}).`,
+);
 
 const undeclaredImports = findUndeclaredImports();
 check(
@@ -362,14 +360,15 @@ function checkSingleMajor(installations, packageName) {
   );
 }
 
+// Walks Node's lookup directories instead of resolving `<name>/package.json`,
+// which an `exports` map (Forge 8, asar 4) may not expose.
 function resolvedVersion(packageName, workspacePath) {
-  try {
-    const packageRequire = createRequire(join(repositoryRoot, workspacePath, "package.json"));
-    const packageJsonPath = packageRequire.resolve(`${packageName}/package.json`);
-    return JSON.parse(readFileSync(packageJsonPath, "utf8")).version;
-  } catch {
-    return undefined;
+  const packageRequire = createRequire(join(repositoryRoot, workspacePath, "package.json"));
+  for (const directory of packageRequire.resolve.paths(packageName) ?? []) {
+    const packageJsonPath = join(directory, packageName, "package.json");
+    if (existsSync(packageJsonPath)) return JSON.parse(readFileSync(packageJsonPath, "utf8")).version;
   }
+  return undefined;
 }
 
 function findUndeclaredImports() {

@@ -1057,7 +1057,7 @@ In the response:
   dependencies without asking.
 - Companion work follows the saved
   [architecture plan](desktop-architecture-plan.md) and
-  [distribution plan](distribution-cloud-plan.md). Native macOS arm64/x64 and
+  [distribution plan](distribution-cloud-plan.md). Native macOS arm64 and
   Windows x64 packaging plus the fail-closed signed-release workflow are the
   authorized D0-D4 slice. No database, RoleFit authentication, synchronization,
   hosted credential service, hosted download/R2 change, custom protocol,

@@ -7,19 +7,10 @@ export const DOWNLOAD_TARGETS = [
     id: "macos-arm64",
     platform: "macOS",
     title: "Apple silicon",
-    detail: "M1 or newer",
+    detail: "macOS 13 or newer",
     format: "DMG",
     assetName: (version: string) =>
       `RoleFit-AI-${version}-macos-arm64.dmg`,
-  },
-  {
-    id: "macos-x64",
-    platform: "macOS",
-    title: "Intel",
-    detail: "Intel processor",
-    format: "DMG",
-    assetName: (version: string) =>
-      `RoleFit-AI-${version}-macos-x64.dmg`,
   },
   {
     id: "windows-x64",
@@ -49,7 +40,6 @@ export interface ReleaseCatalog {
   downloads: Record<DownloadTargetId, ReleaseAsset>;
   archives: {
     macosArm64: ReleaseAsset;
-    macosX64: ReleaseAsset;
   };
   checksums: ReleaseAsset;
 }
@@ -123,23 +113,17 @@ export function parseLatestRelease(value: unknown): ReleaseCatalog | null {
   }
 
   const macosArm64ArchiveName = `RoleFit-AI-${version}-macos-arm64.zip`;
-  const macosX64ArchiveName = `RoleFit-AI-${version}-macos-x64.zip`;
   const macosArm64 = parseAsset(
     assetsByName.get(macosArm64ArchiveName),
     macosArm64ArchiveName,
     tag,
   );
-  const macosX64 = parseAsset(
-    assetsByName.get(macosX64ArchiveName),
-    macosX64ArchiveName,
-    tag,
-  );
-  if (!macosArm64 || !macosX64) return null;
+  if (!macosArm64) return null;
 
   const checksumName = "SHA256SUMS.txt";
   const checksums = parseAsset(assetsByName.get(checksumName), checksumName, tag);
   if (!checksums) return null;
-  if (assetsByName.size !== DOWNLOAD_TARGETS.length + 3) return null;
+  if (assetsByName.size !== DOWNLOAD_TARGETS.length + 2) return null;
 
   return {
     version,
@@ -148,7 +132,7 @@ export function parseLatestRelease(value: unknown): ReleaseCatalog | null {
     ...(value.prerelease ? { previewLabel: tagMatch[4] } : {}),
     releaseUrl: expectedReleaseUrl,
     downloads: resolvedDownloads,
-    archives: { macosArm64, macosX64 },
+    archives: { macosArm64 },
     checksums,
   };
 }

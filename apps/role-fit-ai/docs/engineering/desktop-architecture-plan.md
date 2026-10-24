@@ -485,7 +485,7 @@ false signed-in claim; request eligibility is not presented as detected auth.
 The authorized distribution work is specified in
 [the distribution and cloud plan](distribution-cloud-plan.md). D0-D4 are
 implemented locally: the packaged runtime has a read-only application/writable
-`userData` split; Electron Forge produces native macOS arm64/x64 and Windows x64
+`userData` split; Electron Forge produces native macOS arm64 and Windows x64
 targets; package contents, fuses, runtime paths, and process shutdown have
 focused probes; and the tag-triggered GitHub workflow provides fail-closed
 signing/notarization, artifact verification, and atomic publication seams.

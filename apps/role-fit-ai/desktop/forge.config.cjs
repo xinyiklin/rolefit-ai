@@ -34,9 +34,17 @@ let windowsSigning;
 if (releaseBuild && process.platform === "darwin") {
   macSigning = {
     identity: requiredEnvironment("MAC_CSC_IDENTITY"),
-    hardenedRuntime: true,
-    entitlements: path.join(assets, "entitlements.mac.plist"),
-    entitlementsInherit: path.join(assets, "entitlements.mac.inherit.plist")
+    // Packager defaults this to true, turning a signing failure into a warning.
+    continueOnError: false,
+    // osx-sign reads entitlements only per file; top-level keys are ignored and
+    // every file would fall back to Chromium's default entitlements.
+    optionsForFile: (filePath) => ({
+      hardenedRuntime: true,
+      entitlements: path.join(
+        assets,
+        /\.app\/Contents\//.test(filePath) ? "entitlements.mac.inherit.plist" : "entitlements.mac.plist"
+      )
+    })
   };
   macNotarize = {
     appleApiKey: requiredEnvironment("APPLE_API_KEY_PATH"),

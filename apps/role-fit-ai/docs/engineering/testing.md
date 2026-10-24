@@ -1213,8 +1213,8 @@ unexpected assets.
 Real-browser QA must cover desktop and 390px widths, a clean console, keyboard
 focus, and both release states: the live empty/unavailable response links every
 platform row to GitHub Releases, while mocked complete signed and unsigned
-preview releases produce the exact Apple silicon DMG/ZIP, Intel DMG/ZIP,
-Windows x64 EXE, and checksum links. Preview QA must show the unsigned warning
+preview releases produce the exact Apple silicon DMG/ZIP, Windows x64 EXE, and
+checksum links. Preview QA must show the unsigned warning
 and format labels at both widths; a signed release must outrank every preview.
 Request inspection must show only static page assets and public
 `api.github.com` release metadata, never RoleFit `/api/*`, localhost probing, or
@@ -1378,8 +1378,8 @@ window must load only the static companion surface.
 ## Packaged Companion And Release Coverage
 
 Use Node 24 for Forge packaging. Package and smoke only on a matching native
-host: macOS arm64/x64 or Windows x64. Cross-compilation is intentionally
-rejected.
+host: macOS arm64 or Windows x64. Intel macOS and cross-compilation are
+intentionally rejected.
 
 ```bash
 npm run build:rolefit:desktop:package
@@ -1391,8 +1391,7 @@ npm run collect:desktop:artifacts --workspace apps/role-fit-ai -- --arch=arm64 -
 npm run test:rolefit:release
 ```
 
-Use `--arch=x64 --platform=darwin` on an Intel Mac and
-`--arch=x64 --platform=win32` on Windows. Generated staging, unpacked apps,
+Use `--arch=x64 --platform=win32` on Windows. Generated staging, unpacked apps,
 maker output, and normalized artifacts live beneath
 `apps/role-fit-ai/.forge/` and remain untracked.
 

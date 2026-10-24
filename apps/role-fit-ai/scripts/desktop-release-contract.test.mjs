@@ -168,19 +168,19 @@ test("desktop runtime tuple matches the release manifest and rejects drift", () 
     readFileSync(new URL("../package.json", import.meta.url), "utf8"),
   );
   assertElectronPackageVersion(manifest.devDependencies.electron);
-  assertForgeHostNodeVersion("24.18.0");
+  assertForgeHostNodeVersion("24.22.1");
   assertElectronRuntimeVersions({
     electron: ROLEFIT_DESKTOP_RUNTIME_CONTRACT.electronVersion,
     node: ROLEFIT_DESKTOP_RUNTIME_CONTRACT.embeddedNodeVersion,
   });
   assert.throws(() => assertForgeHostNodeVersion("23.11.1"), /use Node 24/);
   assert.throws(
-    () => assertElectronRuntimeVersions({ electron: "43.6.9", node: "24.21.0" }),
-    /does not match expected 43\.7\.x/,
+    () => assertElectronRuntimeVersions({ electron: "44.8.3", node: "24.22.0" }),
+    /does not match expected 44\.9\.x/,
   );
   assert.throws(
-    () => assertElectronRuntimeVersions({ electron: "43.7.9", node: "24.20.9" }),
-    /does not match expected 24\.21\.x/,
+    () => assertElectronRuntimeVersions({ electron: "44.9.3", node: "24.21.9" }),
+    /does not match expected 24\.22\.x/,
   );
 });
 
@@ -230,6 +230,7 @@ test("release tags and target names are strict and architecture-specific", () =>
     "RoleFit-AI-0.1.0-windows-x64.exe",
   ]);
   assert.throws(() => expectedTargetAssets(VERSION, "windows", "arm64"), /unsupported/);
+  assert.throws(() => expectedTargetAssets(VERSION, "macos", "x64"), /unsupported/);
 });
 
 test("asset verification rejects missing, duplicate, and unexpected files", async () => {

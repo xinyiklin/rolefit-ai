@@ -246,8 +246,8 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   `.resume` other than the bundled starter.
 - Run Forge through `run-forge.mjs` on Node 24 and a matching native host; the
   wrapper rejects every other host Node major. Supported public targets are
-  macOS arm64/x64 DMG + ZIP and Windows x64 Squirrel; cross-compilation and
-  Linux packages are rejected.
+  macOS arm64 DMG + ZIP and Windows x64 Squirrel; Intel macOS (D096),
+  cross-compilation, and Linux packages are rejected.
 - Treat the Windows installer as executable product output, not only a signed
   container. On a clean native Windows runner, silently install the normalized
   Squirrel setup, run the common packaged smoke against the absolute installed

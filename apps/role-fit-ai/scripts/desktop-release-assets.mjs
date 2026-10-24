@@ -14,8 +14,8 @@ function fail(message) {
 export function expectedTargetAssets(version, platform, arch) {
   assertRolefitReleaseVersion(version);
 
-  if (platform === "macos" && (arch === "arm64" || arch === "x64")) {
-    const stem = `${PRODUCT_ASSET_PREFIX}-${version}-macos-${arch}`;
+  if (platform === "macos" && arch === "arm64") {
+    const stem = `${PRODUCT_ASSET_PREFIX}-${version}-macos-arm64`;
     return [`${stem}.dmg`, `${stem}.zip`];
   }
   if (platform === "windows" && arch === "x64") {
@@ -28,7 +28,6 @@ export function expectedTargetAssets(version, platform, arch) {
 export function expectedReleaseAssets(version) {
   return [
     ...expectedTargetAssets(version, "macos", "arm64"),
-    ...expectedTargetAssets(version, "macos", "x64"),
     ...expectedTargetAssets(version, "windows", "x64"),
   ];
 }

@@ -14,7 +14,8 @@ root and RoleFit app guides first.
 - The installed companion is the supported product launcher. It starts the
   loopback server, manages providers, and opens the full app in the user's
   browser. The public page only explains and distributes that local runtime.
-- Show macOS Apple silicon, macOS Intel, and Windows x64 choices explicitly.
+- Show macOS Apple silicon and Windows x64 choices explicitly (no Intel macOS,
+  D096).
   Do not guess architecture from user-agent data.
 - Direct links are fail-closed: accept either a complete canonical signed
   `rolefit-vX.Y.Z` release or, only when no complete signed release exists, a
@@ -23,7 +24,7 @@ root and RoleFit app guides first.
   a newer unsigned preview exists. The repository may also publish other
   products, so select from the bounded public release list rather than trusting
   repository-wide `/latest`. On a missing,
-  partial, malformed, rate-limited, or unavailable response, retain the three
+  partial, malformed, rate-limited, or unavailable response, retain both
   choices but link safely to the Releases page instead of inventing an asset
   URL.
 - An unsigned preview must be labeled as unsigned beside the active download

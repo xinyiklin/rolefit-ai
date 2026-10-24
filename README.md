@@ -33,8 +33,8 @@ npm run dev:typeset  # http://localhost:5186
 npm run check        # every workspace's type/build/eval gate
 ```
 
-Requires Node 24.18 or newer in the Node 24 line. `.node-version` pins
-Node 24.18.0, matching CI and Docker, and the workspace pins npm 11.16.0. The
+Requires Node 24.22 or newer in the Node 24 line. `.node-version` pins
+Node 24.22.1, matching CI and Docker, and the workspace pins npm 11.19.1. The
 desktop companion runs on Electron's bundled Node instead.
 
 Focused commands:
@@ -78,7 +78,7 @@ Use the named root command or an explicit workspace command.
   and download page. It does not bundle the Drafting Desk or call localhost;
   the installed companion starts the full browser workspace on loopback.
 - `.github/workflows/release-rolefit-desktop.yml` validates `rolefit-vX.Y.Z`
-  tags and builds signed macOS arm64/x64 plus Windows x64 companion artifacts on
+  tags and builds signed macOS arm64 plus Windows x64 companion artifacts on
   matching native runners. GitHub Releases is the binary source of truth;
   signing environments fail closed, and no auto-update channel exists yet.
 - `.github/workflows/release-rolefit-desktop-preview.yml` validates

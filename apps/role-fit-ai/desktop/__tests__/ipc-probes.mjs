@@ -217,11 +217,19 @@ const expectedExtensionSetupCopyValues = Object.freeze({
 for (const target of ROLEFIT_EXTENSION_SETUP_COPY_TARGETS) {
   const writes = [];
   assert.equal(
-    copyRoleFitExtensionSetupValue(target, privateExtensionDirectory, 5_183, (value) => writes.push(value)),
+    await copyRoleFitExtensionSetupValue(target, privateExtensionDirectory, 5_183, async (value) => {
+      writes.push(value);
+    }),
     undefined
   );
   assert.deepEqual(writes, [expectedExtensionSetupCopyValues[target]]);
 }
+await assert.rejects(
+  copyRoleFitExtensionSetupValue("chrome", privateExtensionDirectory, 5_183, async () => {
+    throw new Error("clipboard write failed");
+  }),
+  /clipboard write failed/
+);
 assert.equal(normalizeRoleFitExtensionOrigin(`${firefoxOrigin}/`), firefoxOrigin);
 assert.equal(normalizeRoleFitExtensionOrigin("https://example.com"), "");
 assert.deepEqual(runtimeInfo, {

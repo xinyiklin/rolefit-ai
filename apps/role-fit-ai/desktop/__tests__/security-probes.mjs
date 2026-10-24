@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import {
   hardenWindow,
@@ -11,18 +12,71 @@ import {
 const companionUrl = "file:///tmp/rolefit%20companion/companion.html";
 
 const desktopRoot = resolve(import.meta.dirname, "..");
-const [mainEntitlements, inheritedEntitlements, forgeConfigSource, compiledMainSource] = await Promise.all([
+const [mainEntitlements, inheritedEntitlements, compiledMainSource] = await Promise.all([
   readFile(resolve(desktopRoot, "assets/entitlements.mac.plist"), "utf8"),
   readFile(resolve(desktopRoot, "assets/entitlements.mac.inherit.plist"), "utf8"),
-  readFile(resolve(desktopRoot, "forge.config.cjs"), "utf8"),
   readFile(resolve(desktopRoot, "../dist-electron/desktop/main.cjs"), "utf8")
 ]);
 assert.match(mainEntitlements, /com\.apple\.security\.automation\.apple-events/);
 assert.doesNotMatch(inheritedEntitlements, /com\.apple\.security\.automation\.apple-events/);
-assert.match(
-  forgeConfigSource,
-  /entitlementsInherit: path\.join\(assets, "entitlements\.mac\.inherit\.plist"\)/
-);
+// V8 needs only MAP_JIT under the hardened runtime (a run without allow-jit
+// crashes at launch). No process RoleFit starts needs unsigned executable
+// memory: only the Plugin helper would, via allowLoadingUnsignedLibraries.
+for (const entitlements of [mainEntitlements, inheritedEntitlements]) {
+  assert.match(entitlements, /com\.apple\.security\.cs\.allow-jit/);
+  assert.doesNotMatch(entitlements, /allow-unsigned-executable-memory/);
+}
+assert.doesNotMatch(compiledMainSource, /allowLoadingUnsignedLibraries/);
+
+// osx-sign ignores top-level entitlement keys and signs with Chromium's
+// defaults, so evaluate the real macOS release config as osx-sign would.
+const releaseSignOptions = loadMacReleaseSignOptions();
+const appPath = "/build/RoleFit AI-darwin-arm64/RoleFit AI.app";
+assert.equal(releaseSignOptions.continueOnError, false);
+for (const key of ["entitlements", "entitlementsInherit", "hardenedRuntime"]) {
+  assert.equal(key in releaseSignOptions, false, `osxSign.${key} is ignored by osx-sign`);
+}
+assert.deepEqual(releaseSignOptions.optionsForFile(appPath), {
+  hardenedRuntime: true,
+  entitlements: resolve(desktopRoot, "assets/entitlements.mac.plist")
+});
+for (const nested of [
+  `${appPath}/Contents/Frameworks/RoleFit AI Helper (Renderer).app`,
+  `${appPath}/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework`
+]) {
+  assert.deepEqual(releaseSignOptions.optionsForFile(nested), {
+    hardenedRuntime: true,
+    entitlements: resolve(desktopRoot, "assets/entitlements.mac.inherit.plist")
+  });
+}
+
+function loadMacReleaseSignOptions() {
+  const placeholders = {
+    ROLEFIT_RELEASE_BUILD: "1",
+    MAC_CSC_IDENTITY: "probe",
+    APPLE_API_KEY_PATH: "probe",
+    APPLE_API_KEY_ID: "probe",
+    APPLE_API_ISSUER: "probe"
+  };
+  const savedEnvironment = Object.fromEntries(
+    Object.keys(placeholders).map((name) => [name, process.env[name]])
+  );
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.assign(process.env, placeholders);
+  Object.defineProperty(process, "platform", { ...platform, value: "darwin" });
+  const require = createRequire(import.meta.url);
+  const configPath = require.resolve("../forge.config.cjs");
+  try {
+    return require(configPath).packagerConfig.osxSign;
+  } finally {
+    delete require.cache[configPath];
+    Object.defineProperty(process, "platform", platform);
+    for (const [name, value] of Object.entries(savedEnvironment)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+}
 
 // Every BrowserWindow the companion creates (the main companion window and the
 // smoke-only untrusted-bridge probe window) must keep the hardened

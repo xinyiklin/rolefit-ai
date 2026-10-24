@@ -20,6 +20,16 @@ export default defineConfig({
   base: "/",
   publicDir: resolve(appRoot, "landing/public"),
   plugins: [dropCspInDev],
+  // The landing owns 5182 (reservations live in AGENTS.md). Strict, so a bound
+  // port means "already running" instead of drifting into another app's range.
+  server: {
+    port: 5182,
+    strictPort: true,
+  },
+  preview: {
+    port: 5182,
+    strictPort: true,
+  },
   build: {
     // Keep the public site on the Vite 7 browser baseline instead of silently
     // adopting Vite 8's newer Baseline Widely Available target.

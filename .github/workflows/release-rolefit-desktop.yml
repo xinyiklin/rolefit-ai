@@ -32,7 +32,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.18.0
+          node-version: 24.22.1
           package-manager-cache: false
 
       - name: Validate tag, package version, and main ancestry
@@ -84,9 +84,6 @@ jobs:
           - arch: arm64
             runner: macos-15
             machine: arm64
-          - arch: x64
-            runner: macos-15-intel
-            machine: x86_64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     environment:
@@ -112,7 +109,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.18.0
+          node-version: 24.22.1
           architecture: ${{ matrix.arch }}
           package-manager-cache: false
 
@@ -210,6 +207,32 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$app_path"
           xcrun stapler validate "$app_path"
           spctl --assess --type execute --verbose=4 "$app_path"
+          # osx-sign silently falls back to Chromium's defaults when it never
+          # receives the app's entitlements, so assert the signed result.
+          signature_details="$(codesign --display --verbose=4 "$app_path" 2>&1)"
+          grep -E "flags=0x[0-9a-f]+\([^)]*runtime" <<<"$signature_details"
+          app_entitlements="$(codesign --display --entitlements - --xml "$app_path" 2>/dev/null)"
+          grep -F "com.apple.security.automation.apple-events" <<<"$app_entitlements"
+          grep -F "com.apple.security.cs.allow-jit" <<<"$app_entitlements"
+          if grep -E "com\.apple\.security\.(device|personal-information)\.|allow-unsigned-executable-memory" <<<"$app_entitlements"; then
+            echo "::error::The signed app carries an entitlement outside entitlements.mac.plist."
+            exit 1
+          fi
+          # Every helper, not one sample: osx-sign's Renderer default happens to
+          # equal the inherit plist, while the others would expose a fallback.
+          helper_count=0
+          for helper_path in "$app_path"/Contents/Frameworks/*Helper*.app; do
+            helper_count=$((helper_count + 1))
+            helper_details="$(codesign --display --verbose=4 "$helper_path" 2>&1)"
+            grep -E "flags=0x[0-9a-f]+\([^)]*runtime" <<<"$helper_details"
+            helper_entitlements="$(codesign --display --entitlements - --xml "$helper_path" 2>/dev/null)"
+            grep -F "com.apple.security.cs.allow-jit" <<<"$helper_entitlements"
+            if grep -E "automation\.apple-events|allow-unsigned-executable-memory|disable-library-validation|com\.apple\.security\.(device|personal-information)\." <<<"$helper_entitlements"; then
+              echo "::error::$helper_path carries an entitlement outside entitlements.mac.inherit.plist."
+              exit 1
+            fi
+          done
+          test "$helper_count" -eq 4
 
           zip_path="apps/role-fit-ai/.forge/release/RoleFit-AI-${RELEASE_VERSION}-macos-${RELEASE_ARCH}.zip"
           zip_verify_root="$RUNNER_TEMP/rolefit-zip-verify"
@@ -306,7 +329,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.18.0
+          node-version: 24.22.1
           architecture: x64
           package-manager-cache: false
 
@@ -444,7 +467,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.18.0
+          node-version: 24.22.1
           package-manager-cache: false
 
       - name: Download all platform artifacts without merging names

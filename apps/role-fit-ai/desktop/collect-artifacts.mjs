@@ -23,9 +23,8 @@ function parseArguments(argumentsList) {
   }
   const platform = values.get("platform");
   const arch = values.get("arch");
-  if ((platform !== "darwin" && platform !== "win32") ||
-      (arch !== "arm64" && arch !== "x64") ||
-      (platform === "win32" && arch !== "x64")) {
+  if ((platform !== "darwin" || arch !== "arm64") &&
+      (platform !== "win32" || arch !== "x64")) {
     fail(`unsupported target ${platform ?? "missing"}/${arch ?? "missing"}`);
   }
   const checksumsValue = values.get("checksums") ?? "true";
@@ -79,7 +78,7 @@ async function main() {
   const artifacts = [];
   if (platform === "darwin") {
     const dmg = await requireRegularFile(
-      join(makeRoot, `RoleFit AI-${version}-${arch}.dmg`)
+      join(makeRoot, "dmg", arch, `RoleFit AI-${version}-${arch}.dmg`)
     );
     const zip = await requireRegularFile(
       join(
