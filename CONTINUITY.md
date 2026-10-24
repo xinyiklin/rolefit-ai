@@ -115,6 +115,13 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-24
 
+- [USER+CODE+TOOL] **0.22.1 prepared** (patch: #279's shared editor focus and
+  30% zoom floor, #280's per-family font metrics, #281's companion pairing
+  retry; #278 is landing-only and already deployed). Notes
+  `apps/role-fit-ai/docs/releases/0.22.1-beta.1.md`; extension 1.5.2 and
+  desktop bridge API 13 unchanged. Preflight on Windows x64, Node 24.22.1:
+  check 202/202, Electron smoke, release contract 14/14, `make` (Squirrel
+  0.22.1), packaged smoke (win32-x64 unpacked). macOS packaging: release CI only.
 - [CODE+TOOL] **Companion pairing startup retry**: right after start, the
   owned dev server stalls requests for up to ~7 s (measured 1.0/3.7/0.9 s,
   then ~1 ms), tripping main's 1 s pairing fetch. Failures before any success
