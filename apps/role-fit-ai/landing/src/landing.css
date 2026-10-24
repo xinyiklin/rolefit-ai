@@ -628,6 +628,7 @@ h2 {
 
 .workflow p {
   max-width: 15rem;
+  text-wrap: balance;
   color: var(--ink-muted);
   font-size: 0.875rem;
 }
@@ -753,9 +754,9 @@ h2 {
   transform-origin: 24% 0;
 }
 
-/* Prepare and applications: past the app sidebar. Resume and cover letter: framed on the
-   document page alone (about 24-77% of the capture's width), clear of the
-   sidebar and the workflow rail. */
+/* Prepare and applications: past the app sidebar. Resume and cover letter:
+   21-77% of the capture's width, so the editor toolbar shows from its first
+   control (22%) and the page stays clear of the workflow rail. */
 .feature-card__shot--prepare img,
 .feature-card__shot--applications img {
   transform-origin: 35% 0;
@@ -763,8 +764,8 @@ h2 {
 
 .feature-card__shot--resume img,
 .feature-card__shot--cover img {
-  transform: scale(1.85);
-  transform-origin: 51% 12%;
+  transform: scale(1.8);
+  transform-origin: 47.3% 12%;
 }
 
 .feature-card__body {
