@@ -101,7 +101,8 @@ export const FONT_FAMILY_OPTIONS: readonly {
 // validation. Gap bounds start at 0 because 0 is now a meaningful setting: no
 // space added at that junction.
 export const DOC_STYLE_BOUNDS = {
-  zoom: { min: 0.5, max: 2, step: 0.01 },
+  // 0.3 lets Fit show a whole Letter page at phone widths.
+  zoom: { min: 0.3, max: 2, step: 0.01 },
   lineHeight: { min: 1, max: 2, step: 0.01 },
   entryIndentPt: { min: 0, max: 36, step: 0.1 },
   entryEndIndentPt: { min: 0, max: 36, step: 0.1 },
@@ -308,10 +309,11 @@ export const DOC_ZOOM_OPTIONS = [0.5, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 2] as const;
 
 // The next preset step from an arbitrary zoom (a "Fit" zoom sits between
 // presets), clamped at the ends. Shared by the toolbar buttons and the
-// keyboard shortcuts.
+// keyboard shortcuts. A Fit zoom below the smallest preset stays put on zoom
+// out instead of jumping up to that preset.
 export function nextZoomOption(current: number, direction: -1 | 1): number {
   const options = DOC_ZOOM_OPTIONS as readonly number[];
-  if (direction < 0) return [...options].reverse().find((value) => value < current) ?? options[0];
+  if (direction < 0) return [...options].reverse().find((value) => value < current) ?? Math.min(current, options[0]);
   return options.find((value) => value > current) ?? options[options.length - 1];
 }
 

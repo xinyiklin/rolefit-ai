@@ -380,8 +380,6 @@
   white-space: nowrap;
 }
 
-.font-family-control__menu button:hover .font-family-control__metrics,
-.font-family-control__menu button:focus-visible .font-family-control__metrics,
 .font-family-control__menu button.is-selected .font-family-control__metrics {
   color: inherit;
   opacity: 0.75;
@@ -395,13 +393,6 @@
 
 .font-family-control__menu button.is-selected > svg {
   opacity: 1;
-}
-
-.font-family-control__menu button:hover,
-.font-family-control__menu button:focus-visible,
-.font-family-control__menu button.is-selected {
-  color: var(--accent-deep);
-  background: var(--accent-veil);
 }
 
 .font-size-control {
@@ -497,12 +488,6 @@
   font: inherit;
   text-align: center;
   cursor: pointer;
-}
-
-.font-size-control__menu button:hover,
-.font-size-control__menu button.is-selected {
-  color: var(--accent);
-  background: var(--accent-veil);
 }
 
 .font-size-control:hover:not(:has(input:disabled)) {
@@ -615,12 +600,6 @@
   cursor: pointer;
 }
 
-.zoom-control__menu button:hover,
-.zoom-control__menu button.is-selected {
-  color: var(--accent);
-  background: var(--accent-veil);
-}
-
 /* Toolbar commands and their delayed, non-interactive tooltips. */
 .toolbar-tooltip {
   position: relative;
@@ -711,7 +690,8 @@
 }
 
 .toolbar-button--primary:hover:not(:disabled),
-.toolbar-button--primary:active:not(:disabled) {
+.toolbar-button--primary:active:not(:disabled),
+.toolbar-button--primary.is-active:not(:disabled) {
   color: var(--on-accent);
   background: var(--accent-deep);
   border-color: var(--accent-deep);
@@ -722,8 +702,12 @@
   box-shadow: 0 0 0 3px var(--accent-veil);
 }
 
+/* A solid offset ring: a translucent glow around a filled button falls under
+   3:1 against the toolbar. */
 .toolbar-button--primary:focus-visible {
-  box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--accent-glow);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: none;
 }
 
 .toolbar-button:disabled {
@@ -828,13 +812,18 @@
   }
 }
 
+/* File actions and the primary-row structure menus (Header, Section) drop to
+   icons together, so the document title keeps its room on narrow screens. */
 @container typeset-toolbar (max-width: 900px) {
   .top-toolbar__file-actions .toolbar-button__label,
-  .top-toolbar__file-actions .toolbar-button__trailing {
+  .top-toolbar__file-actions .toolbar-button__trailing,
+  .top-toolbar__primary-row .top-toolbar__document-structure .toolbar-button__label,
+  .top-toolbar__primary-row .top-toolbar__document-structure .toolbar-button__trailing {
     display: none;
   }
 
-  .top-toolbar__file-actions .toolbar-button--text {
+  .top-toolbar__file-actions .toolbar-button--text,
+  .top-toolbar__primary-row .top-toolbar__document-structure .toolbar-button--text {
     width: var(--toolbar-control-height);
     padding: 0;
   }

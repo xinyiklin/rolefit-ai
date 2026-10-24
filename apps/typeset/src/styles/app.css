@@ -6,10 +6,11 @@
     "workspace"
     "footnote";
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) 30px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   width: 100%;
+  /* Exactly viewport-tall (no min-height), so only the workspace scrolls. */
   height: 100vh;
-  min-height: 580px;
+  height: 100dvh;
   overflow: hidden;
   overflow: clip;
   color: var(--ink);
@@ -37,7 +38,7 @@
   background: var(--card);
   border: 1px solid var(--hairline);
   border-radius: var(--r-md);
-  box-shadow: 0 2px 8px rgb(21 29 25 / 6%);
+  box-shadow: 0 2px 8px rgb(29 36 48 / 6%);
   font-size: 0.78rem;
   line-height: 1.35;
   transform: translateY(0) scale(1);
@@ -57,7 +58,7 @@
 }
 
 .app-notice--error {
-  color: #71302d;
+  color: #7a2620;
   background: var(--danger-soft);
   border-color: var(--danger-line);
 }
@@ -84,7 +85,7 @@
 }
 
 .app-notice > button:hover {
-  background: rgb(23 26 25 / 6%);
+  background: rgb(29 36 48 / 6%);
 }
 
 .app-notice > button:focus-visible {
@@ -123,6 +124,100 @@
   padding: 2px 48px 28px;
 }
 
+/* The page's wrapper clips outside the page, so its edge is a faint border; an
+   outer ring shadow would be clipped. */
+.tsd-doc--screen .tsd-page {
+  border-color: rgb(29 36 48 / 8%);
+}
+
+/* The ribbon-T mark leads the shared toolbar's Typeset wordmark. Only the
+   pseudo-element is styled, so the shared compact-width hide still applies. */
+.top-toolbar__product-name::before {
+  content: "";
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  margin-right: 7px;
+  vertical-align: middle;
+  background: url("./typeset-mark.svg") center / contain no-repeat;
+}
+
+/* A rose "saved" would read as an error, so saved is quiet text with a green
+   check. */
+.top-toolbar__save-status--saved {
+  color: var(--ink-soft);
+}
+
+.top-toolbar__save-status--saved .top-toolbar__save-status-icon {
+  color: var(--positive);
+}
+
+/* A dozen rose sliders read as alarm; they rest slate and take the accent only
+   while hovered, keyboard-focused, or dragged. */
+.style-popover__range input[type="range"] {
+  accent-color: var(--ink-muted);
+}
+
+.style-popover__range input[type="range"]:is(:focus-visible, :active):not(:disabled) {
+  accent-color: var(--accent);
+}
+
+/* Touch screens keep :hover after a tap, which would leave a slider rose. */
+@media (hover: hover) {
+  .style-popover__range input[type="range"]:hover:not(:disabled) {
+    accent-color: var(--accent);
+  }
+}
+
+/* Both toolbar rows share the chrome surface, so the most-used formatting row
+   no longer reads recessed into the desk. */
+.top-toolbar__secondary-row {
+  background: var(--card);
+}
+
+/* The accent marks action and live state only: menu row icons, the default
+   "header visible" toggle, and pressed marks in the Styles grid stay neutral. */
+.document-action-row > svg {
+  color: var(--ink-muted);
+}
+
+.structure-popover__visibility.is-pressed:not(:disabled) {
+  color: var(--ink-strong);
+  background: var(--paper-deep);
+  border-color: var(--hairline-strong);
+}
+
+.style-popover__entry-mark-buttons button.is-selected {
+  color: var(--ink-strong);
+  background: var(--paper-deep);
+}
+
+/* A pressed mark has no icon change, so its slate border carries the state;
+   keyboard focus keeps the shared accent border. */
+.style-popover__entry-mark-buttons button.is-selected:not(:focus-visible) {
+  border-color: var(--ink-muted);
+}
+
+.style-popover__entry-mark-buttons button.is-mixed {
+  color: var(--ink-muted);
+}
+
+.style-popover__entry-mark-buttons button.is-mixed:not(:focus-visible) {
+  border-color: var(--ink-muted);
+}
+
+/* File-menu rows name their keyboard shortcut. */
+.document-action-row:has(> kbd) {
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+}
+
+.document-action-row > kbd {
+  margin-top: 2px;
+  color: var(--ink-soft);
+  font: 500 0.7rem/1.2 var(--font-ui);
+  white-space: nowrap;
+}
+
 .document-loading {
   display: grid;
   min-height: 100%;
@@ -131,31 +226,30 @@
   font-size: 0.82rem;
 }
 
+/* One storage line; it stacks into two lines on phones instead of truncating. */
 .workspace-footnote {
   grid-area: footnote;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 18px;
+  column-gap: 10px;
   min-width: 0;
-  padding: 0 16px;
-  overflow: hidden;
+  min-height: 30px;
+  padding: 5px 16px;
   color: var(--ink-faint);
-  background: var(--card-soft);
+  background: var(--card);
   border-top: 1px solid var(--hairline-soft);
-  font-size: 0.68rem;
-  font-weight: 520;
-  white-space: nowrap;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: center;
 }
 
 .workspace-footnote span + span::before {
-  content: "";
-  display: inline-block;
-  width: 3px;
-  height: 3px;
-  margin: 0 18px 2px 0;
-  background: var(--hairline-strong);
-  border-radius: 50%;
+  content: "·";
+  margin-right: 10px;
+  color: var(--hairline-strong);
 }
 
 /* File drop is a transient command state, not a permanent import panel. */
@@ -166,7 +260,7 @@
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgb(238 241 239 / 88%);
+  background: rgb(240 242 245 / 88%);
   backdrop-filter: blur(2px);
   pointer-events: none;
 }
@@ -234,16 +328,27 @@
   outline-offset: 2px;
 }
 
-@media (max-width: 1100px) {
-  .workspace-footnote span:nth-child(2) {
-    display: none;
+/* Narrow screens stack the two sentences instead of breaking at an arbitrary
+   point; the separator would otherwise start a line or join them. */
+@media (max-width: 520px) {
+  .workspace-footnote {
+    flex-direction: column;
+  }
+
+  .workspace-footnote span + span::before {
+    content: none;
   }
 }
 
-@media (max-width: 820px) {
-  .workspace-footnote span:last-child {
-    overflow: hidden;
-    text-overflow: ellipsis;
+/* Phones: narrow gutters so Fit spends the width on the page. The editor keeps
+   enough side room for the reorder grips. */
+@media (max-width: 480px) {
+  .document-workspace {
+    padding: 16px 4px 32px;
+  }
+
+  .document-canvas .typeset-editor {
+    padding: 2px 20px 20px;
   }
 }
 

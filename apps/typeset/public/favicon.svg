@@ -1,8 +1,24 @@
-<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Typeset">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Typeset">
   <title>Typeset</title>
-  <rect width="64" height="64" rx="14" fill="#176b5c" />
-  <path d="M16 9h25l8 8v38H16z" fill="#fbfcfb" />
-  <path d="M41 9v8h8z" fill="#c9ddd7" />
-  <path d="M23 24h19v4h-7.25v18h-4.5V28H23z" fill="#176b5c" />
-  <path d="M22 50h20" stroke="#bec6c1" stroke-width="2" stroke-linecap="round" />
+  <defs>
+    <linearGradient id="ts-cap" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FFB45B" />
+      <stop offset="0.42" stop-color="#FF7658" />
+      <stop offset="1" stop-color="#E64259" />
+    </linearGradient>
+    <linearGradient id="ts-stem" x1="0" y1="0" x2="0.9" y2="1">
+      <stop stop-color="#FF795B" />
+      <stop offset="1" stop-color="#D84462" />
+    </linearGradient>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FFFFFF" />
+      <stop offset="1" stop-color="#FFF0EC" />
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="64" height="64" rx="14" fill="url(#tile)" />
+  <!-- The 128-unit ribbon T (stem under cap), as in src/styles/typeset-mark.svg. -->
+  <g transform="translate(10.24 10.24) scale(0.34)">
+    <path d="M72 35C57 39 45 49 45 63V103Q45 112 54 112H67Q77 112 77 102V44Q77 33 72 35Z" fill="url(#ts-stem)" />
+    <path d="M18 31C18 18 29 12 42 12H98C108 12 114 20 114 31V39C100 33 87 32 73 32H42C30 32 22 35 18 41Z" fill="url(#ts-cap)" />
+  </g>
 </svg>
