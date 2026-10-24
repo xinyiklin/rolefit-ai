@@ -54,8 +54,9 @@ D-entries in `docs/decisions.md`.
   a freshly seeded synthetic workspace (Alex Morgan / LumenDesk, built through
   the app's own codecs and tracker sanitizer, served on 5183), plus the three
   README tracker shots on 2026-10-24; the unused `desktop-app.png` is deleted.
-  An installed-upgrade check (0.21.0 with a saved API key, then this build) is
-  still unrun.
+  The installed-upgrade check (0.21.0 with a saved API key, then this build)
+  is unrun and not a release blocker: 2026-10-24 [USER] re-entering a key that
+  does not carry over is acceptable; the release notes should say so.
 
 ## Deferred backlog
 
