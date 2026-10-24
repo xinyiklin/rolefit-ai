@@ -7,6 +7,7 @@ import {
   type ReleaseCatalog,
 } from "./releaseCatalog";
 import { setupGallery } from "./gallery";
+import { setupResizeGuard } from "./resizeGuard";
 import { setupReveal } from "./reveal";
 
 // In-page navigation without URL hashes: buttons carry data-scroll-to="<id>".
@@ -35,6 +36,7 @@ for (const trigger of document.querySelectorAll<HTMLElement>("[data-scroll-to]")
 
 setupReveal();
 setupGallery(reducedMotion);
+setupResizeGuard();
 
 // Release catalog: the static page links every row to the Releases page; a
 // valid catalog upgrades rows to direct, verified asset downloads.
@@ -95,13 +97,13 @@ function applyCatalog(catalog: ReleaseCatalog): void {
     for (const action of document.querySelectorAll<HTMLAnchorElement>(
       `a[data-download-target="${target.id}"]`,
     )) {
-      const format = action.querySelector<HTMLElement>("[data-format]");
+      // The caption under the button is also its aria-describedby, so
+      // "Unsigned" reaches screen readers with the platform name.
+      const format = action.parentElement?.querySelector<HTMLElement>("[data-format]");
       if (!format) continue;
-      // The visible label stays the accessible name; the line below keeps the
-      // static requirement text and appends the verified format and size.
       action.href = asset.url;
       action.classList.add("is-direct");
-      format.textContent = `${format.textContent} · ${preview ? "Unsigned " : ""}${target.format} · ${formatFileSize(asset.size)}`;
+      format.textContent = `${preview ? "Unsigned " : ""}${target.format} · ${formatFileSize(asset.size)}`;
     }
   }
 
