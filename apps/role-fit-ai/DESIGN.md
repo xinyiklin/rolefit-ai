@@ -198,7 +198,9 @@ print uses `--ink-muted` to hold AA over the ribbon), a 22px backdrop blur with
 1.6 saturation, and a light inset top edge, over the page's brand art and a
 soft CSS color field behind the extension and privacy sections (`.glow-zone`).
 Browsers without `backdrop-filter`, and visitors who ask for reduced
-transparency, get the opaque card tone instead. The sticky header is a lighter
+transparency, get the opaque card tone instead, and so does every glass surface
+while the window width is changing (a guard against Chromium repainting
+backdrop layers from stale textures). The sticky header is a lighter
 frost (86% paper, 16px blur). Gallery screenshots sit inset 8px in their glass
 card. A third ribbon from the same family (`ribbon-accent.webp`, generated with
 Codex image generation and compared against `ribbon.webp` before use) runs
@@ -209,7 +211,9 @@ action.
 
 **Composition.** A header with the mark, section navigation, GitHub, and one
 Download action. The hero pairs the headline, lede, and both explicit platform
-buttons (macOS Apple silicon, Windows x64) with the real resume-editor capture
+buttons (macOS Apple silicon, Windows x64: equal width, carrying only the OS
+mark, platform, and architecture, with file type, size, and any "Unsigned" in
+a caption below) with the real resume-editor capture
 inside the reusable laptop frame (`.device-laptop`: the screen is a slot for
 any image, the frame image's screen is transparent). A five-step strip
 (Prepare, Assess fit, Polish, Export, Track) uses the brand kit's line icons on

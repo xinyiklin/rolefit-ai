@@ -71,11 +71,21 @@ root and RoleFit app guides first.
   `.device-laptop__screen`; `public/assets/device/laptop.webp` has a transparent
   screen whose measured insets live in that CSS block. A new frame asset needs
   its screen insets re-measured.
-- Platform buttons appear in the hero and the download panel; every
-  `a[data-download-target]` is upgraded by `main.ts`, and each carries a
-  `[data-format]` line that names an unsigned preview. Keep the visible text
-  as the accessible name (no `aria-label` override), so the format line and
-  "Unsigned" reach screen readers.
+- Platform buttons appear in the hero and the download panel as equal-width
+  pairs. A button carries only the OS mark, "Download for macOS/Windows", and
+  the architecture line; the file type and size (and "Unsigned" for a preview)
+  go in the sibling `[data-format]` caption below it, which `main.ts` fills for
+  every `a[data-download-target]`. Keep the visible text as the accessible name
+  (no `aria-label` override) and the button's `aria-describedby` pointing at
+  its caption, so "Unsigned" reaches screen readers as the description. The
+  Apple and Windows marks are monochrome `currentColor` glyphs naming the
+  platform only.
+- Chromium can repaint `backdrop-filter` layers from stale textures during a
+  live window resize. `resizeGuard.ts` sets `html.is-resizing` while the width
+  changes, swapping the glass for its opaque fallback until resizing settles.
+  A new glass surface is covered only if it takes `var(--glass-blur)` through
+  the shared backdrop-filter selector list; the sticky header has its own
+  `.is-resizing` rule.
 - Preserve semantic landmarks, keyboard focus, WCAG AA contrast, useful image
   alternatives, and reduced-motion behavior at desktop and narrow widths.
 - The section scroll-reveal and the hero entrance are progressive enhancements,

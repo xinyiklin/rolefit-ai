@@ -604,7 +604,8 @@ installer. The browser can report that its local provider registry is
 unavailable, but a normal web page cannot reliably distinguish a closed
 companion from one that is not installed. The public product/download page does
 not attempt that detection: the companion is required, and the page shows the
-three supported platform choices with a safe GitHub Releases fallback. It
+two supported platform choices (macOS Apple silicon, Windows x64) with a safe
+GitHub Releases fallback. It
 prefers a complete signed release and may offer a complete unsigned prerelease
 only with an explicit warning beside the download controls.
 

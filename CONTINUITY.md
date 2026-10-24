@@ -115,6 +115,13 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-24
 
+- [USER+CODE+TOOL] **Landing download buttons and resize guard**: equal-width
+  buttons with Apple/Windows glyphs; file type, size, and "Unsigned" moved to
+  a caption linked by `aria-describedby`. `resizeGuard.ts` drops the glass blur
+  while the width changes (user-confirmed it ends the blank-card glitch on drag).
+  Plus visual-QA polish (wrap and alignment fixes). Verified: landing build,
+  browser QA at 1440/1024/768/390/320 in light and dark, two independent
+  reviews. Unverified: forced colors, Firefox/Safari, a real screen reader.
 - [USER+CODE+TOOL] **RoleFit rename, ribbon-R brand, landing redesign** (D097):
   visible name, packaged app, and release assets are RoleFit (internal IDs
   kept); `generate_icons.py` renders the vector mark (extension now ships PNG
