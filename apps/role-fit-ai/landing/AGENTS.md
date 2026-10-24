@@ -64,8 +64,9 @@ root and RoleFit app guides first.
   mid-page ribbon (2026-10-24). `public/assets/logo-symbol.svg`
   is the bare ribbon-R mark; the favicons and touch icon come from
   `desktop/assets/generate_icons.py`. `public/assets/browsers/` holds the
-  Chrome and Firefox logos, cut from the browsers' own installed app icons;
-  use them only to name supported browsers, never restyled.
+  Chrome and Firefox logos (cut from the browsers' own installed app icons)
+  and the Edge logo (rendered from Microsoft's 2019 logo SVG on Wikimedia
+  Commons); use them only to name supported browsers, never restyled.
 - `.device-laptop` is the reusable laptop frame: put any image or element in
   `.device-laptop__screen`; `public/assets/device/laptop.webp` has a transparent
   screen whose measured insets live in that CSS block. A new frame asset needs

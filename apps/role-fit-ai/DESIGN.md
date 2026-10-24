@@ -216,8 +216,9 @@ any image, the frame image's screen is transparent). A five-step strip
 a tinted disc. "Everything you need in one focused workspace" is a scroll-snap
 gallery of real captures (Prepare, Resume, Cover letter, Applications) with
 arrow buttons; each card zooms its capture to the working area. The extension
-section shows the real Chrome and Firefox logos (taken from the installed
-browsers' own app icons, used only to name supported browsers) on a quiet
+section shows the real Chrome, Firefox, and Edge logos (Chrome and Firefox
+from the installed browsers' app icons, Edge from Microsoft's logo SVG; used
+only to name supported browsers and repeated on the privacy diagram) on a quiet
 tinted panel, beside a generated import illustration (`extension-import.webp`,
 made with Codex image generation) whose only labels are the popup's real
 wording: Prepare in RoleFit and Opened in RoleFit from the popup, then Job
