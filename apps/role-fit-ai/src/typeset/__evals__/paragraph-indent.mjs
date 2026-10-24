@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { DOC_STYLE_DEFAULTS } from "@typeset/engine/lib/documentStyle.ts";
 import { layoutCoverLetter } from "@typeset/engine/typeset/layout.ts";
 import { paragraphIndentFromInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
+import { ensureAllFontMetrics } from "@typeset/engine/typeset/fontRegistry.ts";
+
+await ensureAllFontMetrics();
 
 const INDENT_PT = 36;
 const style = { ...DOC_STYLE_DEFAULTS };

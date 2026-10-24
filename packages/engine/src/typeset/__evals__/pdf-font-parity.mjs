@@ -23,14 +23,16 @@ import { readFileSync } from "node:fs";
 import fontkit from "@pdf-lib/fontkit";
 
 import { measure, texLigatures } from "../measure.ts";
-import { DOCUMENT_FONT_FAMILIES, sfntAssetFile } from "../fontRegistry.ts";
+import { DOCUMENT_FONT_FAMILIES, ensureAllFontMetrics, sfntAssetFile } from "../fontRegistry.ts";
+
+await ensureAllFontMetrics();
 
 const SIZE = 10; // bp; the tolerances below are absolute bp at this size
 const TOLERANCE = 0.05; // bp: sub-⅐ px at 96dpi — visually exact
 
 // Per-glyph quantisation budget, on top of TOLERANCE.
 //
-// metrics.gen.ts stores advances as integer 1000ths of an em. A face whose own
+// The committed per-family metrics store advances as integer 1000ths of an em. A face whose own
 // design grid is 1000/em (Latin Modern, both Source families) therefore round
 // -trips exactly and gets NO budget: its parity is bit-exact and stays locked.
 // The metric-compatible families are drawn on Microsoft's 2048/em grid, where an

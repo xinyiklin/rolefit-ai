@@ -5,10 +5,12 @@ import { PDFDocument } from "pdf-lib";
 import { coverLetterResumeData } from "../../lib/coverLetter.ts";
 import { DOC_STYLE_DEFAULTS } from "../../lib/documentStyle.ts";
 import { buildStarterResume } from "../../sampleResume.ts";
-import { DOCUMENT_FONT_FAMILIES, sfntAssetFile } from "../fontRegistry.ts";
+import { DOCUMENT_FONT_FAMILIES, ensureAllFontMetrics, sfntAssetFile } from "../fontRegistry.ts";
 import { layoutCoverLetter, layoutResume } from "../layout.ts";
 import { emitPdf } from "../pdf/emit.ts";
 import { toTypesetSchema } from "../schema.ts";
+
+await ensureAllFontMetrics();
 
 const fonts = new Map();
 for (const [family, config] of Object.entries(DOCUMENT_FONT_FAMILIES)) {

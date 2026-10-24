@@ -40,7 +40,7 @@ import {
 } from "@typeset/engine/lib/styleFieldFormatting.ts";
 import { buildStarterResume } from "@typeset/engine/sampleResume.ts";
 import { ResumePrintLayer } from "@typeset/editor/sections/ResumePrintLayer.tsx";
-import { layoutResume } from "@typeset/engine/typeset/layout.ts";
+import { ensureLayoutMetrics, layoutResume } from "@typeset/engine/typeset/layout.ts";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
 import {
   TypesetEditor,
@@ -355,6 +355,7 @@ export default function App() {
       // direct import instead of pretending to form a second async chunk.
       const { emitPdf, fetchFontBytes } = await import("@typeset/engine/typeset/pdf/emit.ts");
       const schema = toTypesetSchema(resume);
+      await ensureLayoutMetrics(schema, docStyle.style);
       const doc = layoutResume(schema, docStyle.style);
       const fontAssetBaseUrl = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/fonts`;
       const fonts = await fetchFontBytes(doc, fontAssetBaseUrl);

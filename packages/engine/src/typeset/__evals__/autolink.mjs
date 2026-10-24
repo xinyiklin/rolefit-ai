@@ -4,6 +4,9 @@ import assert from "node:assert/strict";
 import { DOC_STYLE_DEFAULTS } from "../../lib/documentStyle.ts";
 import { automaticLinkHref, decodeLinkHref, normalizeLinkDestination } from "../../lib/links.ts";
 import { layoutResume } from "../layout.ts";
+import { ensureAllFontMetrics } from "../fontRegistry.ts";
+
+await ensureAllFontMetrics();
 
 for (const [text, href] of [
   ["(917) 768-8848", "tel:9177688848"],

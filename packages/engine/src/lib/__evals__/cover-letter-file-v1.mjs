@@ -26,6 +26,9 @@ import {
 } from "../coverLetter.ts";
 import { DOC_STYLE_DEFAULTS, FONT_FAMILY_OPTIONS } from "../documentStyle.ts";
 import { pageMarginValuesFor, pageMarginsForValues } from "../pageMargins.ts";
+import { ensureAllFontMetrics } from "../../typeset/fontRegistry.ts";
+
+await ensureAllFontMetrics();
 
 assert.deepEqual(pageMarginValuesFor("narrow"), { top: 36, right: 36, bottom: 36, left: 36 });
 assert.deepEqual(pageMarginValuesFor("normal"), { top: 72, right: 72, bottom: 72, left: 72 });

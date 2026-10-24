@@ -11,11 +11,13 @@ import { newBullet, newEntry, newSection, newSkillEntry, newSummaryEntry } from 
 import { buildStarterResume } from "@typeset/engine/sampleResume.ts";
 import { applyImportedBodySize } from "../../importStyle.ts";
 import { parseFieldKey } from "@typeset/engine/typeset/types.ts";
-import { DOCUMENT_FONT_FAMILIES, sfntAssetFile } from "@typeset/engine/typeset/fontRegistry.ts";
+import { DOCUMENT_FONT_FAMILIES, ensureAllFontMetrics, sfntAssetFile } from "@typeset/engine/typeset/fontRegistry.ts";
 import { layoutResume } from "@typeset/engine/typeset/layout.ts";
 import { emitPdf } from "@typeset/engine/typeset/pdf/emit.ts";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
 import { isDateLike } from "../../rowDates.ts";
+
+await ensureAllFontMetrics();
 
 export const engineFonts = new Map();
 for (const [family, config] of Object.entries(DOCUMENT_FONT_FAMILIES)) {

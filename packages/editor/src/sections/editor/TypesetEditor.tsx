@@ -65,7 +65,7 @@ import {
 import { fieldKey, parseFieldKey, type FieldSrc } from "@typeset/engine/typeset/types.ts";
 import { pageGeometry } from "@typeset/engine/typeset/blocks.ts";
 import { faceFor, spaceWidth } from "@typeset/engine/typeset/measure.ts";
-import { documentFontFamily } from "@typeset/engine/typeset/fontRegistry.ts";
+import { documentFontFamily, ensureFontMetrics } from "@typeset/engine/typeset/fontRegistry.ts";
 import type { LayoutDocument } from "@typeset/engine/typeset/layout.ts";
 import { browserFontFaceLoaded, ensureTypesetFonts, TypesetDomPages } from "@typeset/engine/typeset/render/dom.tsx";
 import { TEXT_REPOSITIONED_EVENT } from "@typeset/engine/typeset/render/logicalFields.tsx";
@@ -889,10 +889,13 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         update();
       } else {
         setCaretOverlay(null);
-        ensureTypesetFonts(family).then(update).catch((error: unknown) => {
-          if (request !== caretFontRequestRef.current || generation !== actions.getDocumentGeneration()) return;
-          setCaretFontError(error instanceof Error ? error.message : "The document font could not be loaded.");
-        });
+        // Metrics load alongside, so typing in the chosen family lays out at once.
+        Promise.all([ensureTypesetFonts(family), ensureFontMetrics([family])])
+          .then(update)
+          .catch((error: unknown) => {
+            if (request !== caretFontRequestRef.current || generation !== actions.getDocumentGeneration()) return;
+            setCaretFontError(error instanceof Error ? error.message : "The document font could not be loaded.");
+          });
       }
     },
     [actions, zoom]

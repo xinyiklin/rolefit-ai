@@ -2,14 +2,16 @@
 // selectable text layer. Font measurement here calibrates browser baselines;
 // wrapping and pagination remain engine-owned for screen, print, and PDF.
 
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 
 import {
   cssFontFamily,
   DEFAULT_DOCUMENT_FONT_FAMILY,
   DOCUMENT_FONT_FAMILIES,
   documentFontFamily,
+  ensureFontMetrics,
   fontFace,
+  fontMetricsReady,
   type DocumentFontFamily
 } from "../fontRegistry.ts";
 import type { FaceName } from "../metrics.gen.ts";
@@ -18,6 +20,7 @@ import { PAGE_HEIGHT_BP, PAGE_WIDTH_BP } from "../blocks.ts";
 import type { DocumentStyle } from "../../lib/documentStyle.ts";
 import {
   layoutCoverLetter,
+  layoutFamilies,
   layoutResume,
   type LayoutDocument,
   type LayoutPage
@@ -321,18 +324,23 @@ export function TypesetDomPages({
   documentKind?: "resume" | "cover-letter";
 }) {
   const family = documentFontFamily(docStyle.fontFamily);
+  // Layout measures synchronously, so the metrics of every family it will use
+  // must have arrived first. Until then the pages are withheld as for an
+  // unloaded font, while those families' fonts download in parallel.
+  const layoutFamiliesKey = useMemo(() => layoutFamilies(schema, docStyle).sort().join("|"), [schema, docStyle]);
+  const metricsReady = layoutFamiliesKey.split("|").every((id) => fontMetricsReady(documentFontFamily(id)));
   const doc = useMemo(
-    () => documentKind === "cover-letter" ? layoutCoverLetter(schema, docStyle) : layoutResume(schema, docStyle),
-    [schema, docStyle, documentKind]
+    () => !metricsReady ? null : documentKind === "cover-letter" ? layoutCoverLetter(schema, docStyle) : layoutResume(schema, docStyle),
+    [schema, docStyle, documentKind, metricsReady]
   );
-  const runs = doc.pages.flatMap((page) => page.lines.flatMap((line) => line.runs));
-  const familiesKey = [...new Set([family, ...runs.map((run) => run.style.family)])].sort().join("|");
+  const runs = doc ? doc.pages.flatMap((page) => page.lines.flatMap((line) => line.runs)) : [];
+  const familiesKey = [...new Set([family, ...(doc ? runs.map((run) => run.style.family) : layoutFamiliesKey.split("|"))])].sort().join("|");
   // A borrowed glyph's fallback family loads beside the pages instead: the CSS
   // font stack paints it on arrival, and typing one must not unmount the host.
   const fallbackKey = [...new Set(runs.flatMap((run) => runFamilies(run.text, run.style).slice(1)))].sort().join("|");
   // Only an unloaded family withholds the pages; swapping in the loading state
   // for already-loaded fonts would unmount the editable host mid-edit.
-  const fontsReady = familiesKey.split("|").every((id) => loadedFamilies.has(documentFontFamily(id)));
+  const fontsReady = doc !== null && familiesKey.split("|").every((id) => loadedFamilies.has(documentFontFamily(id)));
   const [, setFontLoads] = useState(0);
   const [fontError, setFontError] = useState<{ familiesKey: string; message: string } | null>(null);
 
@@ -349,9 +357,14 @@ export function TypesetDomPages({
     setFontError(null);
     if (fontsReady) return;
     let alive = true;
-    Promise.all(familiesKey.split("|").map((id) => ensureTypesetFonts(documentFontFamily(id))))
+    const families = familiesKey.split("|").map(documentFontFamily);
+    // Metrics and fonts download together; the pages wait for both.
+    Promise.all([ensureFontMetrics(families), ...families.map((id) => ensureTypesetFonts(id))])
       .then(() => {
-        if (alive) setFontLoads((count) => count + 1);
+        if (!alive) return;
+        // The off-screen print copy repaints after, never with, the visible pages.
+        if (variant === "print") startTransition(() => setFontLoads((count) => count + 1));
+        else setFontLoads((count) => count + 1);
       })
       .catch((error: unknown) => {
         if (!alive) return;
@@ -363,10 +376,10 @@ export function TypesetDomPages({
     return () => {
       alive = false;
     };
-  }, [familiesKey, fontsReady]);
+  }, [familiesKey, fontsReady, variant]);
 
   useEffect(() => {
-    if (!fontsReady) return;
+    if (!fontsReady || !doc) return;
     onPageCount?.(doc.pages.length);
     onDoc?.(doc);
   }, [fontsReady, doc, onPageCount, onDoc]);
@@ -405,7 +418,7 @@ export function TypesetDomPages({
     ) : null;
   }
 
-  if (!fontsReady) {
+  if (!doc || !fontsReady) {
     return variant === "screen" ? (
       <div className="preview-overlay__loading" role="status">
         <div className="preview-overlay__spinner" />

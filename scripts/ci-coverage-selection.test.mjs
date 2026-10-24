@@ -12,7 +12,8 @@ test('each changed path selects only the jobs that can reach it', () => {
   for (const [paths, expected] of [
     [['packages/engine/src/typeset/layout.ts'], ['engine', 'editor', 'typeset', 'rolefit', 'server', 'browser']],
     [['packages/engine/fonts/Arimo-Bold.ttf', 'packages/engine/scripts/generate_font_assets.py',
-      'packages/engine/src/typeset/metrics.gen.ts', 'packages/engine/package.json'],
+      'packages/engine/src/typeset/metrics.gen.ts', 'packages/engine/src/typeset/metrics/inter.gen.ts',
+      'packages/engine/package.json'],
     ['engine', 'engineFonts', 'editor', 'typeset', 'rolefit', 'server', 'browser']],
     [['packages/editor/src/editor.tsx'], ['editor', 'typeset', 'rolefit', 'browser']],
     [['apps/typeset/src/App.tsx'], ['typeset', 'browser']],

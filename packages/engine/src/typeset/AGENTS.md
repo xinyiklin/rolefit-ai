@@ -12,12 +12,19 @@ contract. Follow the repository root guide first.
 - `fontRegistry.ts` owns supported document families, faces, and asset paths,
   plus the engine-facing `DocumentFontFamily` name (an alias of the persisted
   `FontFamily` union in `lib/documentStyle.ts`) and its defensive coercion.
-- `metrics.gen.ts` is generated committed measurement data; never hand-edit it.
-  It is packed (one `JSON.parse` string, alias faces by name, class-matrix pair
-  kerning) because an object literal of every family's tables cost the type
-  checker over 1 GB and shipped about 9 MB eagerly. Keep the payload a string.
-- `metrics.ts` owns unpacking a face into `FaceMetrics` lookup records on first
-  use; the registry's `metrics` getter is the only caller.
+- `metrics.gen.ts` and `metrics/<family>.gen.ts` are generated committed
+  measurement data; never hand-edit them. Each family's tables are their own
+  lazy module, packed (one `JSON.parse` string, alias faces by name,
+  class-matrix pair kerning) because an object literal of every family's tables
+  cost the type checker over 1 GB, and one eager module shipped about 5 MB
+  before the first page could even request its fonts. Keep each payload a
+  string.
+- `metrics.ts` owns loading a family's module on demand and unpacking a face
+  into `FaceMetrics` lookup records on first use; the registry's `metrics`
+  getter is the only reader. The contract: layout throws on unloaded metrics,
+  so await `ensureLayoutMetrics(schema, style)` (the document's families and
+  their glyph-fallback families) before any layout; evals may await
+  `ensureAllFontMetrics` once instead.
 - `measure.ts` owns face selection, glyph measurement, modeled ligatures, inline
   mark segmentation, paragraph items, and underline geometry.
 - `linebreak.ts` owns deterministic paragraph breaking.
@@ -168,7 +175,7 @@ it truthfully.
   equal the proprietary original's, so a document keeps its line and page count
   elsewhere. Do not "improve" their metrics — a nicer number breaks the only
   reason to ship them.
-- Those three are drawn on a 2048-unit em, so `metrics.gen.ts`'s integer 1000ths
+- Those three are drawn on a 2048-unit em, so the committed metrics' integer 1000ths
   cannot represent every advance exactly. The residue is per glyph and bounded:
   `pdf-font-parity` allows `0.005bp/glyph` at 10bp for them and holds every
   1000-unit family to bit-exact parity, so a real shaping divergence still fails.
@@ -194,7 +201,7 @@ it truthfully.
 ## Font And Shaping Pipeline
 
 - `scripts/generate_font_assets.py` is the pinned, checksum-verified source for
-  WOFF2 assets and `metrics.gen.ts`.
+  WOFF2 assets, `metrics.gen.ts`, and `metrics/*.gen.ts`.
 - `scripts/generate_pdf_fonts.py` derives PDF-embeddable TrueType siblings from
   the committed WOFF2 files and must fail if the sources contain shaping the
   engine does not model. Latin Modern's name-keyed CFF web outlines are
@@ -203,12 +210,19 @@ it truthfully.
   across PDF viewers.
 - The DOM painter loads only the families used by the next layout, including
   inline overrides, and primes their browser baseline metrics before painting.
+  It pre-scans those families from the schema (`layoutFamilies`) so their
+  metrics modules and fonts download in parallel before the first layout.
   Font-load failure remains visible; a canceled load cannot repaint a superseded
   document. Only a family the loader has not yet confirmed withholds pages:
   adding or removing an already-loaded inline family must not swap the editable
   host for the loading state. The same browser-only loader serves next-typing
   caret choices. Never cache a face box measured before that face is loaded; it
   would preserve fallback metrics when the family later enters document content.
+- Nothing off-screen may share the first visible page's commit: the `print`
+  variant's font-ready repaint runs as a transition, and the editor's print
+  layer mounts empty and lays out after the editor. `LogicalFields` positions
+  fragments in separate DOM write and read passes; a read after every write
+  forced a synchronous layout per fragment and dominated time to first page.
 - Browser fonts, PDF fonts, and committed metrics share one shaping model:
   `liga` is limited to `ff`, `fi`, `fl`, `ffi`, and `ffl`; new catalog families
   compile them into one longest-first lookup and measure glyph-boundary kerning.

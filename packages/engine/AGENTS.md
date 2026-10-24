@@ -26,7 +26,8 @@ Use `src/lib/AGENTS.md` for resume/cover-letter domain and file work and
 - Separate pure transforms from I/O and rendering. Portable file validation
   happens before hydration; renderer backends consume shared layout output.
 - Keep generated files reproducible. Never hand-edit mirrored app fonts or
-  `metrics.gen.ts`; change the generator/source and verify committed output.
+  `metrics.gen.ts` or `metrics/*.gen.ts`; change the generator/source and
+  verify committed output.
 - Do not add compatibility layers for hypothetical or unshipped file versions.
   Schema evolution requires an explicit version/migration decision and round-
   trip tests.

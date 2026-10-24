@@ -29,11 +29,13 @@ export async function renderCoverLetterPdfBytes({
   title: string;
   fontBaseUrl: string;
 }) {
-  const [{ layoutCoverLetter }, { emitPdf, fetchFontBytes }] = await Promise.all([
+  const [{ ensureLayoutMetrics, layoutCoverLetter }, { emitPdf, fetchFontBytes }] = await Promise.all([
     import("@typeset/engine/typeset/layout.ts"),
     import("@typeset/engine/typeset/pdf/emit.ts")
   ]);
-  const document = layoutCoverLetter(toTypesetSchema(data), style);
+  const schema = toTypesetSchema(data);
+  await ensureLayoutMetrics(schema, style);
+  const document = layoutCoverLetter(schema, style);
   const fonts = await fetchFontBytes(document, fontBaseUrl);
   return emitPdf(document, fonts, { title: title.trim() || "Cover letter" });
 }

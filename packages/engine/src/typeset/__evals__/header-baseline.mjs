@@ -6,6 +6,9 @@ import { buildHeaderVerticalStream } from '../blocks.ts';
 import { layoutResume, layoutCoverLetter } from '../layout.ts';
 import { inkExtent } from '../measure.ts';
 import { toTypesetSchema } from '../schema.ts';
+import { ensureAllFontMetrics } from "../fontRegistry.ts";
+
+await ensureAllFontMetrics();
 
 const samples = ['aceonmzx', 'aceonmzxhdjklpq', 'hdjklpq', 'ACEONMZX', 'ÉÅgjpq', ''];
 const geometry = doc => doc.pages.map(page => page.lines.map(line => ({ baseline: line.baseline, rule: line.rule })));

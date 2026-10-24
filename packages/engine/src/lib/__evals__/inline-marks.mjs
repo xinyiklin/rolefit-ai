@@ -35,6 +35,9 @@ import { buildStarterResume } from "../../sampleResume.ts";
 import { layoutResume } from "../../typeset/layout.ts";
 import { segmentsFromInlineMarks } from "../../typeset/measure.ts";
 import { toTypesetSchema } from "../../typeset/schema.ts";
+import { ensureAllFontMetrics } from "../../typeset/fontRegistry.ts";
+
+await ensureAllFontMetrics();
 
 // An unusable <size> still owns its </size>: the close must not pop an outer size.
 for (const inner of ["0", "0.5", "201", "999999"]) {
