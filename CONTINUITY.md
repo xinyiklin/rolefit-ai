@@ -106,20 +106,22 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-24
 
-- [USER+CODE+TOOL] **0.22.1 prepared** (patch: #279's shared editor focus and
-  30% zoom floor, #280's per-family font metrics, #281's companion pairing
-  retry; #278 is landing-only and already deployed). Notes
-  `apps/role-fit-ai/docs/releases/0.22.1-beta.1.md`; extension 1.5.2 and
+- [USER+CODE+TOOL] **0.23.0 prepared** (minor, user-approved retarget of the
+  untagged 0.22.1: #283's agent Drafts, duplicate guard, dry run and MCP resume
+  reads, plus #279/#280/#281; #278 is landing-only and already deployed). Notes
+  `apps/role-fit-ai/docs/releases/0.23.0-beta.1.md`; extension 1.5.2 and
   desktop bridge API 13 unchanged. Preflight on Windows x64, Node 24.22.1:
-  check 202/202, Electron smoke, release contract 14/14, `make` (Squirrel
-  0.22.1), packaged smoke (win32-x64 unpacked). macOS packaging: release CI only.
+  check 202/202, `make`, packaged smoke (win32-x64 unpacked), release contract
+  14/14. **Electron dev smoke fails** its connection-status check (server read
+  `unreachable`) twice, and equally on the 0.22.1 commit that passed earlier the
+  same day, so it is environmental; unresolved. macOS packaging: release CI only.
 - [CODE+TOOL] **Companion pairing startup retry**: right after start, the
   owned dev server stalls requests for up to ~7 s (measured 1.0/3.7/0.9 s,
   then ~1 ms), tripping main's 1 s pairing fetch. Failures before any success
   now keep Loading and retry 4x at 1.5 s. This explains the 0.11.1/0.12.0
   smoke flake; the 750 ms health probe can still read "unreachable".
 - [USER+CODE+TOOL] **Agent commit: Drafts, duplicate guard, dry run; MCP
-  resume reads** (D100) on `feature/rolefit-mcp-agent-commit`. Verified:
+  resume reads** (D100, #283). Verified:
   server tsc, commit and MCP probes, `npm run check` (202/202), read tools over
   the real workspace handlers. Open: no MCP tool attaches documents to a
   submitted Draft (the route exists); real MCP clients not re-run.
