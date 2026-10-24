@@ -755,8 +755,8 @@ h2 {
 }
 
 /* Prepare and applications: past the app sidebar. Resume and cover letter:
-   21-77% of the capture's width, so the editor toolbar shows from its first
-   control (22%) and the page stays clear of the workflow rail. */
+   21-77% of the capture's width, so the editor toolbar shows from the zoom
+   control (22%; undo and redo fall outside) and the workflow rail stays out. */
 .feature-card__shot--prepare img,
 .feature-card__shot--applications img {
   transform-origin: 35% 0;
