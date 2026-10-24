@@ -115,6 +115,11 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-24
 
+- [CODE+TOOL] **Companion pairing startup retry**: right after start, the
+  owned dev server stalls requests for up to ~7 s (measured 1.0/3.7/0.9 s,
+  then ~1 ms), tripping main's 1 s pairing fetch. Failures before any success
+  now keep Loading and retry 4x at 1.5 s. This explains the 0.11.1/0.12.0
+  smoke flake; the 750 ms health probe can still read "unreachable".
 - [USER+CODE+TOOL] **Landing download buttons and resize guard**: equal-width
   buttons with Apple/Windows glyphs; file type, size, and "Unsigned" moved to
   a caption linked by `aria-describedby`. `resizeGuard.ts` drops the glass blur
@@ -139,20 +144,6 @@ D-entries in `docs/decisions.md`.
   glass), three independent reviews. Unverified: reduced-transparency and
   no-blur fallbacks in a real browser, Firefox/Safari rendering, Windows
   installer, the new extension icon in an installed browser.
-
-## 2026-10-23
-
-- [USER+CODE+TOOL] **Toolchain upgrade** (D003, D096): Electron 44.9.3, Node
-  24.22.1 / npm 11.19.1, Forge 8.0.1 + asar 4, patch and audit fixes (dev audit
-  33 to 4 no-fix `image-size`), Intel macOS dropped, async `writeText`
-  awaited, landing pinned to 5182. Signed macOS now gets the app's entitlements
-  via `osxSign.optionsForFile` (Chromium defaults without Apple Events before;
-  the stable workflow asserts them), narrowed to `allow-jit` (a hardened-runtime
-  smoke passed; a no-JIT control crashed). Verified on macOS arm64: `npm run
-  check`, `make`, packaged smoke, codesign/ZIP/DMG, ad-hoc osx-sign runs, the
-  Typeset image, landing in a browser; reviewed. Unverified: Windows `make`/
-  installer on Forge 8 and a Developer ID signature (release CI only), a
-  43-encrypted API key under 44 on macOS, lucide icon redraws.
 
 ## 2026-10-18
 
