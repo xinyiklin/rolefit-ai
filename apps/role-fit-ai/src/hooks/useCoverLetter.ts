@@ -9,6 +9,7 @@ import {
   type AiStageState as StageState,
 } from "../lib/aiWorkflow";
 import type { StageAiUsage } from "../lib/aiUsage";
+import { COVER_ACCEPTED_CONCERNS_WARNING } from "../lib/sourceConcernNotices.ts";
 import {
   buildCoverLetterEvidence,
   type CoverLetterTailorResult,
@@ -168,7 +169,7 @@ export function useCoverLetter({
   // draft's length, phrasing, and structure notes are recomputed each run.
   const inputSourceWarnings = sanitizeContentWarnings([
     ...(sourceWarnings ?? []),
-    ...(lastAppliedResult?.concerns.length ? ["Earlier accepted cover-letter wording had unresolved concerns; repeating Polish or editing does not verify it.", ...lastAppliedResult.concerns] : [])
+    ...(lastAppliedResult?.concerns.length ? [COVER_ACCEPTED_CONCERNS_WARNING, ...lastAppliedResult.concerns] : [])
   ]) ?? [];
   const proposalContentFingerprint = workflowInputFingerprint({
     sourceRevision,

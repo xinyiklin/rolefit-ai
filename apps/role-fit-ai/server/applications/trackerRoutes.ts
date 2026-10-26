@@ -240,7 +240,8 @@ export async function handleApplicationStatus(
     return;
   }
   try {
-    const body = JSON.parse(await readBody(req, 20_000)) as unknown;
+    // Submitting a Draft carries its documents, so the commit's size limit.
+    const body = JSON.parse(await readBody(req, 3 * MAX_DOCUMENT_BYTES + 1_000_000)) as unknown;
     sendJson(res, 200, await changeApplicationStatus(workspaceDir, id, body));
   } catch (error) {
     sendRecordWriteError(error, res, "The stage change failed. Nothing was saved.");

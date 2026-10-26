@@ -61,7 +61,13 @@ browser-side effects; components render them and App composes them.
   render and initializes keyed state only from the next user decision. Restore
   is decision state under that same key, never a change to the result, so it
   keeps earlier decisions, their Undo, and open edit drafts; Accept all never
-  reaches an unrestored held-back edit.
+  reaches an unrestored held-back edit. How an accepted edit lands
+  (`applyTarget`, reorders first, each step reading the pre-batch document)
+  and the dropped-term advisory after acceptance live in
+  `src/lib/resumeProposalApply.ts`, shared with the MCP server's
+  `apply_resume_edits`; the letter's equivalent is
+  `src/lib/coverLetterTailoring.ts`, and the concern notices every stage sends
+  are in `src/lib/sourceConcernNotices.ts`.
   For terminology preservation, a warned field may retain a term supported by
   both its original and current wording. An unrelated metric/quality warning
   must not erase that support; newly added uncertain terms do not count.

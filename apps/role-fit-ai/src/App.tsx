@@ -178,6 +178,7 @@ import { StudioPane } from "./sections/StudioPane";
 import { SettingsDialog, type SettingsSection } from "./sections/SettingsDialog";
 import type { ProfileNoteFocus } from "./sections/settings/ProfileNotes.tsx";
 import { appendProfileBlock, profileNotesScope } from "./lib/profileNotes.ts";
+import { RESUME_SOURCE_WARNING } from "./lib/sourceConcernNotices.ts";
 import { ExportMenu } from "./sections/ExportRail";
 import { ApplyDownloadDialog } from "./sections/ApplyDownloadDialog";
 import { SkipJobDialog } from "./sections/SkipJobDialog";
@@ -1188,7 +1189,7 @@ function App() {
   const resumeSourceWarnings = resultCarriesConcerns && currentResumeConcerns(result,
     flattenResumeTargets(buildResumePolishScope(editedResume, editedResume.sections.map((section) => section.id), [])),
     resumeEditorActions.getDocumentGeneration()).length
-      ? ["Some supplied resume wording retains earlier evidence concerns. Acceptance or later editing does not verify those claims."] : undefined;
+      ? [RESUME_SOURCE_WARNING] : undefined;
 
   // Cover Polish stages a whole-document proposal. The dedicated editor
   // remains the single owner for accepted text, direct edits, file lifecycle,

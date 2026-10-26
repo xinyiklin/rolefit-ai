@@ -5,9 +5,11 @@
 // normalize refuses the whole commit with a path-named issue and writes
 // nothing; a duplicate match refuses until its id is acknowledged; a dry run
 // answers as the commit would and writes nothing; a Draft commit carries no
-// dates or documents; a failed tracker write removes the document folder; the status
-// route applies only the tracker row menu's moves and records the stage entry the
-// tracker requires.
+// dates or documents; an Applied commit and a first submission through the
+// status route need the resume; a failed tracker write removes the document
+// folder, and a failed submission restores the files it replaced; the status
+// route applies only the tracker row menu's moves and records the stage entry
+// the tracker requires.
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -16,6 +18,7 @@ import { Readable } from "node:stream";
 
 import { COVER_LETTER_STYLE_DEFAULTS, serializeCoverLetterFile } from "@typeset/engine/lib/coverLetter.ts";
 import { commitApplication } from "../commitService.ts";
+import { changeApplicationStatus } from "../statusService.ts";
 import { strictApplicationIssues } from "../schema.ts";
 import { invalidateApplicationsSnapshot, readApplications as readCachedApplications } from "../storage.ts";
 import { handleAppendApplicationAnswers, handleApplicationStatus, handleCommitApplication, handleLogApplicationEvent } from "../trackerRoutes.ts";
@@ -116,6 +119,7 @@ const staleRevision = {
   counts: { ...staleReceipt.counts, words: staleReceipt.counts.words + 3 }, compliant: staleReceipt.compliant, status: "ready"
 };
 
+const resumeOnly = { resume: { sourceText: resumeSource } };
 const application = {
   title: "Backend Engineer at Example Co",
   company: "Example Co",
@@ -209,13 +213,20 @@ try {
   const before = await trackerText();
   const beforeFolders = await folders();
   for (const [payload, expected] of refusals) {
-    const res = await commit(payload);
+    // Field refusals on an Applied commit, past its resume requirement.
+    const res = await commit(payload.application?.status === "applied" && !("documents" in payload) ? { ...payload, documents: resumeOnly } : payload);
     assert.equal(res.status, 400, `${expected}: ${res.chunk}`);
     assert.ok(res.json.issues.some((issue) => issue.startsWith(expected)), `${expected} not in ${JSON.stringify(res.json.issues)}`);
   }
   assert.equal(await trackerText(), before, "refusals leave the tracker untouched");
   assert.deepEqual(await folders(), beforeFolders, "refusals write no document folder");
   assert.equal((await commit("{not json")).status, 400);
+  for (const payload of [{ application }, { application, dryRun: true }, { application, documents: { cover: { sourceText: coverSource } } }]) {
+    const res = await commit(payload);
+    assert.equal(res.status, 400, res.chunk);
+    assert.deepEqual(res.json.issues, ["documents.resume: an Applied commit needs the .resume source that was sent"]);
+  }
+  assert.equal(await trackerText(), before, "an Applied commit without a resume writes nothing");
 
   // A second record for a saved job is refused until each match is acknowledged.
   const first = (await readApplications(workspaceDir)).find((record) => record.jobUrl === application.jobUrl);
@@ -226,9 +237,9 @@ try {
     assert.deepEqual(res.json.duplicates.map(({ id, match }) => [id, match.confidence]), [[first.id, "exact"]]);
     assert.equal(res.json.duplicates[0].title, first.title);
     assert.equal(res.json.duplicates[0].jobDescription, undefined, "summaries only");
-    const dryRun = await commit({ application, dryRun: true });
+    const dryRun = await commit({ application, dryRun: true, documents: resumeOnly });
     assert.equal(dryRun.status, 409, "a dry run reports the duplicate the commit would refuse");
-    assert.equal((await commit({ application, acknowledgedDuplicates: ["someone-else"] })).status, 409, "only the matching id acknowledges it");
+    assert.equal((await commit({ application, acknowledgedDuplicates: ["someone-else"], documents: resumeOnly })).status, 409, "only the matching id acknowledges it");
     const acknowledged = await commit({ application, dryRun: true, acknowledgedDuplicates: [first.id], documents: { resume: { sourceText: resumeSource } } });
     assert.equal(acknowledged.status, 200, acknowledged.chunk);
     assert.deepEqual(acknowledged.json, { dryRun: true, valid: true });
@@ -248,9 +259,40 @@ try {
     assert.equal(saved.stageHistory, undefined);
     assert.equal(saved.applicationAnswers[0].answer, "I build reliable APIs.", "a Draft keeps its answers");
     assert.equal((await commit({ application: draft })).status, 409, "the Draft guards its own job");
-    const submitted = await changeStatus(saved.id, { status: "applied", baseUpdatedAt: saved.updatedAt });
+    const unchanged = await trackerText();
+    const bare = await changeStatus(saved.id, { status: "applied", baseUpdatedAt: saved.updatedAt });
+    assert.equal(bare.status, 400, bare.chunk);
+    assert.match(bare.json.error, /^documents\.resume: a first submission needs/);
+    assert.match((await changeStatus(saved.id, { status: "applied", documents: { cover: { sourceText: coverSource } } })).json.error, /^documents\.resume:/);
+    assert.match((await changeStatus(saved.id, { status: "applied", documents: { resume: { sourceText: "{}" } } })).json.error, /^documents\.resume\.sourceText: not a valid \.resume document/);
+    assert.match((await changeStatus(saved.id, { status: "not_applying", documents: resumeOnly })).json.error, /^documents: only a first submission/);
+    assert.equal(await trackerText(), unchanged, "refused submissions write nothing");
+    assert.deepEqual(await folders(), beforeFolders, "nor any document folder");
+
+    // A failed tracker write restores the files the submission wrote.
+    const failing = { writeApplicationsSnapshot: async () => { throw new Error("disk full"); } };
+    await assert.rejects(changeApplicationStatus(workspaceDir, saved.id, { status: "applied", documents: resumeOnly }, failing), /disk full/);
+    assert.equal(await trackerText(), unchanged);
+    assert.deepEqual(await readdir(join(workspaceDir, "applications", saved.id)).catch(() => []), [], "no orphaned document");
+
+    const submitted = await changeStatus(saved.id, {
+      status: "applied",
+      baseUpdatedAt: saved.updatedAt,
+      documents: { resume: { sourceText: resumeSource, fileName: "Draft Resume.resume" }, cover: { sourceText: coverSource } }
+    });
     assert.equal(submitted.status, 200, submitted.chunk);
     assert.ok(submitted.json.application.appliedAt, "submitting the Draft dates it now");
+    const [stored] = (await readApplications(workspaceDir)).filter((record) => record.id === saved.id);
+    assert.equal(stored.resumeArtifacts.fileName, "Draft Resume.resume");
+    assert.equal(stored.resumeArtifacts.savedAt, stored.updatedAt);
+    assert.equal(stored.coverLetterArtifacts.fileName, "cover.cover");
+    const dir = join(workspaceDir, "applications", saved.id);
+    assert.equal(await readFile(join(dir, "resume.resume"), "utf8"), resumeSource);
+    assert.equal(await readFile(join(dir, "cover.cover"), "utf8"), coverSource);
+    assert.deepEqual(strictApplicationIssues(JSON.parse(JSON.stringify(stored))).issues, [], "a submitted Draft re-validates strictly");
+    const retried = await changeStatus(saved.id, { status: "applied", documents: resumeOnly });
+    assert.equal(retried.json.changed, false, "a retried submission changes nothing");
+    assert.match((await changeStatus(saved.id, { status: "interviewing", documents: resumeOnly })).json.error, /^documents: only a first submission/);
   }
 
   // A failed tracker write removes the document folder it created.
@@ -259,13 +301,13 @@ try {
     const before = await trackerText();
     const beforeFolders = await folders();
     const acknowledgedDuplicates = (await readApplications(workspaceDir)).map(({ id }) => id);
-    await assert.rejects(commitApplication(workspaceDir, { application, acknowledgedDuplicates, documents: { resume: { sourceText: resumeSource } } }, failing), /disk full/);
+    await assert.rejects(commitApplication(workspaceDir, { application, acknowledgedDuplicates, documents: resumeOnly }, failing), /disk full/);
     assert.equal(await trackerText(), before);
     assert.deepEqual(await folders(), beforeFolders, "no orphaned document folder");
   }
 
   // The status route moves a record as the row stage menu does, with history.
-  const committed = await commit({ application: { ...application, jobUrl: "https://example.test/jobs/3", appliedAt: "2026-10-01T12:00:00.000Z" } });
+  const committed = await commit({ application: { ...application, jobUrl: "https://example.test/jobs/3", appliedAt: "2026-10-01T12:00:00.000Z" }, documents: resumeOnly });
   const applied = committed.json.application;
   {
     const stale = await changeStatus(applied.id, { status: "interviewing", baseUpdatedAt: "2026-01-01T00:00:00.000Z" });
@@ -299,10 +341,24 @@ try {
     assert.match(ghosted.json.error, /allowed: not_applying, applied, interviewing, offer, withdrawn/);
     assert.equal((await changeStatus(applied.id, { status: "applied" })).status, 200, "the row menu can reopen a rejection");
   }
+  // A submitted record without appliedAt (migration keeps an empty date absent)
+  // moves as before and is never treated as a first submission.
+  {
+    const undated = (await commit({ application: { ...application, jobUrl: "https://example.test/jobs/5" }, documents: resumeOnly, acknowledgedDuplicates: (await readApplications(workspaceDir)).map(({ id }) => id) })).json.application;
+    const tracker = JSON.parse(await trackerText());
+    delete tracker.applications.find((record) => record.id === undated.id).appliedAt;
+    await writeFile(join(workspaceDir, "applications.json"), JSON.stringify(tracker, null, 2), "utf8");
+    invalidateApplicationsSnapshot();
+    assert.match((await changeStatus(undated.id, { status: "rejected", documents: resumeOnly })).json.error, /^documents: only a first submission/, "its saved resume is never replaced");
+    assert.match((await changeStatus(undated.id, { status: "rejected", documents: {} })).json.error, /^documents: only a first submission/);
+    const moved = await changeStatus(undated.id, { status: "interviewing" });
+    assert.equal(moved.status, 200, moved.chunk);
+  }
   {
     const skipped = (await readApplications(workspaceDir)).find((record) => record.status === "not_applying" && !record.appliedAt);
     assert.match((await changeStatus(skipped.id, { status: "applied", date: "2026-10-22" })).json.error, /dated when it is saved/);
-    const promoted = await changeStatus(skipped.id, { status: "applied" });
+    assert.match((await changeStatus(skipped.id, { status: "applied" })).json.error, /^documents\.resume: a first submission needs/);
+    const promoted = await changeStatus(skipped.id, { status: "applied", documents: resumeOnly });
     assert.equal(promoted.status, 200, promoted.chunk);
     assert.ok(promoted.json.application.appliedAt, "applying to a skipped job dates the submission now");
     assert.equal(promoted.json.application.stageHistory, undefined);
@@ -422,7 +478,7 @@ try {
   {
     await writeFile(join(workspaceDir, "applications.json"), "{broken", "utf8");
     invalidateApplicationsSnapshot();
-    assert.equal((await commit({ application })).status, 500);
+    assert.equal((await commit({ application, documents: resumeOnly })).status, 500);
     assert.equal((await changeStatus(applied.id, { status: "offer" })).status, 500);
     assert.equal(await trackerText(), "{broken");
   }

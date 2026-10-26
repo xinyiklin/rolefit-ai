@@ -1,5 +1,6 @@
 import { currentResumeConcerns, sameProposalTarget, type ResumeSourceConcern } from "../resume/proposalWarnings.ts";
 import { affirmativeTerm, jobTerminology } from "../resume/terminology.ts";
+import { RESUME_POLISH_RESULT_WARNING, RESUME_POLISH_SOURCE_WARNING } from "../lib/sourceConcernNotices.ts";
 import { useEffect, useRef, useState } from "react";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 
@@ -226,7 +227,7 @@ export function useResumePolishPipeline({
           candidateContext: context.candidateContext,
           ...(context.fitFindings ? { fitFindings: context.fitFindings } : {}),
           sourceWarnings: context.sourceConcerns.length
-            ? ["Some current resume wording came from earlier generated edits with unresolved evidence concerns. Candidate-supplied text is not independently verified; check every claim against the original supplied sources."] : undefined,
+            ? [RESUME_POLISH_SOURCE_WARNING] : undefined,
           customInstructions: customInstructionsFor("resume-polish"),
           boldBulletKeywords,
           // Omitted when off, so the request stays exactly the single-pass one.
@@ -266,7 +267,7 @@ export function useResumePolishPipeline({
         runId: crypto.randomUUID(),
         documentGeneration: context.documentGeneration,
         sourceConcerns: context.sourceConcerns,
-        warnings: [...(data.warnings ?? []), ...(context.sourceConcerns.length ? ["Some current resume fields retain earlier evidence concerns; acceptance and repeated Polish are not verification."] : [])],
+        warnings: [...(data.warnings ?? []), ...(context.sourceConcerns.length ? [RESUME_POLISH_RESULT_WARNING] : [])],
         polishOutcome: data.status,
         advice: editedResume ? adviceNotOnResume(data.advice, editedResume, context.candidateContext) : data.advice,
         adviceStale: false,

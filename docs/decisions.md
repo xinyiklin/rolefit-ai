@@ -660,7 +660,7 @@ later entry wins.
   0.20/0.21 read its files and drop only the version, which reads back as
   version 0. Builds before it still report newer files as corrupt. Contract:
   `apps/role-fit-ai/docs/engineering/workspace-backup.md#schema-versions-and-newer-files`.
-- 2026-10-24 [USER+CODE+TOOL] D100 ACTIVE: **The agent commit also saves
+- 2026-10-24 [USER+CODE+TOOL] D100 AMENDED by D101: **The agent commit also saves
   Drafts, refuses unacknowledged duplicates, and has a dry run.**
   `POST /api/applications/commit` accepts `status: "draft"` with no
   `appliedAt`, `notApplyingAt`, or documents (submitted later through the
@@ -675,6 +675,48 @@ later entry wins.
   Fit Assessment. The user chose this batch from an agent's five proposals;
   an MCP Fit snapshot, field-level updates, documents on an existing record,
   and server-side PDF rendering are undecided.
+- 2026-10-26 [USER+CODE+TOOL] D101 AMENDED by D102: **An agent-recorded submission
+  always carries its resume.** `POST /api/applications/commit` refuses
+  `status: "applied"` without `documents.resume`. `POST
+  /api/applications/<id>/status` accepts `documents` (the commit's shape and
+  validation) only on a first submission, a Draft or a job-only Skip (no
+  `appliedAt`) moving to a submitted stage, keyed on the stage because a
+  migrated submitted record may also lack `appliedAt`, and requires the
+  resume there; files and stage save together, and a failed tracker write
+  restores the files. Both routes are agent-only, so the UI's Apply, which may
+  exclude the resume, is unchanged. The MCP server adds `list_cover_letters`,
+  `get_cover_letter`, `get_submission_package`, `get_answers` (the newest
+  answer per question across records; no separate answers library), and
+  `get_candidate_profile` over existing routes, with no server change. The
+  user chose this after an agent's gap review (2026-10-24); AI stages over MCP
+  and server-side PDF rendering remain undecided.
+- 2026-10-26 [USER+CODE+TOOL] D102 ACTIVE: **RoleFit's AI stages are MCP
+  tools that save nothing.** `analyze_job`, `assess_fit`, `polish_resume`
+  with `apply_resume_edits`, `polish_cover_letter`, `draft_answer`, and
+  `review_application` call the existing AI routes with each stage's saved
+  provider, model, and effort, the Profile and declared facts (job analysis
+  reads neither), and the stage's instructions, built by the browser's own
+  `src/lib` functions; the server's prompts, grounding, and sanitizers are
+  unchanged and MCP adds none. Results keep the browser's signals (per-edit
+  warnings, held-back edits and the review outcome, every Fit gap read by the
+  app's `resumeFitGapRows`, dropped job terms, letter concerns, local review
+  checks when the review declines or its provider fails) and its response
+  checks. A cover-letter slot answer
+  is accepted only for a slot the letter's template asks for, as in the app.
+  Accepted edits apply through the editor's transform
+  (`src/lib/resumeProposalApply.ts`, `src/lib/coverLetterTailoring.ts`);
+  proposals live only in the MCP process. MCP keeps no state between stages:
+  `apply_resume_edits` returns `resumeConcerns` (the concerns the polish was
+  given plus the accepted edits' warnings) for the agent to pass on, and each
+  stage then gets the browser's notice (`src/lib/sourceConcernNotices.ts`),
+  list-level rather than per field. Known differences from the app: Polish
+  uses the default section scope; a Fit snapshot counts as an earlier
+  assessment; `draft_answer` reads the record's stored brief, which for
+  browser-saved records also lists benefits. Calls run concurrently with at
+  most three provider runs open per MCP session, and a cancelled call or a
+  closed client aborts its request, which stops RoleFit's provider run. An
+  agent's tool call is a billed API call or CLI run, approved through the
+  agent's own tool approval. Server-side PDF rendering remains undecided.
 
 ### Extension
 

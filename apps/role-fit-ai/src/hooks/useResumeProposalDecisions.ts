@@ -1,5 +1,4 @@
-import { sameProposalTarget } from "../resume/proposalWarnings.ts";
-import { lostAcceptedTerms, terminologyCoverage } from "../resume/terminology.ts";
+import { terminologyCoverage } from "../resume/terminology.ts";
 import { serializeResumeData } from "../lib/resumeText.ts";
 /**
  * useResumeProposalDecisions — accept / edit / discard state for the resume
@@ -17,9 +16,7 @@ import { serializeResumeData } from "../lib/resumeText.ts";
  * the original text makes the edit pending again.
  */
 import { useCallback, useDeferredValue, useMemo, useState } from "react";
-import type { ResumeData, ResumeEntry } from "@typeset/engine/lib/resumeData.ts";
-import { sharedWholeFieldFormat, wholeFieldFormat, withWholeFieldFormat } from "@typeset/engine/lib/inlineMarksText.ts";
-import { stripStructuralInlineMarks } from "../../shared/resumePolishContract.ts";
+import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 
 import {
   clearProposalDecision,
@@ -35,108 +32,11 @@ import {
   resumeProposalKey,
   type ResumeProposalDecisionState
 } from "../lib/resumeProposalDecisionState.ts";
+import { acceptedTerminologyWarnings, applyRank, applyTarget, currentTargetText } from "../lib/resumeProposalApply.ts";
 import type { PolishedResume, ResumeProposalSuggestion } from "../resumeEngine.ts";
 import type { ResumeEditorActions } from "./useResumeEditor.ts";
 
 export type { ResumeProposalDecision } from "../lib/resumeProposalDecisionState.ts";
-
-function findEntry(resume: ResumeData, suggestion: ResumeProposalSuggestion): ResumeEntry | null {
-  const section = resume.sections.find((item) => item.id === suggestion.target.sectionId);
-  return section?.items.find((entry) => entry.id === suggestion.target.entryId) ?? null;
-}
-
-// A new bullet that is not in the entry reads as its empty original, so an
-// unaccepted or removed addition is pending again; a missing bullet reads as
-// an accepted removal. A reorder reads the live order of its original bullets.
-export function currentTargetText(resume: ResumeData, suggestion: ResumeProposalSuggestion): string | null {
-  const entry = findEntry(resume, suggestion);
-  if (!entry) return null;
-  if (suggestion.kind === "reorder") {
-    const original = suggestion.originalOrder ?? [];
-    return entry.bullets.map((bullet) => bullet.id).filter((id) => original.includes(id)).join("\n");
-  }
-  if (suggestion.target.field === "bullet") {
-    const text = entry.bullets.find((bullet) => bullet.id === suggestion.target.bulletId)?.text;
-    return text ?? (suggestion.kind === "add" || suggestion.kind === "remove" ? "" : null);
-  }
-  return entry.subtitleLeft;
-}
-
-// Moves the listed bullets into `order` within the slots they occupy, leaving
-// any other bullet (an accepted addition) where it is.
-function reorderEntryBullets(entry: ResumeEntry, order: string[], move: (from: number, to: number) => void): void {
-  const ids = entry.bullets.map((bullet) => bullet.id);
-  const present = order.filter((id) => ids.includes(id));
-  let next = 0;
-  const desired = ids.map((id) => present.includes(id) ? present[next++] : id);
-  for (let index = 0; index < desired.length; index += 1) {
-    const from = ids.indexOf(desired[index]);
-    if (from === index) continue;
-    move(from, index);
-    ids.splice(index, 0, ...ids.splice(from, 1));
-  }
-}
-
-// Every step of a bulk decision reads the pre-batch document. Reorders move by
-// index, so they run first; every other change addresses its bullet by id.
-function applyRank(suggestion: ResumeProposalSuggestion): number {
-  return suggestion.kind === "reorder" ? 0 : 1;
-}
-
-// Polish sees and returns text without whole-field sizes or fonts, so an
-// accepted rewrite takes its field's (a new bullet, the one its siblings share).
-function withFieldFormat(entry: ResumeEntry | null, suggestion: ResumeProposalSuggestion, value: string): string {
-  if (!entry || !value) return value;
-  if (suggestion.target.field !== "bullet") return withWholeFieldFormat(value, wholeFieldFormat(entry.subtitleLeft ?? ""));
-  const existing = entry.bullets.find((bullet) => bullet.id === suggestion.target.bulletId);
-  return withWholeFieldFormat(
-    value,
-    existing ? wholeFieldFormat(existing.text) : sharedWholeFieldFormat(entry.bullets.map((bullet) => bullet.text))
-  );
-}
-
-function applyTarget(
-  resume: ResumeData,
-  actions: ResumeEditorActions,
-  suggestion: ResumeProposalSuggestion,
-  rawValue: string
-): void {
-  const { sectionId, entryId, bulletId, field } = suggestion.target;
-  if (!entryId) return;
-  const entry = findEntry(resume, suggestion);
-  const value = suggestion.kind === "reorder" ? rawValue : withFieldFormat(entry, suggestion, rawValue);
-  if (suggestion.kind === "reorder") {
-    if (entry) reorderEntryBullets(entry, value.split("\n"), (from, to) => actions.reorderBullets(sectionId, entryId, from, to, true));
-    return;
-  }
-  if (suggestion.kind === "remove") {
-    if (!bulletId || !entry) return;
-    const exists = entry.bullets.some((bullet) => bullet.id === bulletId);
-    if (!value) {
-      if (exists) actions.removeBullet(sectionId, entryId, bulletId, true);
-      return;
-    }
-    if (exists) return;
-    // Restore after the nearest original predecessor still in the entry.
-    const original = suggestion.originalOrder ?? [];
-    const before = original.slice(0, original.indexOf(bulletId)).reverse()
-      .map((id) => entry.bullets.findIndex((bullet) => bullet.id === id))
-      .find((index) => index >= 0);
-    actions.addBullet(sectionId, entryId, { id: bulletId, text: value }, true);
-    const to = before === undefined ? 0 : before + 1;
-    if (to !== entry.bullets.length) actions.reorderBullets(sectionId, entryId, entry.bullets.length, to, true);
-    return;
-  }
-  if (field === "bullet") {
-    if (!bulletId) return;
-    const exists = findEntry(resume, suggestion)?.bullets.some((bullet) => bullet.id === bulletId);
-    if (suggestion.kind === "add" && !exists) actions.addBullet(sectionId, entryId, { id: bulletId, text: value }, true);
-    else if (suggestion.kind === "add" && !value) actions.removeBullet(sectionId, entryId, bulletId, true);
-    else actions.updateBullet(sectionId, entryId, bulletId, value, true);
-    return;
-  }
-  actions.updateEntry(sectionId, entryId, "subtitleLeft", value, true);
-}
 
 type UseResumeProposalDecisionsArgs = {
   result: PolishedResume | null;
@@ -262,41 +162,10 @@ export function useResumeProposalDecisions({
     ));
   }, [isPending, proposalKey, suggestions]);
 
-  const terminologyWarnings = useMemo(() => {
-    if (!result?.terminology || result.terminology.inputKey !== terminologyInputKey) return [];
-    const accepted = suggestions.flatMap((suggestion) => {
-      const decision = decisions[suggestion.id];
-      const current = currentTargetText(resume, suggestion);
-      return decision?.kind === "accepted" && current !== null && stripStructuralInlineMarks(current) === decision.text && suggestion.kind !== "reorder"
-        ? [{ original: suggestion.currentText, current }] : [];
-    });
-    if (!accepted.length) return [];
-    const uncertainEdits: Array<{ original: string; current: string }> = [];
-    const evidenceResume = { ...resume, sections: resume.sections.map((section) => ({ ...section,
-      items: section.items.map((entry) => {
-        const uncertain = suggestions.filter((suggestion) => suggestion.warnings?.length
-          && suggestion.target.sectionId === section.id && suggestion.target.entryId === entry.id
-          && (() => {
-            const decision = decisions[suggestion.id];
-            return stripStructuralInlineMarks(currentTargetText(resume, suggestion) ?? "") === (decision?.kind === "accepted" ? decision.text : suggestion.proposedText);
-          })());
-        for (const suggestion of uncertain) {
-          const prior = result?.sourceConcerns?.find((concern) => sameProposalTarget(concern.target, suggestion.target));
-          uncertainEdits.push({
-            original: prior?.originalText ?? suggestion.currentText,
-            current: currentTargetText(resume, suggestion) ?? ""
-          });
-        }
-        return { ...entry,
-          subtitleLeft: uncertain.some((suggestion) => suggestion.target.field === "skill") ? "" : entry.subtitleLeft,
-          bullets: entry.bullets.map((bullet) => uncertain.some((suggestion) => suggestion.target.bulletId === bullet.id)
-            ? { ...bullet, text: "" } : bullet)
-        };
-      })
-    })) };
-    const currentEvidence = serializeResumeData(evidenceResume);
-    return lostAcceptedTerms(result.terminology, terminologyInputKey, currentEvidence, accepted, uncertainEdits);
-  }, [decisions, resume, result, suggestions, terminologyInputKey]);
+  const terminologyWarnings = useMemo(
+    () => acceptedTerminologyWarnings(result, terminologyInputKey, suggestions, decisions, resume),
+    [decisions, resume, result, suggestions, terminologyInputKey]
+  );
 
   const fitGapRows = useMemo(() => resumeFitGapRows(result, suggestions, (suggestion) => isDocumentReplaced()
     ? "changed"

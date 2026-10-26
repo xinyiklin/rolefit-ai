@@ -67,12 +67,13 @@ export class ApplicationCommitError extends Error {
   }
 }
 
-type CommitDocument = { kind: ApplicationDocumentKind; sourceText: string; fileName: string };
+export type CommitDocument = { kind: ApplicationDocumentKind; sourceText: string; fileName: string };
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
-function commitDocuments(raw: unknown, issues: string[]): CommitDocument[] {
+// Also validates the documents that submit a Draft through the status route.
+export function commitDocuments(raw: unknown, issues: string[]): CommitDocument[] {
   if (raw === undefined) return [];
   if (!isObject(raw)) {
     issues.push("documents: must be an object with optional resume and cover entries");
@@ -173,6 +174,9 @@ function prepareCommit(body: unknown, now: string) {
   }
   if (status === "draft" && documents.length) {
     issues.push("documents: a Draft cannot store application documents");
+  }
+  if (status === "applied" && !(isObject(body.documents) && Object.hasOwn(body.documents, "resume"))) {
+    issues.push("documents.resume: an Applied commit needs the .resume source that was sent");
   }
   if (issues.length) throw new ApplicationCommitError(issues);
 

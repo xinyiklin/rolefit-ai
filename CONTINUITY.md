@@ -33,9 +33,6 @@ D-entries in `docs/decisions.md`.
   main bundle fell 5.8 → 0.5 MB and a two-page resume's first page paints in
   290 ms instead of 715 (production, cold). Open: exercise RoleFit's editor and
   exports in a browser; only its build and offline suite were run.
-- 2026-10-26 [USER] 0.23.0 (#282): after the squash merge and the user's
-  go-ahead, tag `rolefit-preview-v0.23.0-beta.1` on that commit and confirm the
-  release workflow. Open pre-tag call: RoleFit browser QA of #280 (above).
 
 ## Deferred backlog
 
@@ -107,16 +104,15 @@ D-entries in `docs/decisions.md`.
   state labels (user's call); unverified Firefox/Safari, print, forced colors,
   macOS, native window-control rendering, and real unpacked popup installs.
 
+## 2026-10-26
+
+- [USER+CODE+TOOL] **MCP submit path, read tools, AI stages** (D101, D102) on
+  `feature/rolefit-mcp-agent-tools`. Verified: probes, apply parity, real
+  routes to provider resolution (no key), two reviews passed after fixes.
+  Open: no live provider run or real MCP client; `render_pdf`.
+
 ## 2026-10-24
 
-- [USER+CODE+TOOL] **0.23.0 prepared** (minor, user-approved retarget of the
-  untagged 0.22.1: #283's agent Drafts, duplicate guard, dry run and MCP resume
-  reads, plus #279/#280/#281; #278 is landing-only and already deployed). Notes
-  `apps/role-fit-ai/docs/releases/0.23.0-beta.1.md`; extension 1.5.2 and
-  desktop bridge API 13 unchanged. Preflight on Windows x64, Node 24.22.1:
-  check 202/202, `make`, packaged smoke (win32-x64 unpacked), release contract
-  14/14. Electron smoke: failed 4x on 2026-10-24 (0.22.1 commit too), passed
-  15/15 at `2b9b232` on 2026-10-26 (flake below). macOS: release CI only.
 - [CODE+TOOL] **Companion pairing startup retry**: right after start, the
   owned dev server stalls requests for up to ~7 s (measured 1.0/3.7/0.9 s,
   then ~1 ms), tripping main's 1 s pairing fetch. Failures before any success
@@ -127,9 +123,8 @@ D-entries in `docs/decisions.md`.
   `getConnectionStatus` reads `unreachable`. Trigger unknown (not cold Vite
   cache, lockfile, CPU or disk load). User (2026-10-26): record, don't harden.
 - [USER+CODE+TOOL] **Agent commit: Drafts, duplicate guard, dry run; MCP
-  resume reads** (D100, #283). Verified: server tsc, commit and MCP probes,
-  `npm run check` 202/202, read tools over real handlers. Open: no MCP tool
-  attaches documents to a submitted Draft; real MCP clients not re-run.
+  resume reads** (D100, #283). Verified: server tsc, probes, `npm run check`
+  (202/202), read tools over the real handlers. Real MCP clients not re-run.
 - [USER+CODE+TOOL] **Landing download buttons and resize guard**: equal-width
   buttons with Apple/Windows glyphs; file type, size, and "Unsigned" moved to
   a caption linked by `aria-describedby`. `resizeGuard.ts` drops the glass blur

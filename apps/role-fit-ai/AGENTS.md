@@ -171,8 +171,9 @@ RoleFit owns:
 - `src/lib/` and `src/resume/`: RoleFit-only job, workflow, evidence, and
   deterministic mechanical analysis helpers;
 - `extension/`: a vanilla MV3 client of the local extension API.
-- `mcp/`: the local stdio MCP server, a client of the loopback tracker routes
-  that never reads or writes the workspace itself (D094).
+- `mcp/`: the local stdio MCP server, a client of the loopback routes that
+  never reads or writes the workspace itself (D094, D101); its AI-stage tools
+  send the browser's request for each stage and save nothing (D102).
 - `desktop/`: the compact four-provider manager, encrypted API-key vault,
   provider-owned CLI setup, private owned-server credential bridge, and local
   server lifecycle. It never owns the Drafting Desk or personal workspace.

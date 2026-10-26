@@ -124,6 +124,10 @@ owns:
 - `/api/providers`, a shape-only same-origin registry of configured/readiness
   state. It never returns keys, account identifiers, executable paths, versions,
   raw CLI output, operation ids, or workspace details
+- the AI routes' two callers: the browser and the local MCP server
+  (`mcp/aiTools.ts`, D102). MCP builds each stage's request with the browser's
+  own `src/lib` builders and the saved Settings, and adds no prompt, grounding,
+  or sanitizer of its own
 - `/api/resume-polish` AI provider routing — subscription CLIs (Claude Code
   and Codex CLI) shelled out to local subprocesses,
   plus the native OpenAI and Anthropic APIs. Normal Resume Polish sends

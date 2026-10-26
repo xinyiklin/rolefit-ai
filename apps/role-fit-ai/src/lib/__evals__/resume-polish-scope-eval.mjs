@@ -193,7 +193,7 @@ assert.match(serializeResumeData(absentRows), /Built accessible tooling/);
 assert(!serializeResumeData(absentRows).includes('null'));
 const { buildCoverLetterEvidence } = await import('../coverLetterEvidence.ts');
 assert(buildCoverLetterEvidence({ resumeData: absentRows, candidateContext: '' }).some(item => item.text.includes('Built accessible tooling')));
-const { currentTargetText } = await import('../../hooks/useResumeProposalDecisions.ts');
+const { currentTargetText } = await import('../resumeProposalApply.ts');
 const { resumeProposalEditIsPending } = await import('../resumeProposalDecisionState.ts');
 const staleRowProposal = { target: { sectionId: 'absent-section', entryId: 'absent-entry', field: 'skills' }, currentText: '', proposedText: 'Recreated subtitle' };
 assert.equal(currentTargetText(absentRows, staleRowProposal), null);
