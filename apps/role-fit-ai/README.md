@@ -700,8 +700,9 @@ another port; only loopback origins are accepted. Tools:
   plus company, text, and stage filters.
 - `get_application` — one record in full: notes, answers, Fit snapshot,
   timeline, and saved documents.
-- `commit_application` — one Applied or Skipped record with its `.resume` and
-  `.cover` sources, or a Draft without documents, saved atomically. A value the
+- `commit_application` — one Applied record with its `.resume` (required) and
+  optional `.cover` sources, a Skipped record, or a Draft without documents,
+  saved atomically. A value the
   tracker would drop, clip, or normalize refuses the whole commit with
   field-level `issues`. A posting that matches a saved record is refused with
   the matches until the agent lists their ids in `acknowledgedDuplicates`.
@@ -711,13 +712,47 @@ another port; only loopback origins are accepted. Tools:
 - `log_application_event` — an interview, employer response, or follow-up on
   a submitted application's timeline, exactly as the Log buttons add it.
 - `update_application_status` — a stage change, applied by the server with the
-  same history entry the tracker row's stage menu adds.
-- `list_resumes` and `get_resume` — the saved base resumes; `get_resume`
-  returns the `.resume` source and the plain text RoleFit sends to Fit
-  Assessment.
+  same history entry the tracker row's stage menu adds. A first submission (a
+  Draft or a job-only Skip moving to a submitted stage) must send the `.resume`
+  that was sent, plus any `.cover`; the stage and documents save together.
+- `list_resumes` and `get_resume`, `list_cover_letters` and `get_cover_letter`
+  — the saved base resumes and cover letters, each as its `.resume`/`.cover`
+  source and the plain text RoleFit reads.
+- `get_submission_package` — one application's saved resume and cover letter
+  (text and source), newest answers, Fit snapshot, and job brief, with a
+  `missing` list.
+- `get_answers` — the newest saved answer to each question across every
+  application, searchable by words and company.
+- `get_candidate_profile` — the Profile Background and the candidate facts the
+  user declared in Settings.
 
-The agent receives the tracker and resume data it reads, so its own model
-provider sees that personal data.
+RoleFit's AI stages are tools too. Each sends the request the app sends for
+that stage, on the provider, model, and effort saved for it in Settings (a
+billed API call or a CLI run that can take minutes; cancelling the tool call
+stops it, and at most three run at once), and saves nothing. Pass the
+`resumeConcerns` that `apply_resume_edits` returns, and an accepted letter's
+`concerns`, to later stages as `resumeConcerns` and `coverConcerns`, so they
+know that wording is unverified, as the app does. A resume sent as source is
+read as the candidate's own evidence, so it should be a saved resume or
+`apply_resume_edits` output:
+
+- `analyze_job` — the job brief from a posting, with the local extractor as
+  fallback.
+- `assess_fit` — Fit Assessment, returned as the snapshot `commit_application`
+  takes.
+- `polish_resume` and `apply_resume_edits` — a Resume Polish proposal, then
+  the `.resume` with only the accepted edits, applied as the editor applies
+  them. Proposals live in the MCP session.
+- `polish_cover_letter` — a whole-letter proposal and the `.cover` with it
+  applied, or the details RoleFit needs first.
+- `draft_answer` — an answer revision for a saved record, to save with
+  `add_application_answers`.
+- `review_application` — the Final application review of a record's saved
+  documents.
+
+The agent receives the tracker, document, and profile data it reads, so its
+own model provider sees that personal data. The AI-stage tools send that data
+to the provider set in RoleFit, as the app does.
 
 ## Browser extension
 
@@ -991,7 +1026,7 @@ src/
 ../../packages/engine/           # document adapters/codecs (`.resume`, `.cover`), layout, DOM/print, PDF, fonts
 ../../packages/editor/           # shared direct editor, history/style hooks, formatting toolbar, editor CSS
 extension/                       # Chrome/Firefox MV3 popup (preparation + duplicate/applied status)
-mcp/                             # local stdio MCP server for agents (tracker search, commit, stage)
+mcp/                             # local stdio MCP server for agents (tracker, documents, answers, profile, AI stages)
 desktop/                         # required product launcher, provider manager, vault + trust boundary
 landing/                         # isolated public product/download page
 dist-electron/                   # generated companion CommonJS output; gitignored

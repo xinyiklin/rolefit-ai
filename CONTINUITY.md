@@ -113,6 +113,13 @@ D-entries in `docs/decisions.md`.
   state labels (user's call); unverified Firefox/Safari, print, forced colors,
   macOS, native window-control rendering, and real unpacked popup installs.
 
+## 2026-10-26
+
+- [USER+CODE+TOOL] **MCP submit path, read tools, AI stages** (D101, D102) on
+  `feature/rolefit-mcp-agent-tools`. Verified: probes, apply parity, real
+  routes to provider resolution (no key), two reviews passed after fixes.
+  Open: no live provider run or real MCP client; `render_pdf`.
+
 ## 2026-10-24
 
 - [CODE+TOOL] **Companion pairing startup retry**: right after start, the
@@ -121,10 +128,8 @@ D-entries in `docs/decisions.md`.
   now keep Loading and retry 4x at 1.5 s. This explains the 0.11.1/0.12.0
   smoke flake; the 750 ms health probe can still read "unreachable".
 - [USER+CODE+TOOL] **Agent commit: Drafts, duplicate guard, dry run; MCP
-  resume reads** (D100) on `feature/rolefit-mcp-agent-commit`. Verified:
-  server tsc, commit and MCP probes, `npm run check` (202/202), read tools over
-  the real workspace handlers. Open: no MCP tool attaches documents to a
-  submitted Draft (the route exists); real MCP clients not re-run.
+  resume reads** (D100, #283). Verified: server tsc, probes, `npm run check`
+  (202/202), read tools over the real handlers. Real MCP clients not re-run.
 - [USER+CODE+TOOL] **Landing download buttons and resize guard**: equal-width
   buttons with Apple/Windows glyphs; file type, size, and "Unsigned" moved to
   a caption linked by `aria-describedby`. `resizeGuard.ts` drops the glass blur

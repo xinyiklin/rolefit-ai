@@ -13,10 +13,10 @@ import {
   type ExtractedJobPosting,
   type ExtractedJobTracking,
   type ExtractedSalaryPeriod
-} from "./jobExtract";
-import type { AiRequestFields } from "./aiRequest";
-import type { StageAiUsage } from "./aiUsage";
-import { ApiError, classifyFailure, type ClassifiedFailure } from "./failures";
+} from "./jobExtract.ts";
+import type { AiRequestFields } from "./aiRequest.ts";
+import type { StageAiUsage } from "./aiUsage.ts";
+import { ApiError, classifyFailure, type ClassifiedFailure } from "./failures.ts";
 import {
   sanitizeFitAssessment,
   type FitAssessmentResult

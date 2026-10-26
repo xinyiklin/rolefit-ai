@@ -1,8 +1,7 @@
-// The tools the local MCP server offers an agent. Each one is a thin client of
-// the running RoleFit server's loopback routes: the server owns validation,
-// locking and storage, so this process never touches the workspace itself.
+// The tools the local MCP server offers an agent: tracker, document, answer and
+// profile reads and writes over the running RoleFit server's routes (client.ts),
+// plus the AI stages (aiTools.ts).
 
-import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import { MAX_APPENDED_ANSWERS } from "../server/applications/answerService.ts";
 import { COMMIT_STATUSES, MAX_ACKNOWLEDGED_DUPLICATES } from "../server/applications/commitService.ts";
 import { APPLICATION_EVENT_TYPES } from "../server/applications/eventService.ts";
@@ -10,42 +9,43 @@ import { APPLICATION_SOURCES } from "../server/applications/schema.ts";
 import { INTERVIEW_KINDS, STAGE_HISTORY_NOTE_MAX_LENGTH } from "../shared/applicationStageHistoryContract.ts";
 import { FIT_ASSESSMENT_VERDICTS } from "../shared/fitAssessmentContract.ts";
 import { APPLICATION_STATUSES } from "../src/lib/applicationStatusTransitions.ts";
-import {
-  findDuplicateApplications,
-  normalizeCompanyName,
-  type DuplicateCandidate
-} from "../src/lib/jobIdentity.ts";
+import { findDuplicateApplications, normalizeCompanyName } from "../src/lib/jobIdentity.ts";
 import { LEGACY_NOT_APPLYING_REASONS, NOT_APPLYING_REASONS } from "../src/lib/notApplying.ts";
-import { serializeResumeData } from "../src/lib/resumeText.ts";
-
-export type ToolResult = { ok: boolean; value: unknown };
-
-export type Tool = {
-  name: string;
-  title: string;
-  description: string;
-  inputSchema: Record<string, unknown>;
-  run: (args: Record<string, unknown>) => Promise<ToolResult>;
-};
-
-type TrackerRecord = DuplicateCandidate & {
-  id: string;
-  title: string;
-  status: string;
-  createdAt: string;
-  updatedAt: string;
-  appliedAt?: string;
-  notApplyingAt?: string;
-};
+import { createAiTools } from "./aiTools.ts";
+import { candidateProfile, createClient, isToolResult, type SavedAnswer, type Tool, type TrackerRecord } from "./client.ts";
 
 const SEARCH_LIMIT_MAX = 100;
-const REQUEST_TIMEOUT_MS = 60_000;
 const OFFERED_SKIP_REASONS = NOT_APPLYING_REASONS.filter((reason) => !LEGACY_NOT_APPLYING_REASONS.includes(reason));
 const timestamp = { type: "string", description: "Canonical ISO timestamp, e.g. 2026-10-23T14:05:00.000Z." };
 // These writes have no request id, so a lost reply must not become a blind retry.
 const CHECK_BEFORE_RETRY =
   " A refusal saved nothing and can be corrected and resent. If the call times out or returns no reply, it may " +
   "have saved: read the record (search_applications or get_application) before retrying, or it can be saved twice.";
+const editableDocuments = (description: string) => ({
+  type: "object",
+  description,
+  additionalProperties: false,
+  properties: {
+    resume: {
+      type: "object",
+      required: ["sourceText"],
+      additionalProperties: false,
+      properties: {
+        sourceText: { type: "string", description: "The complete .resume file text." },
+        fileName: { type: "string", maxLength: 200 }
+      }
+    },
+    cover: {
+      type: "object",
+      required: ["sourceText"],
+      additionalProperties: false,
+      properties: {
+        sourceText: { type: "string", description: "The complete .cover file text." },
+        fileName: { type: "string", maxLength: 200 }
+      }
+    }
+  }
+});
 const answerList = (description: string) => ({
   type: "array",
   description: `${description} A plain {question, answer} pair is enough; savedAt defaults to now.`,
@@ -56,44 +56,24 @@ const answerList = (description: string) => ({
   }
 });
 
-// Loopback only: the tracker holds personal data and this server has no
-// business sending it anywhere else.
-export function roleFitBaseUrl(raw = "http://127.0.0.1:5181"): string {
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    throw new Error(`ROLEFIT_URL is not a URL: ${raw}`);
-  }
-  if (url.protocol !== "http:" || !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) || url.pathname !== "/" || url.search || url.username) {
-    throw new Error("ROLEFIT_URL must be a loopback origin such as http://127.0.0.1:5181.");
-  }
-  return url.origin;
+// The newest saved answer to each question: a corrected answer is a later entry.
+function latestAnswers(answers: readonly SavedAnswer[] = []): SavedAnswer[] {
+  const latest = new Map<string, SavedAnswer>();
+  for (const answer of answers) latest.set(answer.questionId ?? answer.question.trim().toLowerCase(), answer);
+  return [...latest.values()];
 }
 
+const answerSummary = ({ question, answer, savedAt, status, warnings }: SavedAnswer) => ({
+  question,
+  answer,
+  savedAt,
+  ...(status ? { status } : {}),
+  ...(warnings?.length ? { warnings } : {})
+});
+
 export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): Tool[] {
-  async function request(method: "GET" | "POST", path: string, body?: unknown): Promise<ToolResult> {
-    let response: Response;
-    try {
-      response = await fetchImpl(`${baseUrl}${path}`, {
-        method,
-        headers: body === undefined ? undefined : { "Content-Type": "application/json" },
-        body: body === undefined ? undefined : JSON.stringify(body),
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-      });
-    } catch (error) {
-      return {
-        ok: false,
-        value: {
-          error: error instanceof Error && error.name === "TimeoutError"
-            ? `RoleFit at ${baseUrl} did not answer within ${REQUEST_TIMEOUT_MS / 1000} seconds.`
-            : `RoleFit is not reachable at ${baseUrl}. Start it (npm run dev:rolefit or the desktop companion) or set ROLEFIT_URL to its port.`
-        }
-      };
-    }
-    const value = await response.json().catch(() => ({ error: `RoleFit answered ${response.status} without JSON.` }));
-    return { ok: response.ok, value };
-  }
+  const client = createClient(baseUrl, fetchImpl);
+  const { request, listApplications, getApplication, applicationDocument, workspaceVariant } = client;
 
   return [
     {
@@ -127,9 +107,8 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
         additionalProperties: false
       },
       async run(args) {
-        const listed = await request("GET", "/api/applications");
-        if (!listed.ok) return listed;
-        const applications = (listed.value as { applications: TrackerRecord[] }).applications;
+        const applications = await listApplications();
+        if (!Array.isArray(applications)) return applications;
         const posting = args.posting === undefined ? null : args.posting;
         if (posting !== null && (!posting || typeof posting !== "object" || Array.isArray(posting)
           || Object.values(posting).some((value) => typeof value !== "string"))) {
@@ -189,10 +168,8 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
         properties: { id: { type: "string", description: "The record id from search_applications." } }
       },
       async run({ id }) {
-        const listed = await request("GET", "/api/applications");
-        if (!listed.ok) return listed;
-        const record = (listed.value as { applications: TrackerRecord[] }).applications.find((application) => application.id === id);
-        return record ? { ok: true, value: record } : { ok: false, value: { error: `No application has id ${String(id)}.` } };
+        const record = await getApplication(id);
+        return isToolResult(record) ? record : { ok: true, value: record };
       }
     },
     {
@@ -201,7 +178,8 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
       description:
         "Create one tracker record, with its tailored resume and cover letter, in a single atomic save. Use status " +
         "`applied` for a submitted application, `not_applying` for a job you decided to skip, or `draft` for one " +
-        "you started but have not submitted (no documents or dates; submit it later with update_application_status). " +
+        "you started but have not submitted (no documents or dates; submit it later with update_application_status, " +
+        "sending its documents then). An applied commit must include documents.resume, the .resume that was sent. " +
         "The server runs the tracker's duplicate matcher and refuses with status 409 and `duplicates` while any " +
         "match is not listed in acknowledgedDuplicates; if the match is the same application (often your own " +
         "draft), change that record instead. Send dryRun: true to get the same answer without saving anything. " +
@@ -267,31 +245,9 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
             items: { type: "string" },
             description: "Ids of matching records you reviewed and are keeping separate from this one."
           },
-          documents: {
-            type: "object",
-            description: "Editable sources sent with an applied application. PDFs are not accepted here.",
-            additionalProperties: false,
-            properties: {
-              resume: {
-                type: "object",
-                required: ["sourceText"],
-                additionalProperties: false,
-                properties: {
-                  sourceText: { type: "string", description: "The complete .resume file text." },
-                  fileName: { type: "string", maxLength: 200 }
-                }
-              },
-              cover: {
-                type: "object",
-                required: ["sourceText"],
-                additionalProperties: false,
-                properties: {
-                  sourceText: { type: "string", description: "The complete .cover file text." },
-                  fileName: { type: "string", maxLength: 200 }
-                }
-              }
-            }
-          }
+          documents: editableDocuments(
+            "Editable sources sent with an applied application; resume is required for applied. PDFs are not accepted here."
+          )
         }
       },
       run: (args) => request("POST", "/api/applications/commit", args)
@@ -302,7 +258,10 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
       description:
         "Move a tracker record to a new stage, as the tracker row's stage menu would: the server applies the change " +
         "to the latest saved record and adds the stage-history entry. Moves the menu does not offer are refused " +
-        "with the allowed list. Setting the current stage again changes nothing, so a retry after a lost reply is safe.",
+        "with the allowed list. A first submission (a Draft, or a job-only Skip, moving to a submitted stage) must " +
+        "send documents with the .resume that was sent, and the .cover if one was; the stage and documents save " +
+        "together or not at all. Any other move refuses documents. Setting the current stage again changes " +
+        "nothing and saves no documents, so a retry after a lost reply is safe.",
       inputSchema: {
         type: "object",
         required: ["id", "status"],
@@ -316,7 +275,8 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
           baseUpdatedAt: {
             ...timestamp,
             description: "The updatedAt you read; if the record changed since, the change is refused and the current record returned."
-          }
+          },
+          documents: editableDocuments("Only for a first submission, where resume is required.")
         }
       },
       run: ({ id, ...body }) => typeof id === "string"
@@ -407,22 +367,138 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
         additionalProperties: false,
         properties: { fileName: { type: "string", description: "A fileName from list_resumes, e.g. default.resume." } }
       },
-      async run({ fileName }) {
-        if (typeof fileName !== "string" || !fileName) return { ok: false, value: { error: "fileName: required string" } };
-        const read = await request("POST", "/api/workspace/base-resume/candidates", { fileNames: [fileName] });
-        if (!read.ok) return read;
-        const [resume] = (read.value as { candidates: { fileName: string; label: string; text: string }[] }).candidates;
-        if (!resume) return { ok: false, value: { error: `No readable saved resume is named ${fileName}. List them with list_resumes.` } };
+      run: ({ fileName }) => workspaceVariant("resume", fileName)
+    },
+    {
+      name: "list_cover_letters",
+      title: "List cover letters",
+      description:
+        "List the cover letters saved in the RoleFit workspace (default.cover first), by fileName and label. " +
+        "Read one with get_cover_letter.",
+      inputSchema: { type: "object", additionalProperties: false, properties: {} },
+      async run() {
+        const workspace = await request("GET", "/api/workspace");
+        if (!workspace.ok) return workspace;
+        const { coverLetterOptions } = workspace.value as { coverLetterOptions: { fileName: string; label: string }[] };
+        return { ok: true, value: { coverLetters: coverLetterOptions.map(({ fileName, label }) => ({ fileName, label })) } };
+      }
+    },
+    {
+      name: "get_cover_letter",
+      title: "Get cover letter",
+      description:
+        "Read one saved cover letter. `text` is the letter's paragraphs as plain text; `sourceText` is the " +
+        "complete .cover file, the starting point for a tailored copy to send with commit_application or a " +
+        "first submission.",
+      inputSchema: {
+        type: "object",
+        required: ["fileName"],
+        additionalProperties: false,
+        properties: { fileName: { type: "string", description: "A fileName from list_cover_letters, e.g. default.cover." } }
+      },
+      run: ({ fileName }) => workspaceVariant("cover", fileName)
+    },
+    {
+      name: "get_submission_package",
+      title: "Get submission package",
+      description:
+        "Everything saved for one application in a single read, for a final review: the record's essentials and " +
+        "job brief, the resume and cover letter it saved (plain text and .resume/.cover source; a PDF-only upload " +
+        "has pdfOnly and no text), the newest answer to each question, and the Fit Assessment snapshot. `missing` " +
+        "names what the record does not have (resume, coverLetter, applicationAnswers, fitAssessment, " +
+        "jobDescription); whether each is needed for this job is your call.",
+      inputSchema: {
+        type: "object",
+        required: ["id"],
+        additionalProperties: false,
+        properties: { id: { type: "string", description: "The record id from search_applications." } }
+      },
+      async run({ id }) {
+        const record = await getApplication(id);
+        if (isToolResult(record)) return record;
+        const resume = await applicationDocument(record.id, "resume", record.resumeArtifacts);
+        if (resume && !resume.ok) return resume;
+        const coverLetter = await applicationDocument(record.id, "cover", record.coverLetterArtifacts);
+        if (coverLetter && !coverLetter.ok) return coverLetter;
+        const applicationAnswers = latestAnswers(record.applicationAnswers).map(answerSummary);
+        const present = {
+          resume: Boolean(resume),
+          coverLetter: Boolean(coverLetter),
+          applicationAnswers: applicationAnswers.length > 0,
+          fitAssessment: record.fitAssessment !== undefined,
+          jobDescription: Boolean(record.jobDescription?.trim())
+        };
+        const { title, company, role, status, jobUrl, location, appliedAt, updatedAt, resumeUsed } = record;
         return {
           ok: true,
           value: {
-            fileName: resume.fileName,
-            label: resume.label,
-            text: serializeResumeData(parseResumeFile(resume.text).data),
-            sourceText: resume.text
+            application: { id: record.id, title, company, role, status, jobUrl, location, appliedAt, updatedAt, resumeUsed },
+            jobDescription: record.jobDescription,
+            resume: resume?.value ?? null,
+            coverLetter: coverLetter?.value ?? null,
+            applicationAnswers,
+            fitAssessment: record.fitAssessment ?? null,
+            missing: Object.entries(present).filter(([, has]) => !has).map(([field]) => field)
           }
         };
       }
-    }
+    },
+    {
+      name: "get_answers",
+      title: "Get answers",
+      description:
+        "Search the answers saved on every application, to reuse or adapt an earlier one. Each record contributes " +
+        "only its newest answer to each question (a correction saved with add_application_answers replaces the " +
+        "earlier one here), newest first, with the application it belongs to.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          query: { type: "string", description: "Every word must appear in the question or answer, ignoring case." },
+          company: { type: "string", description: "Company name; legal suffixes and case are ignored." },
+          limit: { type: "integer", minimum: 1, maximum: SEARCH_LIMIT_MAX, default: 20 }
+        }
+      },
+      async run(args) {
+        const applications = await listApplications();
+        if (!Array.isArray(applications)) return applications;
+        const company = typeof args.company === "string" ? normalizeCompanyName(args.company) : "";
+        const terms = typeof args.query === "string" ? args.query.toLowerCase().split(/\s+/).filter(Boolean) : [];
+        const results = applications
+          .filter((record) => !company || normalizeCompanyName(record.company).includes(company))
+          .flatMap((record) => latestAnswers(record.applicationAnswers).map((answer) => ({ record, answer })))
+          .filter(({ answer }) => {
+            const text = `${answer.question}\n${answer.answer}`.toLowerCase();
+            return terms.every((term) => text.includes(term));
+          })
+          .sort((a, b) => b.answer.savedAt.localeCompare(a.answer.savedAt));
+        const limit = Number.isInteger(args.limit) ? Math.min(Math.max(args.limit as number, 1), SEARCH_LIMIT_MAX) : 20;
+        return {
+          ok: true,
+          value: {
+            total: results.length,
+            answers: results.slice(0, limit).map(({ record, answer }) => ({
+              ...answerSummary(answer),
+              application: { id: record.id, title: record.title, company: record.company, role: record.role, status: record.status }
+            }))
+          }
+        };
+      }
+    },
+    {
+      name: "get_candidate_profile",
+      title: "Get candidate profile",
+      description:
+        "Read the standing facts the user keeps in RoleFit Settings: `profileBackground` (the Profile Background " +
+        "text) and `declaredFacts` (citizenship, work authorization, sponsorship, education, availability, only " +
+        "where the user declared them). RoleFit sends both to its AI stages as candidate context. Use them " +
+        "instead of facts remembered elsewhere; nothing here is inferred.",
+      inputSchema: { type: "object", additionalProperties: false, properties: {} },
+      async run() {
+        const read = await client.readSettings();
+        return isToolResult(read) ? read : { ok: true, value: { saved: read.saved, ...candidateProfile(read.settings) } };
+      }
+    },
+    ...createAiTools(client)
   ];
 }

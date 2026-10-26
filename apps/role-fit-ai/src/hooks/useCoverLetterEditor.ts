@@ -26,7 +26,6 @@ import {
 } from "@typeset/engine/lib/coverLetter.ts";
 import { downloadBlob } from "@typeset/engine/lib/download.ts";
 import { DOC_STYLE_DEFAULTS, type DocStyle, type DocumentStyle } from "@typeset/engine/lib/documentStyle.ts";
-import { sharedWholeFieldFormat, withWholeFieldFormat } from "@typeset/engine/lib/inlineMarksText.ts";
 import {
   newDocumentHeader,
   starterDocumentHeader,
@@ -34,6 +33,7 @@ import {
 } from "@typeset/engine/lib/resumeData.ts";
 import { clearCoverLetterAutosaveDraft } from "./useCoverLetterAutosaveDraft";
 import { prepareCoverLetterUpload } from "../lib/documentOpenFiles.ts";
+import { tailoredCoverLetterData } from "../lib/coverLetterTailoring.ts";
 import {
   coverLetterStartupIsCurrent,
   loadLastCoverLetterName,
@@ -363,23 +363,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   const applyTailoredText = useCallback(
     (tailored: string) => {
       cancelStartupOpenRef.current = true;
-      // Polish returns plain paragraphs; keep the size and font the letter's
-      // paragraphs share.
-      const format = sharedWholeFieldFormat(editor.editedResume ? coverLetterParagraphs(editor.editedResume) : []);
-      const parsed = coverLetterResumeData(
-        coverLetterParagraphs(parseCoverLetterText(tailored)).map((paragraph) => withWholeFieldFormat(paragraph, format))
-      );
-      const data = editor.editedResume
-        ? {
-            ...parsed,
-            header: editor.editedResume.header
-              ? {
-                  ...editor.editedResume.header,
-                  contact: [...editor.editedResume.header.contact]
-                }
-              : null
-          }
-        : parsed;
+      const data = tailoredCoverLetterData(editor.editedResume, tailored);
       capturePreTailorSnapshot(
         editor.editedResume
           ? serializeCoverLetterFile(

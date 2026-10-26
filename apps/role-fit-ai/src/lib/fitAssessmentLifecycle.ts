@@ -14,9 +14,9 @@ import {
   POLISH_FIT_FINDINGS_ITEM_LIMIT,
   type PolishFitFindings
 } from "../../shared/polishFitFindings.ts";
-import type { FitAssessmentRequest } from "./aiJobAnalysis";
+import type { FitAssessmentRequest } from "./aiJobAnalysis.ts";
 import type { AiRequestFields } from "./aiRequest.ts";
-import { workflowInputFingerprint } from "./aiWorkflow";
+import { workflowInputFingerprint } from "./aiWorkflow.ts";
 import { contentFingerprint } from "./contentFingerprint.ts";
 import type { PreparedResumeSelection } from "./preparedResume.ts";
 
@@ -78,16 +78,21 @@ export function fitAssessmentCurrentResult(
 // labelled the same way. Excerpts Polish would refuse are left out, never sent.
 export function fitFindingsForPolish(state: FitAssessmentState): PolishFitFindings | null {
   const completed = state.latestCompleted;
-  const result = completed?.snapshot.result;
-  if (!completed || completed.previousPreparation || completed.changes.includes("job") || result?.status !== "ASSESSED") return null;
+  if (!completed || completed.previousPreparation || completed.changes.includes("job")) return null;
+  return polishFitFindings(
+    completed.snapshot.result,
+    completed.origin === "saved" || completed.changes.includes("resume") || completed.changes.includes("candidate-context")
+  );
+}
+
+// The findings of one assessment of the posting being polished for.
+export function polishFitFindings(result: FitAssessmentResult, earlierVersion: boolean): PolishFitFindings | null {
+  if (result.status !== "ASSESSED") return null;
   const matches = result.matches.filter((match) => isPolishFitExcerpt(match.jobExcerpt)).slice(0, POLISH_FIT_FINDINGS_ITEM_LIMIT)
     .map(({ jobExcerpt, relationship }) => ({ jobExcerpt, ...(relationship ? { relationship } : {}) }));
   const gaps = result.gaps.filter(isPolishFitExcerpt).slice(0, POLISH_FIT_FINDINGS_ITEM_LIMIT)
     .map((jobExcerpt, index) => ({ id: `gap-${index + 1}`, jobExcerpt }));
   if (!matches.length && !gaps.length) return null;
-  const earlierVersion = completed.origin === "saved"
-    || completed.changes.includes("resume")
-    || completed.changes.includes("candidate-context");
   return { earlierVersion, matches, gaps };
 }
 

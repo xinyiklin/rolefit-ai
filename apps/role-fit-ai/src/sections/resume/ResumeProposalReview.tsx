@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Check, Pencil, Undo2, X } from "lucide-react";
 
 import type { useResumeProposalDecisions } from "../../hooks/useResumeProposalDecisions";
-import { currentTargetText } from "../../hooks/useResumeProposalDecisions";
+import { currentTargetText } from "../../lib/resumeProposalApply.ts";
 import { stripInlineMarks } from "../../lib/inlineMarks";
 import { resumeProposalEditState } from "../../lib/resumeProposalDecisionState.ts";
 import type { PolishedResume, ResumeProposalSuggestion } from "../../resumeEngine";

@@ -1,23 +1,27 @@
 // RoleFit's local MCP server: newline-delimited JSON-RPC 2.0 over stdio, the
 // MCP stdio transport. It implements only what tool use needs (initialize,
-// tools/list, tools/call, ping), so it carries no SDK dependency. stdout is the
-// protocol stream; diagnostics go to stderr.
+// tools/list, tools/call, ping, and cancellation), so it carries no SDK
+// dependency. stdout is the protocol stream; diagnostics go to stderr.
 //
 //   node apps/role-fit-ai/mcp/server.ts        (ROLEFIT_URL=http://127.0.0.1:5181)
 
 import { createInterface } from "node:readline";
 
-import { createTools, roleFitBaseUrl, type Tool } from "./tools.ts";
+import { roleFitBaseUrl, type Tool } from "./client.ts";
+import { createTools } from "./tools.ts";
 
 // Newest first; a client asking for another version is offered the newest.
 const PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
-const SERVER_INFO = { name: "rolefit", title: "RoleFit tracker", version: "1.0.0" };
+const SERVER_INFO = { name: "rolefit", title: "RoleFit", version: "1.1.0" };
 const INSTRUCTIONS =
-  "Records job applications in the user's local RoleFit tracker. Search before committing to avoid duplicates; " +
-  "get_application reads one in full; commit_application saves a whole application or a Draft atomically, " +
-  "refuses unacknowledged duplicates, and validates without saving on dryRun; " +
-  "add_application_answers adds later answers; log_application_event records interviews, responses and " +
-  "follow-ups; update_application_status moves its stage. list_resumes and get_resume read the saved base resumes.";
+  "Records job applications in the user's local RoleFit tracker and runs RoleFit's AI stages. Search before " +
+  "committing to avoid duplicates; get_application reads one in full and get_submission_package everything saved " +
+  "for it; commit_application saves a whole application (with its resume) or a Draft atomically, refuses " +
+  "unacknowledged duplicates, and validates without saving on dryRun; update_application_status moves its stage " +
+  "and submits a Draft with its documents; add_application_answers adds answers; log_application_event records " +
+  "interviews, responses and follow-ups. The list_/get_ tools read saved resumes, cover letters, answers and the " +
+  "user's Profile. analyze_job, assess_fit, polish_resume, polish_cover_letter, draft_answer and " +
+  "review_application run the provider set in RoleFit (billed or CLI; minutes; cancel to stop) and save nothing.";
 
 type JsonRpcId = string | number | null;
 type JsonRpcResponse =
@@ -31,7 +35,7 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
 // One message in, at most one response out (notifications get none).
-export async function handleMcpMessage(message: unknown, tools: Tool[]): Promise<JsonRpcResponse | null> {
+export async function handleMcpMessage(message: unknown, tools: Tool[], signal?: AbortSignal): Promise<JsonRpcResponse | null> {
   // This server sends no requests, so a client response needs no answer.
   if (isObject(message) && message.jsonrpc === "2.0" && message.method === undefined && ("result" in message || "error" in message)) {
     return null;
@@ -65,7 +69,7 @@ export async function handleMcpMessage(message: unknown, tools: Tool[]): Promise
       const tool = tools.find((candidate) => candidate.name === params.name);
       if (!tool) return failure(id, -32602, `Unknown tool: ${String(params.name)}`);
       const args = isObject(params.arguments) ? params.arguments : {};
-      const { ok, value } = await tool.run(args);
+      const { ok, value } = await tool.run(args, signal);
       return result({
         content: [{ type: "text", text: JSON.stringify(value, null, 2) }],
         ...(isObject(value) ? { structuredContent: value } : {}),
@@ -82,30 +86,47 @@ export function serveStdio(tools: Tool[], input = process.stdin, output = proces
   const write = (response: JsonRpcResponse | null) => {
     if (response) output.write(`${JSON.stringify(response)}\n`);
   };
-  // One message at a time, in arrival order: replies stay ordered and the
-  // RoleFit server serializes tracker writes anyway.
-  let queue = Promise.resolve();
+  // Requests run concurrently, so a minutes-long AI call never holds up the
+  // rest; each reply carries its request id. A cancelled call is aborted, which
+  // stops RoleFit's provider run, and gets no reply; so does every open call
+  // when the client goes away.
+  const running = new Map<string | number, AbortController>();
+  const pending = new Set<Promise<void>>();
   lines.on("line", (line) => {
     if (!line.trim()) return;
-    queue = queue.then(async () => {
-      let message: unknown;
+    let message: unknown;
+    try {
+      message = JSON.parse(line);
+    } catch {
+      write(failure(null, -32700, "Parse error."));
+      return;
+    }
+    if (isObject(message) && message.jsonrpc === "2.0" && message.method === "notifications/cancelled") {
+      const requestId = isObject(message.params) ? message.params.requestId : undefined;
+      if (typeof requestId === "string" || typeof requestId === "number") running.get(requestId)?.abort();
+      return;
+    }
+    const id = isObject(message) && (typeof message.id === "string" || typeof message.id === "number") ? message.id : undefined;
+    const controller = new AbortController();
+    if (id !== undefined) running.set(id, controller);
+    const task = (async () => {
       try {
-        message = JSON.parse(line);
-      } catch {
-        write(failure(null, -32700, "Parse error."));
-        return;
-      }
-      try {
-        write(await handleMcpMessage(message, tools));
+        const response = await handleMcpMessage(message, tools, controller.signal);
+        if (!controller.signal.aborted) write(response);
       } catch (error) {
         process.stderr.write(`rolefit-mcp: ${error instanceof Error ? error.name : "error"} while handling a request\n`);
-        if (isObject(message) && "id" in message) write(failure(message.id as JsonRpcId, -32603, "Internal error."));
+        if (id !== undefined && !controller.signal.aborted) write(failure(id, -32603, "Internal error."));
+      } finally {
+        if (id !== undefined && running.get(id) === controller) running.delete(id);
       }
-    });
+    })();
+    pending.add(task);
+    void task.finally(() => pending.delete(task));
   });
   return new Promise((resolve) => {
     lines.on("close", () => {
-      void queue.then(resolve);
+      for (const controller of running.values()) controller.abort();
+      void Promise.all(pending).then(() => resolve());
     });
   });
 }
