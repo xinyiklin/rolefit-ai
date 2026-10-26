@@ -117,12 +117,24 @@ for provider, prompt, sanitizer, and review work.
 - The ordinary Host/Origin guard covers every non-extension request, app files
   included; it is a browser CSRF/DNS-rebinding boundary, not authentication for
   native clients. In development Vite serves the app root, which holds the
-  workspace, with CORS off and the workspace directory denied. Do not add broad
-  web CORS, bearer handling, or public Electron-management routes to this
-  runtime. The provider companion may start or compatibly reuse this server,
-  but the browser still reaches it only through the existing same-origin
-  application. A read-only `/api/providers` route may expose closed provider
-  ids and configured/readiness/auth-state enums only; it is not a vault API.
+  workspace, with CORS off and the workspace directory denied
+  (`developmentViteConfig`). Do not add broad web CORS, bearer handling, or
+  public Electron-management routes to this runtime. The provider companion may
+  start or compatibly reuse this server, but the browser still reaches it only
+  through the existing same-origin application. A read-only `/api/providers`
+  route may expose closed provider ids and configured/readiness/auth-state
+  enums only; it is not a vault API.
+- The development watcher (`developmentViteConfig`) covers only `src/`,
+  `shared/`, the client's root files, and the `packages/*` modules it loads,
+  never the workspace, its restore backups, build output, or `public/`: every
+  `fs.watch` blocks the event loop, and watching the whole root (about 4,400
+  paths) froze the companion-owned server for seconds after startup, past the
+  companion's 750 ms health probe. A new client folder or root file joins the
+  allowlist; a file added to or removed from `public/` is served only after a
+  restart. Vite also turns on its console forwarding when it detects an AI
+  agent's environment, which the companion-owned server does not inherit, so in
+  an agent-run desktop smoke the two development phases re-optimize
+  dependencies under different cache keys.
 - Accept managed provider credentials only through a versioned, bounded private
   parent/child message from the Electron process that created this server.
   Validate and atomically replace the complete snapshot, keep decrypted values

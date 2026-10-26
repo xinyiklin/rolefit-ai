@@ -35,7 +35,7 @@ D-entries in `docs/decisions.md`.
   exports in a browser; only its build and offline suite were run.
 - 2026-10-26 [USER] 0.24.0: after the release PR's squash merge and the user's
   go-ahead, tag `rolefit-preview-v0.24.0-beta.1` and confirm the workflow.
-  Pre-tag: rerun the Electron dev smoke on a quiet machine.
+  Pre-tag: merge the dev-smoke fix (Vite watcher scope, below).
 
 ## Deferred backlog
 
@@ -112,7 +112,7 @@ D-entries in `docs/decisions.md`.
 - [USER+CODE+TOOL] **MCP agent tools** (D101, D102, #284) and **0.24.0
   prepared** (minor). Windows x64, Node 24.22.1: check 204/204, `make`,
   packaged smoke, release contract 14/14; Electron dev smoke 0/4, the same at
-  0.23.0's commit ([ASSUMPTION] machine state). [USER] The user's agent used
+  0.23.0's commit (Vite's watcher; fixed, below). [USER] The user's agent used
   the package and cover reads and `draft_answer` live. Open: other AI stages
   not run live; most tools not through a real client; `render_pdf`.
 
@@ -122,11 +122,11 @@ D-entries in `docs/decisions.md`.
   owned dev server stalls requests for up to ~7 s (measured 1.0/3.7/0.9 s,
   then ~1 ms), tripping main's 1 s pairing fetch. Failures before any success
   now keep Loading and retry 4x at 1.5 s. This explains the 0.11.1/0.12.0
-  smoke flake. 2026-10-26 [TOOL] it still flakes the Electron smoke's owned-dev
-  connection check: under Electron the loop blocks ~5 s in `createViteServer`
-  (plain Node <1 s); past `listen`, the single 750 ms `/api/health` probe in
-  `getConnectionStatus` reads `unreachable`. Trigger unknown (not cold Vite
-  cache, lockfile, CPU or disk load). User (2026-10-26): record, don't harden.
+  smoke flake. 2026-10-26 [TOOL] Vite then watched the whole app root (~4,400
+  paths incl. workspace, backups, `.forge`); under Electron its first 493
+  `fs.watch` calls blocked 8.1 s (one 139 ms), past the smoke's 750 ms probe.
+  Now only client source: 468 calls, ~160 ms, lag ≤89 ms (3 runs); smoke 3/3.
+  Unfiltered, one smoke still passed: a timing race.
 - [USER+CODE+TOOL] **Agent commit: Drafts, duplicate guard, dry run; MCP
   resume reads** (D100, #283). Verified: server tsc, probes, `npm run check`
   (202/202), read tools over the real handlers. Real MCP clients not re-run.

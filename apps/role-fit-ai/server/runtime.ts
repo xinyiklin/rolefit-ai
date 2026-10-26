@@ -5,7 +5,8 @@ import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { isIP } from "node:net";
 import { hostname } from "node:os";
-import { extname, join, resolve, sep } from "node:path";
+import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import type { InlineConfig } from "vite";
 import { handleResumePolish } from "./ai/resumePolish.ts";
 import { handleJobAnalysis } from "./ai/jobAnalysis.ts";
 import { getDefaultProvider } from "./ai/providers.ts";
@@ -109,6 +110,51 @@ const ROLEFIT_CONTENT_SECURITY_POLICY = [
   "worker-src 'self' blob:",
   "child-src 'self' blob:"
 ].join("; ");
+
+// Vite watches its whole root, which here also holds the workspace, backups,
+// and build output; every fs.watch blocks the event loop (server/AGENTS.md).
+const VITE_WATCHED_APP_ENTRIES = new Set(["src", "shared", "index.html", "vite.config.ts", "package.json", "tsconfig.json"]);
+
+function isUnwatchedAppPath(appRoot: string, path: string): boolean {
+  const relativePath = relative(appRoot, resolve(path));
+  if (!relativePath || relativePath.startsWith("..") || isAbsolute(relativePath)) return false;
+  const [entry] = relativePath.split(sep);
+  return !VITE_WATCHED_APP_ENTRIES.has(entry) && !entry.startsWith(".env");
+}
+
+// The source-development Vite server: served from the app root, middleware only.
+export function developmentViteConfig(appRoot: string, workspaceDir: string): InlineConfig {
+  return {
+    root: appRoot,
+    appType: "spa",
+    optimizeDeps: {
+      include: ["pdf-lib", "@pdf-lib/fontkit"]
+    },
+    server: {
+      middlewareMode: true,
+      watch: { ignored: [(path: string) => isUnwatchedAppPath(appRoot, path)] },
+      // The runtime's request guard is the only cross-origin policy; Vite's
+      // default CORS would admit every localhost origin to the served root.
+      cors: false,
+      // The served root holds the workspace. Keep it out of Vite's static
+      // and /@fs/ serving: Vite 8's default deny list plus the workspace.
+      fs: {
+        strict: true,
+        deny: [
+          ".env",
+          ".env.*",
+          "*.{crt,pem,key,p12,pfx,cer,der}",
+          ".npmrc",
+          ".yarnrc.yml",
+          "**/.git/**",
+          // picomatch reads the path as a glob, so its metacharacters are
+          // escaped; a folder such as "Projects (2)" would otherwise fail open.
+          `${workspaceDir.split(sep).join("/").replace(/[\\^$.*+?()[\]{}|!@#,]/g, "\\$&")}/**`
+        ]
+      }
+    }
+  };
+}
 
 function setRoleFitSecurityHeaders(res: ServerResponse, development = false): void {
   // Vite injects an inline React-refresh preamble and opens an HMR WebSocket in
@@ -357,35 +403,7 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
   // dependency loaded only for the standalone source server.
   const vite = isProduction
     ? null
-    : await import("vite").then(({ createServer: createViteServer }) => createViteServer({
-        root: appRoot,
-        appType: "spa",
-        optimizeDeps: {
-          include: ["pdf-lib", "@pdf-lib/fontkit"]
-        },
-        server: {
-          middlewareMode: true,
-          // The request guard below is the only cross-origin policy; Vite's
-          // default CORS would admit every localhost origin to the served root.
-          cors: false,
-          // The served root holds the workspace. Keep it out of Vite's static
-          // and /@fs/ serving: Vite 8's default deny list plus the workspace.
-          fs: {
-            strict: true,
-            deny: [
-              ".env",
-              ".env.*",
-              "*.{crt,pem,key,p12,pfx,cer,der}",
-              ".npmrc",
-              ".yarnrc.yml",
-              "**/.git/**",
-              // picomatch reads the path as a glob, so its metacharacters are
-              // escaped; a folder such as "Projects (2)" would otherwise fail open.
-              `${workspaceDir.split(sep).join("/").replace(/[\\^$.*+?()[\]{}|!@#,]/g, "\\$&")}/**`
-            ]
-          }
-        }
-      }));
+    : await import("vite").then(({ createServer: createViteServer }) => createViteServer(developmentViteConfig(appRoot, workspaceDir)));
 
   // Handlers answer their expected failures. This catches the rest so one bug
   // fails its own request instead of crashing the server process.
