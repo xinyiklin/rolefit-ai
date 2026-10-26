@@ -33,6 +33,9 @@ D-entries in `docs/decisions.md`.
   main bundle fell 5.8 → 0.5 MB and a two-page resume's first page paints in
   290 ms instead of 715 (production, cold). Open: exercise RoleFit's editor and
   exports in a browser; only its build and offline suite were run.
+- 2026-10-26 [USER] 0.23.0 (#282): after the squash merge and the user's
+  go-ahead, tag `rolefit-preview-v0.23.0-beta.1` on that commit and confirm the
+  release workflow. Open pre-tag call: RoleFit browser QA of #280 (above).
 
 ## Deferred backlog
 
@@ -118,18 +121,15 @@ D-entries in `docs/decisions.md`.
   owned dev server stalls requests for up to ~7 s (measured 1.0/3.7/0.9 s,
   then ~1 ms), tripping main's 1 s pairing fetch. Failures before any success
   now keep Loading and retry 4x at 1.5 s. This explains the 0.11.1/0.12.0
-  smoke flake. 2026-10-26 [TOOL] the same stall still flakes the Electron
-  smoke's owned-development connection-status check: under Electron the server's
-  loop blocks ~5 s inside `createViteServer` (plain Node <1 s); past `listen`,
-  `getConnectionStatus`'s single 750 ms `/api/health` probe reads `unreachable`.
-  Trigger unknown (not a cold Vite cache, lockfile change, CPU or disk load);
-  failures coincided with heavy concurrent work. User chose (2026-10-26) to
-  record it and not harden the probe yet.
+  smoke flake. 2026-10-26 [TOOL] it still flakes the Electron smoke's owned-dev
+  connection check: under Electron the loop blocks ~5 s in `createViteServer`
+  (plain Node <1 s); past `listen`, the single 750 ms `/api/health` probe in
+  `getConnectionStatus` reads `unreachable`. Trigger unknown (not cold Vite
+  cache, lockfile, CPU or disk load). User (2026-10-26): record, don't harden.
 - [USER+CODE+TOOL] **Agent commit: Drafts, duplicate guard, dry run; MCP
-  resume reads** (D100, #283). Verified:
-  server tsc, commit and MCP probes, `npm run check` (202/202), read tools over
-  the real workspace handlers. Open: no MCP tool attaches documents to a
-  submitted Draft (the route exists); real MCP clients not re-run.
+  resume reads** (D100, #283). Verified: server tsc, commit and MCP probes,
+  `npm run check` 202/202, read tools over real handlers. Open: no MCP tool
+  attaches documents to a submitted Draft; real MCP clients not re-run.
 - [USER+CODE+TOOL] **Landing download buttons and resize guard**: equal-width
   buttons with Apple/Windows glyphs; file type, size, and "Unsigned" moved to
   a caption linked by `aria-describedby`. `resizeGuard.ts` drops the glass blur
