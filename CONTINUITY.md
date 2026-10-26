@@ -28,15 +28,6 @@ D-entries in `docs/decisions.md`.
   required changes are in
   `apps/role-fit-ai/docs/engineering/distribution-cloud-plan.md` (Browser
   extension distribution). Nothing is decided or changed.
-- 2026-10-24 [USER+CODE] **0.22.0 preview prepared** (minor: tracker format
-  version D095 #268, Electron 44 and no Intel macOS D096 #269, RoleFit rename
-  D097 #272/#275/#276); extension 1.5.2 (name, PNG icons, newer-workspace
-  message), desktop API 13; notes
-  `apps/role-fit-ai/docs/releases/0.22.0-beta.1.md` carry the three
-  release notices rotated to `docs/continuity/2026-10.md` today. Tag
-  `rolefit-preview-v0.22.0-beta.1` only after the release PR merges and the
-  user approves it; until a release with `RoleFit-*` assets exists, the
-  landing page links every download to GitHub Releases.
 - 2026-10-24 [TOOL] Shared-editor startup: font metrics load per family
   (`metrics/<family>.gen.ts`; layout awaits `ensureLayoutMetrics`). Typeset's
   main bundle fell 5.8 → 0.5 MB and a two-page resume's first page paints in
@@ -126,7 +117,11 @@ D-entries in `docs/decisions.md`.
   owned dev server stalls requests for up to ~7 s (measured 1.0/3.7/0.9 s,
   then ~1 ms), tripping main's 1 s pairing fetch. Failures before any success
   now keep Loading and retry 4x at 1.5 s. This explains the 0.11.1/0.12.0
-  smoke flake; the 750 ms health probe can still read "unreachable".
+  smoke flake. 2026-10-26 [TOOL] it still flakes the Electron smoke's owned-dev
+  connection check: under Electron the loop blocks ~5 s in `createViteServer`
+  (plain Node <1 s); past `listen`, the single 750 ms `/api/health` probe in
+  `getConnectionStatus` reads `unreachable`. Trigger unknown (not cold Vite
+  cache, lockfile, CPU or disk load). User (2026-10-26): record, don't harden.
 - [USER+CODE+TOOL] **Agent commit: Drafts, duplicate guard, dry run; MCP
   resume reads** (D100, #283). Verified: server tsc, probes, `npm run check`
   (202/202), read tools over the real handlers. Real MCP clients not re-run.
