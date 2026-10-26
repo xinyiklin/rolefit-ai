@@ -112,9 +112,9 @@ D-entries in `docs/decisions.md`.
 - [USER+CODE+TOOL] **MCP agent tools** (D101, D102, #284) and **0.24.0
   prepared** (minor). Windows x64, Node 24.22.1: check 204/204, `make`,
   packaged smoke, release contract 14/14; Electron dev smoke 0/4, the same at
-  0.23.0's commit ([ASSUMPTION] machine state). [USER] The user's agent read a
-  package and a cover letter live. Open: no live AI-stage run, most tools not
-  run through a real client; `render_pdf`.
+  0.23.0's commit ([ASSUMPTION] machine state). [USER] The user's agent used
+  both reads and `draft_answer` live. Open: other AI stages not run live;
+  most tools not through a real client; `render_pdf`.
 
 ## 2026-10-24
 
