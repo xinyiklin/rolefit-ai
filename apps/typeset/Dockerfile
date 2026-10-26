@@ -29,7 +29,7 @@ COPY packages/editor packages/editor
 COPY apps/typeset apps/typeset
 RUN npm run build --workspace apps/typeset
 
-FROM nginxinc/nginx-unprivileged:1.31.3-alpine@sha256:59ccf0943b0b8e8d9e6ea9039a39555730f544701a655c596f7df7d096c593f5
+FROM nginxinc/nginx-unprivileged:1.31.7-alpine@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e
 
 COPY --from=build /repo/apps/typeset/dist /usr/share/nginx/html
 COPY apps/typeset/nginx.conf /etc/nginx/conf.d/default.conf
