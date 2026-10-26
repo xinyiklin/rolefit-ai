@@ -33,6 +33,9 @@ D-entries in `docs/decisions.md`.
   main bundle fell 5.8 → 0.5 MB and a two-page resume's first page paints in
   290 ms instead of 715 (production, cold). Open: exercise RoleFit's editor and
   exports in a browser; only its build and offline suite were run.
+- 2026-10-26 [USER] 0.24.0: after the release PR's squash merge and the user's
+  go-ahead, tag `rolefit-preview-v0.24.0-beta.1` and confirm the workflow.
+  Pre-tag: rerun the Electron dev smoke on a quiet machine.
 
 ## Deferred backlog
 
@@ -106,10 +109,11 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-26
 
-- [USER+CODE+TOOL] **MCP submit path, read tools, AI stages** (D101, D102) on
-  `feature/rolefit-mcp-agent-tools`. Verified: probes, apply parity, real
-  routes to provider resolution (no key), two reviews passed after fixes.
-  Open: no live provider run or real MCP client; `render_pdf`.
+- [USER+CODE+TOOL] **MCP agent tools** (D101, D102, #284) and **0.24.0
+  prepared** (minor). Windows x64, Node 24.22.1: check 204/204, `make`,
+  packaged smoke, release contract 14/14; Electron dev smoke 0/4, the same at
+  0.23.0's commit (machine state). [USER] The user's agent read a package and
+  a cover letter live. Open: no live AI-stage run; `render_pdf`.
 
 ## 2026-10-24
 

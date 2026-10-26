@@ -990,10 +990,24 @@ An outside AI agent may record applications through the local MCP server in
 one atomic commit of a submitted or skipped job with its editable documents (or
 a Draft without them), later answers appended without changing saved ones,
 timeline events through the Log buttons' rules, and stage moves the row menu
-offers. A commit whose posting matches a saved record is refused until the
+offers. A submitted application an agent records always carries the resume that
+was sent: an Applied commit needs it, and a first submission of a Draft or a
+job-only Skip sends it with the stage move, saved together or not at all. A
+commit whose posting matches a saved record is refused until the
 agent names each match as reviewed, as Prepare's duplicate check asks the user;
 a dry run reports the same outcome without saving. A value the tracker would
 drop or alter refuses the whole write with the field named; nothing is guessed.
-The agent may also read the saved base resumes. It receives whatever tracker
-and resume data it reads, so its own model provider sees that personal data; RoleFit itself sends nothing to the agent's
+
+The agent may read the saved resumes and cover letters, everything saved for an
+application, the answers saved across applications, and the Profile Background
+and declared candidate facts. It may also run RoleFit's AI stages (job analysis,
+Fit Assessment, both Polishes, application answers, final review). Each sends
+the app's own request for that stage on the provider saved for it, with the
+few differences D102 records, so the user's key or CLI is used and the stage's
+evidence rules, warnings, and checks apply unchanged. Nothing is saved until the agent saves it, and accepted edits
+are applied as the editor applies them. Text the agent supplies as the
+candidate's (a resume it sends, facts, clarifications, cover-letter details) is
+treated as the user's own evidence, so the agent must take it from the user.
+The agent receives whatever it reads and every AI result, so its own model
+provider sees that personal data; RoleFit itself sends nothing to the agent's
 provider and keeps the server loopback-only.

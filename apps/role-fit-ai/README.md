@@ -13,7 +13,7 @@ application-data service.
 
 [Product site and companion downloads](https://rolefit.xinyiklin.com/)
 
-Current desktop source version: **0.23.0** (preview).
+Current desktop source version: **0.24.0** (preview).
 
 [Content and evidence checks](PRODUCT.md#content-and-evidence-warning-policy)
 keep otherwise usable output available with warnings before use. Accept, edit,
@@ -727,9 +727,13 @@ another port; only loopback origins are accepted. Tools:
   user declared in Settings.
 
 RoleFit's AI stages are tools too. Each sends the request the app sends for
-that stage, on the provider, model, and effort saved for it in Settings (a
-billed API call or a CLI run that can take minutes; cancelling the tool call
-stops it, and at most three run at once), and saves nothing. Pass the
+that stage, on the provider, model, and effort saved for it in Settings, and
+saves nothing. Each call is a billed API call or a CLI run that can take
+minutes. Cancelling the tool call stops the run (what the provider already
+processed may still be billed), and each agent connection can have at most
+three running. If your agent app limits how long a tool call may take, raise
+that limit for RoleFit: a call it abandons without cancelling keeps running
+for up to 15 minutes and holds one of the three. Pass the
 `resumeConcerns` that `apply_resume_edits` returns, and an accepted letter's
 `concerns`, to later stages as `resumeConcerns` and `coverConcerns`, so they
 know that wording is unverified, as the app does. A resume sent as source is
@@ -750,9 +754,15 @@ read as the candidate's own evidence, so it should be a saved resume or
 - `review_application` — the Final application review of a record's saved
   documents.
 
-The agent receives the tracker, document, and profile data it reads, so its
-own model provider sees that personal data. The AI-stage tools send that data
-to the provider set in RoleFit, as the app does.
+The agent receives the tracker, document, and profile data it reads and every
+AI-stage result (briefs, proposals, answers, review findings), so its own model
+provider sees that personal data. Separately, the AI-stage tools send their
+inputs, including saved documents and your Profile, to the provider set in
+RoleFit for that stage, as the app does.
+
+The MCP server runs from your source checkout, not from the installed app, so
+keep the checkout at the same version as the RoleFit it talks to; after
+upgrading one, update the other and restart the agent's MCP connection.
 
 ## Browser extension
 
