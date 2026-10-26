@@ -112,14 +112,19 @@ D-entries in `docs/decisions.md`.
   `apps/role-fit-ai/docs/releases/0.23.0-beta.1.md`; extension 1.5.2 and
   desktop bridge API 13 unchanged. Preflight on Windows x64, Node 24.22.1:
   check 202/202, `make`, packaged smoke (win32-x64 unpacked), release contract
-  14/14. **Electron dev smoke fails** its connection-status check (server read
-  `unreachable`) twice, and equally on the 0.22.1 commit that passed earlier the
-  same day, so it is environmental; unresolved. macOS packaging: release CI only.
+  14/14. Electron smoke: failed 4x on 2026-10-24 (0.22.1 commit too), passed
+  15/15 at `2b9b232` on 2026-10-26 (flake below). macOS: release CI only.
 - [CODE+TOOL] **Companion pairing startup retry**: right after start, the
   owned dev server stalls requests for up to ~7 s (measured 1.0/3.7/0.9 s,
   then ~1 ms), tripping main's 1 s pairing fetch. Failures before any success
   now keep Loading and retry 4x at 1.5 s. This explains the 0.11.1/0.12.0
-  smoke flake; the 750 ms health probe can still read "unreachable".
+  smoke flake. 2026-10-26 [TOOL] the same stall still flakes the Electron
+  smoke's owned-development connection-status check: under Electron the server's
+  loop blocks ~5 s inside `createViteServer` (plain Node <1 s); past `listen`,
+  `getConnectionStatus`'s single 750 ms `/api/health` probe reads `unreachable`.
+  Trigger unknown (not a cold Vite cache, lockfile change, CPU or disk load);
+  failures coincided with heavy concurrent work. User chose (2026-10-26) to
+  record it and not harden the probe yet.
 - [USER+CODE+TOOL] **Agent commit: Drafts, duplicate guard, dry run; MCP
   resume reads** (D100, #283). Verified:
   server tsc, commit and MCP probes, `npm run check` (202/202), read tools over
