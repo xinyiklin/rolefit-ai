@@ -320,12 +320,9 @@ const TECH_KEYWORDS: Array<[string, RegExp]> = [
   // separate JavaScript requirement.
   ["JavaScript", /\bjavascript\b|(?:^|[^a-z0-9.])js\b/i],
   ["TypeScript", /\btypescript\b/i],
-  // "react", "node", "rails" and "elastic" are also prose ("react quickly",
-  // "node pools", "guard rails", "Elastic Beanstalk"): like bare Go, they
-  // count only as a known spelling, an experience phrase, or a list item.
-  ["React", /\breact(?:\.js|js)\b|\breact\s+(?:native|hooks|components?|router|query)\b|(?:\b(?:experience with|proficien(?:t|cy) in|knowledge of|using|with|in|building|build(?:ing)? with)\s+)react(?=\s*(?:[,.;)/]|$|\band\b|\bor\b))|(?:^|[,(;/]\s*)react(?=\s*(?:[,.;)/]|$|\band\b|\bor\b))/i],
+  ["React", /\breact(?:\.js|js)?\b/i],
   ["Next.js", /\bnext(?:\.js|js)\b/i],
-  ["Node.js", /\bnode(?:\.js|js)\b|\bnode\s+(?:runtime|backend|services?|apis?|modules?)\b|(?:\b(?:experience with|proficien(?:t|cy) in|knowledge of|using|with|in|building|build(?:ing)? with)\s+)node(?=\s*(?:[,.;)/]|$|\band\b|\bor\b))|(?:^|[,(;/]\s*)node(?=\s*(?:[,.;)/]|$|\band\b|\bor\b))/i],
+  ["Node.js", /\bnode(?:\.js|js)?\b/i],
   ["Python", /\bpython\b/i],
   ["Java", /\bjava\b/i],
   ["C++", /\bc\+\+|\bcpp\b/i],  // Fix(JD-test): dropped trailing \b — it never matched "C++," before punctuation
@@ -345,7 +342,7 @@ const TECH_KEYWORDS: Array<[string, RegExp]> = [
   ["Flask", /\bflask\b/i],            // Fix #14
   ["FastAPI", /\bfastapi\b/i],         // Fix #14
   ["Vue", /\bvue(?:\.js|js)?\b/i],     // Fix #14
-  ["Elasticsearch", /\belasticsearch\b|\belastic\s+(?:stack|cloud)\b|(?:\b(?:experience with|proficien(?:t|cy) in|knowledge of|using|with|in)\s+)elastic(?=\s*(?:[,.;)/]|$|\band\b|\bor\b))|(?:^|[,(;/]\s*)elastic(?=\s*(?:[,.;)/]|$|\band\b|\bor\b))/i],
+  ["Elasticsearch", /\belastic(?:search)?\b/i],  // Fix #14
   ["Express.js", /\bexpress\.?js\b/i], // Fix #14: require .js suffix to avoid prose "express"
   ["HTML", /\bhtml\b/i],               // Fix #14
   ["CSS", /\bcss\b/i],                 // Fix #14
@@ -388,7 +385,7 @@ const TECH_KEYWORDS: Array<[string, RegExp]> = [
   ["Spring", /\bspring\s?(?:boot|framework|mvc|cloud|security|data)\b/i],
   ["Django", /\bdjango\b/i],
   ["Angular", /\bangular\b/i],
-  ["Rails", /\bruby on rails\b|\brails\s+(?:app(?:lication)?s?|apis?|developer|engineer|framework)\b|(?:\b(?:experience with|proficien(?:t|cy) in|knowledge of|using|with|in|building|build(?:ing)? with)\s+)rails(?=\s*(?:[,.;)/]|$|\band\b|\bor\b))|(?:^|[,(;/]\s*)rails(?=\s*(?:[,.;)/]|$|\band\b|\bor\b))/i],
+  ["Rails", /\bruby on rails\b|\brails\b/i],
   ["Kafka", /\bkafka\b/i],
   ["Spark", /\bapache spark\b|\bpyspark\b|\bspark\s+(?:streaming|sql)\b/i],  // Fix(JD-test): explicit forms only — bare "spark" is a common verb ("spark ideas")
   ["Terraform", /\bterraform\b/i],
@@ -497,25 +494,33 @@ function headingCore(line: string): string {
     // are numbered PROCESS-STEP duties ("Step 1: Requirements gathering with…") and
     // must stay content, not be re-read as a Requirements heading.
     .replace(/^(?:section|part)\s+\d+\s*[:.)\-–—]\s*/i, "")
+    // "Qualifications..." is a styled heading, not a sentence.
+    .replace(/(?:\.{3}|…)\s*$/, "")
     .replace(/:\s*$/, "");
+}
+
+// A full sentence that merely starts with a heading word ("Bonus programs
+// administration for the sales team.") is an item, never a heading. A styled
+// heading of up to six words ("What you'll bring to the table.") still is
+// one. The section, structure, and brief heading tests share this rule, so
+// such a line is kept as content rather than closing a section and vanishing.
+function isSentenceLine(core: string): boolean {
+  return /[.!]$/.test(core) && core.split(/\s+/).length > 6;
 }
 
 function isSectionHeading(line: string): boolean {
   const t = headingCore(line);
-  return t.length > 1 && t.length <= 90 && SECTION_HEADING.some((re) => re.test(t));
+  return t.length > 1 && t.length <= 90 && !isSentenceLine(t) && SECTION_HEADING.some((re) => re.test(t));
 }
 
 function isStructureHeading(line: string): boolean {
   const t = headingCore(line);
-  return t.length > 1 && t.length <= 100 && STRUCTURE_HEADING.some((re) => re.test(t));
+  return t.length > 1 && t.length <= 100 && !isSentenceLine(t) && STRUCTURE_HEADING.some((re) => re.test(t));
 }
 
 function matchesHeading(line: string, headings: RegExp[]): boolean {
   const t = headingCore(line);
-  // A sentence ("Bonus programs administration for the sales team.") is an
-  // item, not a heading, however it starts.
-  if (/[.!]$/.test(t)) return false;
-  return t.length > 1 && t.length <= 100 && headings.some((re) => re.test(t));
+  return t.length > 1 && t.length <= 100 && !isSentenceLine(t) && headings.some((re) => re.test(t));
 }
 
 function inlineHeadingContent(line: string, headings: RegExp[]): string {
@@ -670,7 +675,8 @@ function isPreferredItemStrict(item: string): boolean {
   // "plus" demotes only as the idiom ("is a plus", "a big plus", "plus:"),
   // never as the conjunction in "a degree plus 3 years"; "bonus" never as the
   // pay program.
-  return /\b(preferred|nice[- ]to[- ]have)\b|\bbonus\b(?!\s+(?:program|plan|pay|structure|eligib|scheme|compensation))|\b(?:an?|big|huge|strong|definite|major|real|added|significant)\s+plus\b|\bplus\s*[:!]|\bplus\.?\s*$/i.test(checkWindow);
+  // The idiom is never followed by a number ("an MBA plus 5 years").
+  return /\b(preferred|nice[- ]to[- ]have)\b|\bbonus\b(?!\s+(?:program|plan|pay|structure|eligib|scheme|compensation))|\ban?\s+(?:\w+\s+)?plus\b(?!\s*,?\s*(?:\d|an?\b|at least|minimum|additional))|\bplus\s*[:!]|\bplus\.?\s*$|^plus\b/i.test(checkWindow);
 }
 
 function isListLikeContent(line: string): boolean {
@@ -893,10 +899,17 @@ function valueForLabel(lines: string[], labels: string[]): string {
     const line = lines[i].trim();
     for (const label of labels) {
       const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      // A dash separates only with a space beside it: "Employer-paid ..." is a
-      // hyphenated word, not the Employer label.
+      // A dash separates with a space beside it or before a capitalized value
+      // ("Company-Acme Corp"); "Employer-paid ..." is a hyphenated word, not
+      // the Employer label.
       const sameLine = line.match(new RegExp(`^${escaped}\\s*(?:[:|]\\s*|\\s-\\s*|-\\s+)(.+)$`, "i"));
       if (sameLine?.[1]?.trim()) return sameLine[1].trim();
+      // The capital test runs outside the case-insensitive label match; a
+      // title-case benefit ("Employer-Paid Health Insurance") is still prose.
+      const unspaced = line.match(new RegExp(`^${escaped}-(.+)$`, "i"));
+      if (unspaced?.[1] && /^(?!(?:Paid|Wide|Owned|Sponsored|Provided|Matched|Funded|Based|Led)\b)[A-Z0-9]/.test(unspaced[1])) {
+        return unspaced[1].trim();
+      }
 
       if (new RegExp(`^${escaped}\\s*:?$`, "i").test(line)) {
         const next = nextTextIndex(lines, i + 1);
@@ -2056,8 +2069,23 @@ function extractQualifications(lines: string[]) {
 // the AI review's exact-term cross-check. Keeping one catalog prevents the
 // analyzer, reviewer prompt, and coverage backstop from disagreeing about
 // whether a concrete technology name is present.
+// Prose that carries a framework's name without meaning it. It is blanked
+// before the catalog runs, so "react quickly", "node pools", "guard rails" and
+// "Elastic Beanstalk" fabricate nothing while "React", "Node 20", "the Rails
+// framework" or "from React to Vue" still count. Spaces only, never a line
+// break: a bullet ending in "React" above a "To apply" line is not "react to".
+const PROSE_TECH_COLLOCATIONS = [
+  /\breact[ \t]+(?:quickly|fast|promptly|well|calmly|appropriately|accordingly|to(?![ \t]+(?:vue|angular|next|svelte|solid|remix|native|typescript)\b))\b/gi,
+  /\b(?:single|each|every|worker|master|compute|cluster|graph|tree|leaf|control[- ]plane)[ \t]+nodes?\b/gi,
+  /\bnodes?[ \t]+(?:pools?|groups?|count|labels?|affinity|selectors?|failures?)\b/gi,
+  /\b(?:guard|safety|hand)[ \t]+rails\b/gi,
+  /\b(?:the|those|these)[ \t]+rails[ \t]+(?:that|which|between|of|for|around)\b/gi,
+  /\brails[ \t]+(?:that|which|between)\b/gi,
+  /\belastic[ \t]+(?:beanstalk|kubernetes|container|compute|load|ip|block|file|network|ecs|eks)\b/gi
+];
+
 export function extractKnownTechKeywords(source: unknown): string[] {
-  const text = String(source ?? "");
+  const text = PROSE_TECH_COLLOCATIONS.reduce((scrubbed, re) => scrubbed.replace(re, " "), String(source ?? ""));
   return TECH_KEYWORDS.filter(([, re]) => re.test(text)).map(([label]) => label);
 }
 

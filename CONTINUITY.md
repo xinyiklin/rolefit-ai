@@ -110,14 +110,14 @@ D-entries in `docs/decisions.md`.
 ## 2026-10-29
 
 - [TOOL] **Bug-hunt round three**, uncommitted with the others. Job
-  extraction: react/node/rails/elastic count only as a known spelling, an
-  experience phrase, or a list item; "plus" demotes only as the idiom; a
+  extraction: prose collocations ("react quickly", "node pools", "guard
+  rails") fabricate no keyword; "plus" demotes only as the idiom; a long
   sentence is never a heading; a label's dash needs a space beside it. The
   direct Apply path commits with the latest Fit decision, usage, resume text
-  and tracking. Refuted: heading-before-body. Verified: evals, tsc, app check
-  205/205; this round's review and seven sweep candidates (fit excerpt,
-  advice warnings, Detail stage select, event dates, margin default, companion
-  messages) are UNCONFIRMED.
+  and tracking. Verified: evals, tsc, app check 205/205; its review's
+  findings (gating too strict, sentence rule too broad) are fixed in a
+  re-checked follow-up. UNCONFIRMED sweep candidates: fit excerpt, advice
+  warnings, Detail stage select, event dates, margin default, companion messages.
 
 ## 2026-10-28
 

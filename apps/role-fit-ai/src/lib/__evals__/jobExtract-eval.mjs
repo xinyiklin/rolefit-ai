@@ -638,23 +638,48 @@ assert.match(doYouQualify, /Required Qualifications:[\s\S]*bachelor's degree in 
 const hyphenated = extractJobPosting("Senior Backend Engineer\nEmployer-paid health coverage for the whole family.\nCompany: Acme Corp\nLocation: Austin, TX");
 assert.equal(hyphenated.tracking.company, "Acme Corp", "a hyphenated word at line start is not a label");
 assert.equal(extractJobPosting("Senior Backend Engineer\nCompany - Acme Corp").tracking.company, "Acme Corp", "a spaced dash still separates a label");
+assert.equal(extractJobPosting("Senior Backend Engineer\nCompany-Acme Corp").tracking.company, "Acme Corp", "an unspaced dash before a capitalized value still separates a label");
 
 // "plus" as a conjunction keeps a requirement required; the idiom still demotes.
-const plusCue = extractJobPosting("Senior Backend Engineer\nAcme\nRequirements\n- Bachelor's degree plus 3 years of relevant experience.\n- Strong SQL skills.\n- Go experience is a plus.\n").tailoringText;
+const plusCue = extractJobPosting("Senior Backend Engineer\nAcme\nRequirements\n- Bachelor's degree plus 3 years of relevant experience.\n- Strong SQL skills.\n- Go experience is a plus.\n- Kubernetes is a great plus for this role.\n").tailoringText;
 assert.match(plusCue, /Required Qualifications:[\s\S]*degree plus 3 years/i, "'degree plus N years' stays required");
 assert.match(plusCue, /Preferred Qualifications:[\s\S]*Go experience is a plus/i, "'is a plus' still demotes");
+assert.match(plusCue, /Preferred Qualifications:[\s\S]*Kubernetes is a great plus/i, "'a great plus' demotes");
+const articlePlus = extractJobPosting("Senior Backend Engineer\nAcme\nRequirements\n- An MBA plus 5 years in finance.\n- A degree plus 3 years of experience.\n- Strong SQL skills.\n").tailoringText;
+assert.match(articlePlus, /Required Qualifications:[\s\S]*An MBA plus 5 years[\s\S]*A degree plus 3 years/i, "'an X plus N years' stays required");
+assert.equal(extractJobPosting("Senior Backend Engineer\nEmployer-Paid Health Insurance\nCompany: Acme Corp").tracking.company, "Acme Corp", "a title-case benefit is not a label value");
 
-// A sentence that starts with a heading word is an item, never a heading.
-const bonusBullet = extractJobPosting("Senior Backend Engineer\nAcme\nWhat you will do\n- Bonus programs administration for the sales team.\n- Build and operate payment services.\nWhat you bring\n- 5 years of backend experience.\n").tailoringText;
+// A sentence that starts with a heading word is an item, never a heading: it
+// stays in its section and the section stays open.
+const bonusBullet = extractJobPosting("Senior Backend Engineer\nAcme\nWhat you will do\n- Bonus programs administration for the sales team.\n- Partner with finance on quarterly close.\n- Build and operate payment services.\nWhat you bring\n- 5 years of backend experience.\n").tailoringText;
+const bonusDuties = bonusBullet.slice(bonusBullet.indexOf("Core Responsibilities:"), bonusBullet.indexOf("Required Qualifications:"));
+for (const duty of ["Bonus programs administration", "Partner with finance", "Build and operate payment services"]) {
+  assert.ok(bonusDuties.includes(duty), `'${duty}' stays a responsibility`);
+}
 assert.doesNotMatch(bonusBullet, /Preferred Qualifications:[\s\S]*Build and operate payment services/i, "a 'Bonus ...' bullet does not open a preferred section");
+// A short styled heading with a period or ellipsis is still a heading.
+const styled = extractJobPosting("Senior Backend Engineer\nAcme\nWhat you'll bring to the table.\n- 5 years of backend experience.\nNice to have!\n- Go experience.\nQualifications...\n- Strong SQL skills.\n").tailoringText;
+assert.match(styled, /Required Qualifications:[\s\S]*5 years of backend experience[\s\S]*Strong SQL skills/i, "headings ending in '.' or '...' still open their section");
+assert.match(styled, /Preferred Qualifications:[\s\S]*Go experience/i, "a heading ending in '!' still opens its section");
 
-// Prose that merely contains a framework's name is not a stack keyword.
-const prose = extractJobPosting("Platform Engineer\nAcme\nResponsibilities\n- Deploy services to Elastic Beanstalk and manage node pools in the cluster.\n- React quickly to incidents and keep guard rails in place.\nRequirements\n- 3 years of infrastructure experience.\n").tailoringText;
+// Prose that merely contains a framework's name is not a stack keyword, while
+// the name in every ordinary posting shape still counts.
+const prose = extractJobPosting("Platform Engineer\nAcme\nResponsibilities\n- Deploy services to Elastic Beanstalk and manage node pools in the cluster.\n- React quickly to incidents and keep guard rails in place.\n- Maintain the rails that ship data between teams.\nRequirements\n- 3 years of infrastructure experience.\n").tailoringText;
 assert.doesNotMatch(prose, /Tech Stack \/ Keywords:[\s\S]*(?:React|Node\.js|Elasticsearch|Rails)\b/, "react/node/rails/elastic in prose are not keywords");
-const listed = extractJobPosting("Platform Engineer\nAcme\nRequirements\n- Experience with React, Node.js, Rails and Elasticsearch.\n- 3 years of experience.\n").tailoringText;
-const listedStack = listed.slice(listed.indexOf("Tech Stack / Keywords:"));
-for (const name of ["React", "Node.js", "Rails", "Elasticsearch"]) {
-  assert.ok(listedStack.includes(`- ${name}`), `${name} in a tech list still counts`);
+for (const [shape, text] of [
+  ["comma list", "- Experience with React, Node.js, Rails and Elasticsearch."],
+  ["bare bullets", "- React\n- Node.js\n- Rails\n- Elasticsearch"],
+  ["line end", "- Experience with React\n- Ruby on Rails\n- Node\n- Elastic Search"],
+  ["labelled", "- Frontend: React | Backend: Rails\n- Tech stack: Node 20, Elasticsearch 8"],
+  ["slash and noun", "- React/Redux experience\n- 3+ years of Node experience\n- Rails developer\n- Elasticsearch clusters"],
+  ["next line and determiner", "- Experience with React\nTo apply, send a resume.\n- Experience with Node\nPools of talent await.\n- Deep knowledge of the Rails framework\n- Migrate screens from Elasticsearch to OpenSearch"],
+  ["migration", "- Migrate screens from React to Vue\n- Node 20\n- Contribute to the Rails codebase\n- Elasticsearch 8"]
+]) {
+  const stack = extractJobPosting(`Platform Engineer\nAcme\nRequirements\n${text}\n- 3 years of experience.\n`).tailoringText;
+  const section = stack.slice(stack.indexOf("Tech Stack / Keywords:"));
+  for (const name of ["React", "Node.js", "Rails", "Elasticsearch"]) {
+    assert.ok(section.includes(`- ${name}`), `${name} counts in the ${shape} shape`);
+  }
 }
 
 console.log("jobExtract evals passed");
