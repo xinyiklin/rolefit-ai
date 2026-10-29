@@ -1,6 +1,6 @@
 // Base-resume persistence probes in an isolated temporary workspace.
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -50,7 +50,8 @@ try {
     handleSelectBaseResume,
     handleRestoreBaseResume,
     ensureJobWorkspace,
-    readWorkspaceBaseResume
+    readWorkspaceBaseResume,
+    replaceWorkspaceFile
   } = await import(`../workspace.ts?workspace-probe=${Date.now()}`);
 
   async function invoke(handler, method, payload) {
@@ -341,6 +342,50 @@ try {
       starter,
       "the restored base resume carries the archived bytes"
     );
+  }
+
+  // A save archives the live file only after its replacement is staged, and a
+  // failure after the archive puts the live file back: the live version is
+  // never left only in .trash.
+  {
+    const livePath = join(resumeDir, "ordering.resume");
+    await writeFile(livePath, "live", "utf8");
+    let archived = false;
+    await assert.rejects(
+      replaceWorkspaceFile(join(resumeDir, "missing-dir", "ordering.resume"), "new", async () => {
+        archived = true;
+        return null;
+      }),
+      /ENOENT/
+    );
+    assert.equal(archived, false, "nothing is archived before the replacement bytes exist");
+    await assert.rejects(
+      replaceWorkspaceFile(livePath, "new", async () => { throw new Error("archive failed"); }),
+      /archive failed/
+    );
+    assert.equal(await readFile(livePath, "utf8"), "live", "a failed archive leaves the live file");
+    const aside = `${livePath}.aside`;
+    await assert.rejects(
+      replaceWorkspaceFile(livePath, "new", async () => {
+        // Simulate the name being taken between archive and install.
+        await rename(livePath, aside);
+        await mkdir(livePath);
+        await writeFile(join(livePath, "occupied"), "x", "utf8");
+        return async () => {
+          await rm(livePath, { recursive: true, force: true });
+          await rename(aside, livePath);
+        };
+      })
+    );
+    assert.equal(await readFile(livePath, "utf8"), "live", "a failed install restores the archived live file");
+    assert.ok(!(await readdir(resumeDir)).some((name) => name.includes(".tmp")), "no staged file is left behind");
+    await replaceWorkspaceFile(livePath, "new", async () => {
+      await rename(livePath, aside);
+      return () => rename(aside, livePath);
+    });
+    assert.equal(await readFile(livePath, "utf8"), "new", "a successful replace installs the staged bytes");
+    await rm(aside, { force: true });
+    await rm(livePath, { force: true });
   }
 
   console.log("workspace persistence probes: PASS");

@@ -107,54 +107,54 @@ D-entries in `docs/decisions.md`.
   state labels (user's call); unverified Firefox/Safari, print, forced colors,
   macOS, native window-control rendering, and real unpacked popup installs.
 
-## 2026-10-26
+## 2026-10-29
 
-- [USER+CODE+TOOL] **MCP agent tools** (D101, D102, #284) and **0.24.0
-  prepared** (minor). Windows x64, Node 24.22.1: check 204/204, `make`,
-  packaged smoke, release contract 14/14; Electron dev smoke 0/4, the same at
-  0.23.0's commit (Vite's watcher; fixed, below). [USER] The user's agent used
-  the package and cover reads and `draft_answer` live. Open: other AI stages
-  not run live; most tools not through a real client; `render_pdf`.
+- [TOOL] **Bug-hunt round three**, uncommitted with the others. Job
+  extraction: react/node/rails/elastic count only as a known spelling, an
+  experience phrase, or a list item; "plus" demotes only as the idiom; a
+  sentence is never a heading; a label's dash needs a space beside it. The
+  direct Apply path commits with the latest Fit decision, usage, resume text
+  and tracking. Refuted: heading-before-body. Verified: evals, tsc, app check
+  205/205; this round's review and seven sweep candidates (fit excerpt,
+  advice warnings, Detail stage select, event dates, margin default, companion
+  messages) are UNCONFIRMED.
 
-## 2026-10-24
+## 2026-10-28
 
-- [CODE+TOOL] **Companion pairing startup retry**: right after start, the
-  owned dev server stalls requests for up to ~7 s (measured 1.0/3.7/0.9 s,
-  then ~1 ms), tripping main's 1 s pairing fetch. Failures before any success
-  now keep Loading and retry 4x at 1.5 s. This explains the 0.11.1/0.12.0
-  smoke flake. 2026-10-26 [TOOL] Vite then watched the whole app root (~4,400
-  paths incl. workspace, backups, `.forge`); under Electron its first 493
-  `fs.watch` calls blocked 8.1 s (one 139 ms), past the smoke's 750 ms probe.
-  Now only client source: 468 calls, ~160 ms, lag ≤89 ms (3 runs); smoke 3/3.
-  Unfiltered, one smoke still passed: a timing race.
-- [USER+CODE+TOOL] **Agent commit: Drafts, duplicate guard, dry run; MCP
-  resume reads** (D100, #283). Verified: server tsc, probes, `npm run check`
-  (202/202), read tools over the real handlers. Real MCP clients not re-run.
-- [USER+CODE+TOOL] **Landing download buttons and resize guard**: equal-width
-  buttons with Apple/Windows glyphs; file type, size, and "Unsigned" moved to
-  a caption linked by `aria-describedby`. `resizeGuard.ts` drops the glass blur
-  while the width changes (user-confirmed it ends the blank-card glitch on drag).
-  Plus visual-QA polish (wrap and alignment fixes). Verified: landing build,
-  browser QA at 1440/1024/768/390/320 in light and dark, two independent
-  reviews. Unverified: forced colors, Firefox/Safari, a real screen reader.
-- [USER+CODE+TOOL] **Typeset brand refresh + Preview A touch-ups** (D098,
-  D099). Verified: browser 1280 to 390px, RoleFit tokens via the editor
-  harness, editor/Typeset/engine checks, RoleFit build, independent reviews.
-  Unverified: `npm run test:editor:browser` locally (Chrome refuses CDP attach),
-  the real RoleFit app and dark mode, Firefox/Safari, print, forced colors. The
-  shared default `--shadow-rest` (`packages/editor` tokens) still clips if a
-  host keeps it.
-- [USER+CODE+TOOL] **RoleFit rename, ribbon-R brand, landing redesign** (D097):
-  visible name, packaged app, and release assets are RoleFit (internal IDs
-  kept); `generate_icons.py` renders the vector mark (extension now ships PNG
-  icons); landing follows the user's mockup with brand ribbons, frosted glass
-  cards, Codex-generated accent art, and retaken synthetic screenshots.
-  Verified: `npm run check` (202/202), landing build guard, headless Chromium
-  at 1440/1280/1024/900/390 in light and dark (no overflow, AA contrast over
-  glass), three independent reviews. Unverified: reduced-transparency and
-  no-blur fallbacks in a real browser, Firefox/Safari rendering, Windows
-  installer, the new extension icon in an installed browser.
+- [TOOL] **Bug-hunt round two**, uncommitted with round one. Workspace saves
+  and restores stage the replacement before archiving the live file and put
+  it back if the install fails (`replaceWorkspaceFile`); tracker upserts
+  cannot drop `appliedAt`, stage moves never invent a date, same-stage status
+  requests still validate, disk failures answer 500; Apply and Skip keep one
+  record id per preparation until a save succeeds and read a create refused as
+  existing as that earlier success (`confirmCreated` clears the banner); the
+  timeline shows a new entry once and orders same-day rows by day then
+  recorded order; Detail carries no hidden date into a job-only Skip; the
+  companion shows the blocked-port reason, keeps typed keys and focus across
+  the provider poll, and labels Confirm only for a pending port; the engine's
+  `coerceDivider` never cuts a surrogate pair (two reviewers, shared
+  package); Typeset's root drop claims only file drops and its leave guard
+  covers the autosave delay. Verified: app, Typeset and engine checks,
+  server/app tsc, desktop probes, three independent reviews, all fixed.
+  Residual: `confirmCreated` keeps the first attempt's content; a migrated
+  undated record moved to Skipped sheds its documents. Unscanned: intake and
+  polish hooks, editor hooks, shared contracts. Not fixed: Providers panel
+  ignores a reused server.
 
-## 2026-10-18
+## 2026-10-27
 
-- [TOOL] `draft/document-chat` is local-only at `../role-fit-ai-document-chat-draft`.
+- [TOOL] **Bug-hunt fixes**, uncommitted on `fix/rolefit-dev-smoke-connection`
+  (open for the user: commit and PR). Duplicate matcher (URL query and hash
+  routes, LinkedIn/Workday ids, accent folding, location noise words); job
+  import (single-pass entities, `<li` boundary, prose `<`, charset and BOM,
+  empty compressed body); cover-letter batch skips unreadable files; port-80
+  Host guard; companion (Fetch bad ports, backup-name pre-check, Safari
+  origins filtered, settings read failure keeps origins); extension (retry
+  keeps the claim token, capture before settings, truthful notice, bad
+  ports); settings cache cleared on a failed
+  write. Verified: app check, server/app/desktop tsc, desktop probes, a
+  code-review pass and one independent review, all findings fixed (incl. no
+  regex lookbehind, for Safari 16.0-16.3). No probe (not simulable here): the
+  settings I/O-error branch, `main.cts` paths, the popup's Settings-from-
+  loading restart. Still not fixed: `jdTokens` is ASCII-only; variant
+  listings do not filter directories.

@@ -171,6 +171,18 @@ assert.match(bridge, /text\.slice\(0, 50000\)/, "page extraction keeps the 50,00
 for (const source of [popup, background]) {
   assert.match(source, /const claimToken = randomClaimToken\(\)/, "each import creates one claim token");
 }
+// A failed tab open is retried with the SAME claim token: the server reserves
+// the entry for that token, so a plain RoleFit tab could never deliver it.
+assert.match(popup, /controller\.requestRetry = \(\) => openTab\(\)\.catch\(tabOpenFailed\)/, "the tab-open retry reopens the token hand-off");
+assert.doesNotMatch(popup, /requestRetry = \(\) => \{ void openRoleFit\(\); \}/, "a plain RoleFit tab is never the import retry");
+// Page capture starts before the saved settings are read, so recovering from
+// unreadable settings still has a page to send.
+const mainStart = popup.indexOf("async function main()");
+assert.ok(mainStart >= 0, "the popup entry point is bounded");
+assert.ok(
+  popup.indexOf("beginPageLoad();", mainStart) < popup.indexOf("await loadExtensionSettings()", mainStart),
+  "the popup captures the page before reading its settings"
+);
 for (const [name, source] of [["popup", popup], ["background", background]]) {
   assert.doesNotMatch(source, /fetch\(/, `${name} does not open its own request path`);
   assert.doesNotMatch(source, /tabs\.update\(/, `${name} never replaces the current RoleFit tab`);

@@ -133,6 +133,12 @@ const rejectsUnrecorded = (overrides, base, message) => assert.throws(
 const moved = { id: "s9", type: "stage", status: "interviewing", at: rev2 };
 
 rejectsUnrecorded({ status: "interviewing" }, saved, "a stage change without a stage entry is refused");
+// Dropping the submission date would disarm that guard on the next save.
+assert.throws(
+  () => save({ appliedAt: undefined }),
+  (error) => error instanceof ApplicationsStorageError && error.status === 400 && /submission date cannot be removed/.test(error.message),
+  "a submitted record cannot lose its application date"
+);
 rejectsUnrecorded(
   { status: "interviewing", stageHistory: [fullHistory[3], { ...moved, status: "offer" }] },
   saved,

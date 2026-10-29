@@ -62,7 +62,8 @@ const {
   validateLocalSitePort
 } = await import(settingsUrl);
 
-assert.equal(validateLocalSitePort("1"), 1);
+assert.equal(validateLocalSitePort("2"), 2);
+assert.throws(() => validateLocalSitePort("1"), /browsers refuse/, "port 1 is on the Fetch bad-port list");
 assert.equal(validateLocalSitePort("065535"), 65_535);
 assert.equal(validateLocalSitePort(5_181), 5_181);
 for (const invalid of [
@@ -87,6 +88,7 @@ for (const invalid of [
     /digits only|integer from 1 through 65535/
   );
 }
+assert.throws(() => validateLocalSitePort("6000"), /browsers refuse/, "a Fetch bad port is refused before it is saved");
 assert.equal(createLocalSiteOrigin("5181"), "http://localhost:5181");
 assert.throws(() => createLocalSiteOrigin("https://localhost:5181"));
 

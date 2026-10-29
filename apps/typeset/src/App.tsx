@@ -252,7 +252,9 @@ export default function App() {
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
       const state = typeof saveStatus === "string" ? saveStatus : saveStatus.state;
-      if (!editor.dirty && !docStyle.dirty && state !== "error") return;
+      // "saving" covers the autosave delay after a title-only edit, which
+      // marks neither the document nor its style dirty.
+      if (!editor.dirty && !docStyle.dirty && state !== "error" && state !== "saving") return;
       event.preventDefault();
     };
     window.addEventListener("beforeunload", onBeforeUnload);
@@ -456,6 +458,9 @@ export default function App() {
 
   const onDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
+      // Only a file drop is the shell's; a text drop into the title field or
+      // the editor keeps the browser's own insertion.
+      if (!hasDraggedFiles(event)) return;
       event.preventDefault();
       dragDepthRef.current = 0;
       setIsDraggingFile(false);

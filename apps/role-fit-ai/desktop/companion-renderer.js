@@ -430,7 +430,9 @@ function updateSitePortControls({ preserveStatus = false } = {}) {
     siteSettings?.warning === null;
   elements.sitePortInput.disabled = !siteSettings || locked || sitePortApplyPending;
   elements.sitePortApply.disabled = !siteSettings || locked || sitePortApplyPending || port === null || unchanged;
-  elements.sitePortApply.textContent = sitePortConfirmValue === port
+  // The confirm step exists only for a concrete new port; an empty or invalid
+  // field is not one awaiting confirmation.
+  elements.sitePortApply.textContent = port !== null && sitePortConfirmValue === port
     ? "Confirm & restart"
     : "Apply & restart";
   elements.sitePortInput.setCustomValidity(
@@ -702,6 +704,10 @@ function localSitePortErrorMessage(error) {
   const message = error instanceof Error ? error.message : String(error);
   if (message.includes("already in use")) return "That port is already in use. Choose another port.";
   if (message.includes("ROLEFIT_DESKTOP_PORT")) return "Remove ROLEFIT_DESKTOP_PORT before changing this setting.";
+  // A refused port names its reason: RoleFit's own sentence, without the
+  // "Error invoking remote method" prefix Electron wraps around it.
+  const refused = message.match(/Port \d+ is one browsers refuse to connect to\. Choose another port\./);
+  if (refused) return refused[0];
   return "The port could not be saved. Check app permissions and try again.";
 }
 
@@ -755,6 +761,9 @@ function apiKeyForm(provider, replacing) {
     replacing ? "Save replacement" : "Add provider"
   );
   submit.type = "submit";
+  // Tagged like the action buttons so focus survives the provider poll.
+  submit.dataset.providerAction = replacing ? "save-replacement" : "add-provider";
+  submit.dataset.providerId = provider.id;
   submit.disabled = pendingProviders.has(provider.id);
   form.append(submit);
   if (replacing) {
@@ -845,7 +854,40 @@ function renderProviders() {
     fragment.append(item);
   });
 
+  // The visible-window poll re-renders this list while a key may be half
+  // typed: carry each key field's text and the focused field across the
+  // rebuild, or every poll wipes the entry and drops focus.
+  const typedKeys = new Map();
+  let focusedKey = null;
+  for (const field of elements.providerList.querySelectorAll('input[name="apiKey"]')) {
+    const providerId = field.closest("[data-provider-id]")?.dataset.providerId;
+    if (!providerId) continue;
+    if (field.value) typedKeys.set(providerId, field.value);
+    if (document.activeElement === field) {
+      focusedKey = { providerId, start: field.selectionStart, end: field.selectionEnd };
+    }
+  }
+  // A focused action button survives the rebuild by its action and provider.
+  const active = document.activeElement;
+  const focusedAction = active instanceof HTMLButtonElement && elements.providerList.contains(active) && active.dataset.providerAction
+    ? { action: active.dataset.providerAction, providerId: active.dataset.providerId }
+    : null;
   elements.providerList.replaceChildren(fragment);
+  if (focusedAction) {
+    const button = elements.providerList.querySelector(
+      `button[data-provider-action="${focusedAction.action}"][data-provider-id="${focusedAction.providerId}"]`
+    );
+    if (button && !button.disabled) button.focus({ preventScroll: true });
+  }
+  for (const field of elements.providerList.querySelectorAll('input[name="apiKey"]')) {
+    const providerId = field.closest("[data-provider-id]")?.dataset.providerId;
+    if (!providerId) continue;
+    if (typedKeys.has(providerId)) field.value = typedKeys.get(providerId);
+    if (focusedKey?.providerId === providerId && !field.disabled) {
+      field.focus({ preventScroll: true });
+      field.setSelectionRange(focusedKey.start, focusedKey.end);
+    }
+  }
   elements.providerList.dataset.rendered = "true";
   elements.providerList.setAttribute("aria-busy", "false");
   elements.providerSummary.textContent = configuredCount === 0

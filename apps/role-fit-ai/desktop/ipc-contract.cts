@@ -299,14 +299,28 @@ export function isRoleFitConnectionServerState(
     value === "unreachable";
 }
 
+// Ports a browser and Node's fetch refuse outright (the Fetch standard's bad
+// ports). A companion saved on one could never pass its own health probe and
+// no browser could open it, so every place a port is chosen rejects them.
+const FETCH_BLOCKED_PORTS: ReadonlySet<number> = new Set([
+  1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77, 79, 87, 95, 101, 102, 103, 104,
+  109, 110, 111, 113, 115, 117, 119, 123, 135, 137, 139, 143, 161, 179, 389, 427, 465, 512, 513, 514, 515,
+  526, 530, 531, 532, 540, 548, 554, 556, 563, 587, 601, 636, 989, 990, 993, 995, 1719, 1720, 1723, 2049,
+  3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6679, 6697, 10080
+]);
+
+export function isFetchBlockedPort(port: number): boolean {
+  return FETCH_BLOCKED_PORTS.has(port);
+}
+
 export function isRoleFitWorkspaceBackupFileName(value: unknown): value is string {
   return typeof value === "string" &&
     value.length <= ROLEFIT_WORKSPACE_BACKUP_FILE_NAME_MAX_LENGTH &&
     value.endsWith(".rolefit-backup") &&
     // A bare file name only: no separators, drive/stream colons, control
-    // characters, or leading dots that could smuggle a path across the bridge.
+    // characters, or a leading dot that could smuggle a path across the bridge.
     // eslint-disable-next-line no-control-regex
-    /^[A-Za-z0-9][^\\\/:*?"<>|\u0000-\u001F]*$/.test(value);
+    /^[^.\\\/:*?"<>|\u0000-\u001F][^\\\/:*?"<>|\u0000-\u001F]*$/.test(value);
 }
 
 export function normalizeRoleFitExtensionOrigin(value: unknown): string {

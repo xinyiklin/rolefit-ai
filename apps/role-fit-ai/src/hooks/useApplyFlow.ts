@@ -1,7 +1,7 @@
 import type { JobAnalysisWarning } from "../../shared/jobAnalysisWarnings.ts";
 /** Owns Apply confirmation, tracker commit, document snapshots, and optional PDF export. */
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { makeApplicationRecord, type Application } from "./useApplications";
+import { makeApplicationRecord, newApplicationId, type Application } from "./useApplications";
 import type { DuplicateResolution } from "./useDuplicateGuard";
 import type { ExtractedJobTracking } from "../lib/jobExtract";
 import type { StageAiUsage } from "../lib/aiUsage";
@@ -51,6 +51,7 @@ type UseApplyFlowArgs = {
   getCurrentPreparationId: () => string;
   getPreparationGeneration: () => number;
   getApplication: (id: string) => Application | undefined;
+  confirmCreated: (id: string) => boolean;
   refreshApplications: () => Promise<boolean>;
   createApplication: (app: Application) => Promise<boolean>;
   updateApplicationById: (app: Application) => Promise<boolean>;
@@ -112,6 +113,7 @@ export function useApplyFlow({
   getCurrentPreparationId,
   getPreparationGeneration,
   getApplication,
+  confirmCreated,
   refreshApplications,
   createApplication,
   updateApplicationById,
@@ -142,6 +144,11 @@ export function useApplyFlow({
   const applyActionRef = useRef<PreparationPrimaryAction | null>(null);
   const applyUnrelatedApplicationIdRef = useRef<string | null>(null);
   const applyCommitIdentityRef = useRef<string | null>(null);
+  // One record id per preparation until a commit succeeds: a retry after a
+  // lost reply, from the download prompt or a fresh Apply click, resolves to
+  // the record the earlier try may already have created instead of a second row.
+  const applyAttemptRef = useRef<{ preparationId: string; id: string } | null>(null);
+  const applyAttemptIdRef = useRef<string | null>(null);
   const applyPreparationIdRef = useRef<string | null>(null);
   const applyPreparationGenerationRef = useRef<number | null>(null);
   const applyMaterialSelectionRef = useRef<{
@@ -193,6 +200,10 @@ export function useApplyFlow({
     resume: resumeDocumentVersion,
     coverLetter: coverLetterDocumentVersion
   };
+  // The direct Apply path awaits a refresh and a duplicate dialog before it
+  // commits; the commit must read the values of that moment, not the click's.
+  const commitInputsRef = useRef({ result, currentResumeText, fitAssessmentPersistence, pipelineAiUsage, currentJobTracking });
+  commitInputsRef.current = { result, currentResumeText, fitAssessmentPersistence, pipelineAiUsage, currentJobTracking };
   const canApplyRef = useRef(canApply);
   const applyBlockerRef = useRef(applyBlocker);
   canApplyRef.current = canApply;
@@ -207,6 +218,7 @@ export function useApplyFlow({
     applyActionRef.current = null;
     applyUnrelatedApplicationIdRef.current = null;
     applyCommitIdentityRef.current = null;
+    applyAttemptIdRef.current = null;
   }
 
   function capturedPreparationIsCurrent(): boolean {
@@ -343,6 +355,7 @@ export function useApplyFlow({
   // Called directly when the user has opted to skip the download dialog, or
   // from the dialog's Download / Apply-only callbacks.
   async function commitApply(): Promise<boolean> {
+    const { result, currentResumeText, fitAssessmentPersistence, pipelineAiUsage, currentJobTracking } = commitInputsRef.current;
     const session = applySessionRef.current ?? preparationSession;
     const existing = session.applicationId
       ? getApplication(session.applicationId) ?? null
@@ -398,7 +411,10 @@ export function useApplyFlow({
     try {
       const now = new Date().toISOString();
       const tracking = currentJobTracking();
-      const baseRecord = makeApplicationRecord(jobUrl, preparedJobDescription, "applied", tracking);
+      const baseRecord = {
+        ...makeApplicationRecord(jobUrl, preparedJobDescription, "applied", tracking),
+        ...(applyAttemptIdRef.current ? { id: applyAttemptIdRef.current } : {})
+      };
       const prepared = preparedApplicationRecord({
         base: baseRecord,
         existing,
@@ -450,6 +466,9 @@ export function useApplyFlow({
       // The store normally converts request failures to `false`; keep this
       // boundary fail-closed if a future adapter rejects unexpectedly.
     }
+    // A create refused because the id already exists is the earlier attempt
+    // of this same Apply whose reply was lost: the record is saved.
+    if (!saved && commit.operation === "create" && confirmCreated(app.id)) saved = true;
     if (!saved) {
       const message = `${action.label} could not be saved. Your recovery draft is still available; retry ${action.label}.`;
       setApplySaveError(message);
@@ -458,6 +477,7 @@ export function useApplyFlow({
       setIsCommittingApply(false);
       return false;
     }
+    applyAttemptRef.current = null;
     let relationshipWarning = "";
     if (commit.operation === "create" && session.pendingRelationship) {
       const relationship = session.pendingRelationship;
@@ -560,6 +580,10 @@ export function useApplyFlow({
       };
       applySessionRef.current = session;
       applyActionRef.current = action;
+      if (applyAttemptRef.current?.preparationId !== currentPreparationId) {
+        applyAttemptRef.current = { preparationId: currentPreparationId, id: newApplicationId() };
+      }
+      applyAttemptIdRef.current = session.mode === "new" ? applyAttemptRef.current.id : null;
       applyUnrelatedApplicationIdRef.current = null;
       applyCommitIdentityRef.current = preparationCommitIdentity({
         session,

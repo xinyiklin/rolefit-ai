@@ -10,6 +10,7 @@ import {
 const readHook = (name) => readFileSync(new URL(`../${name}`, import.meta.url), "utf8");
 const applications = readHook("useApplications.ts");
 const applyFlow = readHook("useApplyFlow.ts");
+const skipFlow = readHook("useSkipFlow.ts");
 const applicationFiles = readHook("useApplicationFiles.ts");
 const applicationDocumentSync = readHook("useApplicationDocumentSync.ts");
 const preparedApplicationRecord = readFileSync(
@@ -449,5 +450,24 @@ function deferred() {
     "post-Apply PDF export does not keep the saved draft unload-guarded"
   );
 }
+
+// One record id per Apply or Skip attempt: a retry after a lost reply resolves
+// to the record the earlier try created instead of a second tracker row.
+assert.match(applyFlow, /if \(applyAttemptRef\.current\?\.preparationId !== currentPreparationId\) \{\s*applyAttemptRef\.current = \{ preparationId: currentPreparationId, id: newApplicationId\(\) \};/, "the record id lives with the preparation, not the click");
+assert.match(applyFlow, /applyAttemptIdRef\.current = session\.mode === "new" \? applyAttemptRef\.current\.id : null;/, "each Apply captures that id");
+assert.match(applyFlow, /return false;\s*\}\s*applyAttemptRef\.current = null;/, "the id is retired only by a successful commit");
+// The direct Apply path commits after a refresh and a duplicate dialog, so the
+// commit reads the latest Fit decision, usage, resume text, and tracking, not
+// the click's render.
+assert.match(applyFlow, /commitInputsRef\.current = \{ result, currentResumeText, fitAssessmentPersistence, pipelineAiUsage, currentJobTracking \};/, "the commit inputs are refreshed every render");
+assert.match(applyFlow, /async function commitApply\(\): Promise<boolean> \{\s*const \{ result, currentResumeText, fitAssessmentPersistence, pipelineAiUsage, currentJobTracking \} = commitInputsRef\.current;/, "commitApply reads the latest inputs");
+assert.match(applyFlow, /\.\.\.\(applyAttemptIdRef\.current \? \{ id: applyAttemptIdRef\.current \} : \{\}\)/, "commitApply reuses the attempt id");
+assert.match(applyFlow, /applyAttemptIdRef\.current = null;/, "the attempt id is cleared with the captured Apply");
+assert.match(applyFlow, /if \(!saved && commit\.operation === "create" && confirmCreated\(app\.id\)\) saved = true;/, "an id refused as existing resolves to the earlier attempt's record");
+assert.match(applications, /const confirmCreated = useCallback\(\(id: string\) => \{\s*if \(!applicationsRef\.current\.some\(\(application\) => application\.id === id\)\) return false;\s*conflictMessage\.current = "";\s*setError\(""\);\s*return true;/, "confirming a create clears the refusal's banner");
+assert.match(skipFlow, /skipAttemptIdRef\.current = capturedSession\.mode === "new" \? skipAttemptRef\.current\.id : null;/, "each Skip decision captures the preparation's record id");
+assert.match(skipFlow, /return false;\s*\}\s*skipAttemptRef\.current = null;/, "the Skip id is retired only by a successful save");
+assert.match(skipFlow, /\.\.\.\(skipAttemptIdRef\.current \? \{ id: skipAttemptIdRef\.current \} : \{\}\)/, "saveSkip reuses the attempt id");
+assert.match(skipFlow, /if \(!saved && commit\.operation === "create" && confirmCreated\(commit\.application\.id\)\) saved = true;/, "a Skip id refused as existing resolves to the earlier attempt's record");
 
 console.log("application persistence guards passed");

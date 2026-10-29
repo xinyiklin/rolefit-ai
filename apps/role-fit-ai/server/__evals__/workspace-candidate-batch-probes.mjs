@@ -201,16 +201,19 @@ try {
     assert.equal(res.status, 400, `cover batch rejects an unsafe fileName: ${JSON.stringify(badName)}`);
     assert.match(JSON.parse(res.body).error, /valid cover letter/);
   }
+  // A name that cannot be read as a file (here a directory, EISDIR) is skipped
+  // like a missing or invalid one.
+  await mkdir(join(coverDir, "folder.cover"), { recursive: true });
   {
     const res = await invoke(handleCoverLetterCandidates, "POST", {
-      fileNames: ["default.cover", "broken.cover", "growth.cover", "absent.cover"]
+      fileNames: ["default.cover", "broken.cover", "folder.cover", "growth.cover", "absent.cover"]
     });
     assert.equal(res.status, 200, "cover batch reads several letters in one request");
     const body = JSON.parse(res.body);
     assert.deepEqual(
       body.candidates.map((candidate) => candidate.fileName),
       ["default.cover", "growth.cover"],
-      "invalid and absent letters are skipped while valid siblings still rank"
+      "invalid, unreadable, and absent letters are skipped while valid siblings still rank"
     );
     assert.deepEqual(
       body.candidates.map((candidate) => candidate.label),

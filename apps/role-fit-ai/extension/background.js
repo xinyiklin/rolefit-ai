@@ -84,8 +84,9 @@ async function runShortcutImport() {
     try {
       await openImportTab(apiBase, claimToken, sourceTab?.cookieStoreId);
     } catch {
-      // The posting is queued server-side; only the tab hand-off failed.
-      await reportFailure("The posting was captured, but RoleFit could not be opened. Open RoleFit to finish.");
+      // The queued entry is reserved for the tab that failed to open and
+      // expires on its own; only a new import can deliver the posting.
+      await reportFailure("RoleFit could not open a tab for this posting, so it was not handed off. Press the shortcut again.");
       return;
     }
     setBadge("", null);

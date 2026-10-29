@@ -9,7 +9,7 @@ import { parseCoverLetterFile } from "@typeset/engine/lib/coverLetter.ts";
 import { readBody, sendJson } from "./http.ts";
 import {
   WorkspaceStorageError,
-  atomicWriteWorkspaceFile,
+  replaceWorkspaceFile,
   coverLetterWorkspaceDir,
   ensureJobWorkspace,
   isMissingFile,
@@ -157,14 +157,19 @@ async function readCoverLetterHistory(
   });
 }
 
-async function trashCoverLetterFile(name: string, locations: WorkspaceLocations): Promise<void> {
-  const trashDir = join(coverLetterWorkspaceDir(locations), ".trash");
+// Archive the live letter into history and return how to move it back.
+async function trashCoverLetterFile(name: string, locations: WorkspaceLocations): Promise<(() => Promise<void>) | null> {
+  const dir = coverLetterWorkspaceDir(locations);
+  const trashDir = join(dir, ".trash");
   await mkdir(trashDir, { recursive: true });
+  const archived = join(trashDir, `${nextTrashStamp()}__${name}`);
   try {
-    await rename(join(coverLetterWorkspaceDir(locations), name), join(trashDir, `${nextTrashStamp()}__${name}`));
+    await rename(join(dir, name), archived);
   } catch (error) {
     if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") throw error;
+    return null;
   }
+  return () => rename(archived, join(dir, name));
 }
 
 async function coverLetterSnapshot(locations: WorkspaceLocations) {
@@ -210,9 +215,10 @@ export async function handleWorkspaceCoverLetter(
 
     const snapshot = await withWorkspaceLock(async () => {
       await ensureJobWorkspace(locations.workspaceDir);
-      // Archive before overwriting so every save is recoverable from history.
-      await trashCoverLetterFile(targetName, locations);
-      await atomicWriteWorkspaceFile(join(coverLetterWorkspaceDir(locations), targetName), rawText);
+      // The current letter is archived into history once the replacement is staged.
+      await replaceWorkspaceFile(join(coverLetterWorkspaceDir(locations), targetName), rawText, () =>
+        trashCoverLetterFile(targetName, locations)
+      );
       return coverLetterSnapshot(locations);
     });
 
@@ -305,13 +311,14 @@ export async function handleCoverLetterCandidates(
       await ensureJobWorkspace(locations.workspaceDir);
       const read: { fileName: string; label: string; text: string }[] = [];
       for (const fileName of fileNames) {
-        // A missing or invalid letter is skipped, never fatal: the ranker's own
-        // completeness rule turns a short candidate list into no recommendation.
+        // A missing, unreadable, or invalid letter is skipped, never fatal: the
+        // ranker's own completeness rule turns a short candidate list into no
+        // recommendation. Anything but a file error still surfaces.
         try {
           const data = await readFile(join(coverLetterWorkspaceDir(locations), fileName));
           read.push({ fileName, label: coverLetterLabel(fileName), text: validateCoverLetterText(data) });
         } catch (error) {
-          if (isMissingFile(error) || error instanceof WorkspaceStorageError) continue;
+          if (error instanceof WorkspaceStorageError || typeof (error as NodeJS.ErrnoException)?.code === "string") continue;
           throw error;
         }
       }
@@ -357,8 +364,9 @@ export async function handleRestoreCoverLetter(
       // Validate the archived bytes before displacing the current good version.
       const data = await readFile(join(coverLetterWorkspaceDir(locations), ".trash", key));
       const text = validateCoverLetterText(data);
-      await trashCoverLetterFile(targetName, locations);
-      await atomicWriteWorkspaceFile(join(coverLetterWorkspaceDir(locations), targetName), data);
+      await replaceWorkspaceFile(join(coverLetterWorkspaceDir(locations), targetName), data, () =>
+        trashCoverLetterFile(targetName, locations)
+      );
       return { text, ...(await coverLetterSnapshot(locations)) };
     });
 

@@ -3,7 +3,7 @@
 
 import assert from "node:assert/strict";
 
-import { DOC_STYLE_DEFAULTS, FONT_FAMILY_OPTIONS } from "../documentStyle.ts";
+import { DOC_STYLE_DEFAULTS, FONT_FAMILY_OPTIONS, coerceDocStyle } from "../documentStyle.ts";
 import { buildStarterResume } from "../../sampleResume.ts";
 import {
   MAX_RESUME_FILE_BYTES,
@@ -199,6 +199,14 @@ expectError(mutated((file) => { file.style.contactDivider = "———"; }), "in
 // The 2-character divider ceiling is inclusive.
 const twoCharDivider = mutated((file) => { file.style.contactDivider = "•—"; });
 assert.equal(parseResumeFile(JSON.stringify(twoCharDivider)).documentStyle.contactDivider, "•—");
+// The lenient coercion keeps the codec's two-unit bound without ever cutting
+// inside a surrogate pair, so what it keeps always serializes.
+assert.equal(coerceDocStyle({ contactDivider: "a🙂" }).contactDivider, "a");
+assert.equal(coerceDocStyle({ contactDivider: "🙂x" }).contactDivider, "🙂");
+assert.equal(coerceDocStyle({ contactDivider: "🙂" }).contactDivider, "🙂");
+assert.equal(coerceDocStyle({ contactDivider: "\uD83Da" }).contactDivider, "a", "a lone surrogate in the input is dropped");
+assert.equal(coerceDocStyle({ contactDivider: "\uD83D" }).contactDivider, DOC_STYLE_DEFAULTS.contactDivider);
+assert.equal(parseResumeFile(JSON.stringify(mutated((file) => { file.style.contactDivider = "🙂"; }))).documentStyle.contactDivider, "🙂");
 
 // ----- binary inputs: Uint8Array, ArrayBuffer, File, and non-UTF-8 bytes -----
 

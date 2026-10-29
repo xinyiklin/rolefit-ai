@@ -534,8 +534,16 @@ export function ApplicationModal({
       jobType: form.jobType.trim(),
       workAuth: form.workAuth.trim(),
       jobUrl: form.jobUrl.trim(),
+      // Only a first submission (from Draft or a job-only Skip) is dated now; a
+      // migrated submitted record without a date never gets one invented.
+      // A job never submitted carries no application date into Skipped either,
+      // whatever the hidden date field holds; a submitted record keeps one.
       appliedAt:
-        statusOverride === "draft" ? undefined : toIso(form.appliedAt) || base.appliedAt || (statusOverride !== "not_applying" ? now : undefined),
+        statusOverride === "draft"
+          || (statusOverride === "not_applying" && !base.appliedAt && (base.status === "draft" || base.status === "not_applying"))
+          ? undefined
+          : toIso(form.appliedAt) || base.appliedAt
+            || (statusOverride !== "not_applying" && (base.status === "draft" || base.status === "not_applying") ? now : undefined),
       notApplyingAt:
         statusOverride === "not_applying"
           ? toIso(form.notApplyingAt) || base.notApplyingAt || now

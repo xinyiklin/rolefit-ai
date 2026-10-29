@@ -5,6 +5,7 @@ import { request as httpsRequest } from "node:https";
 import { lookup as dnsLookup } from "node:dns/promises";
 import type { LookupAddress } from "node:dns";
 import type { Readable } from "node:stream";
+import { TextDecoder } from "node:util";
 import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
 import { FetchTimeoutError } from "./http.ts";
 
@@ -204,6 +205,20 @@ export function isPublicHttpUrl(url: URL): boolean {
 
 const MAX_FETCH_BYTES = 5_000_000;
 
+// Decode by the declared charset — a windows-1252 careers page otherwise reads
+// every accented letter as U+FFFD — and drop a byte-order mark, which would
+// make a vendor's JSON response unparseable. An unknown label reads as UTF-8.
+function decodeBody(bytes: Buffer, contentType: string | undefined): string {
+  const label = /charset=["']?([A-Za-z0-9._:-]+)/i.exec(contentType ?? "")?.[1] ?? "utf-8";
+  let decoder: TextDecoder;
+  try {
+    decoder = new TextDecoder(label);
+  } catch {
+    decoder = new TextDecoder("utf-8");
+  }
+  return decoder.decode(bytes);
+}
+
 function decompressResponse(res: IncomingMessage): Readable {
   const encoding = String(res.headers["content-encoding"] || "").toLowerCase();
   if (encoding === "gzip") return res.pipe(createGunzip());
@@ -261,6 +276,18 @@ function pinnedFetch(
         const stream = decompressResponse(res);
         const chunks: Buffer[] = [];
         let total = 0;
+        let rawBytes = 0;
+        if (stream !== res) res.on("data", (chunk: Buffer) => { rawBytes += chunk.length; });
+        const respond = (bytes: Buffer): void => {
+          const status = res.statusCode ?? 0;
+          const body = decodeBody(bytes, res.headers["content-type"]);
+          finish(resolve, {
+            status,
+            ok: status >= 200 && status < 300,
+            headers: { get: (name: string): string | null => (res.headers[String(name).toLowerCase()] as string | undefined) ?? null },
+            text: async () => body
+          });
+        };
         stream.on("data", (chunk: Buffer) => {
           if (settled) return;
           total += chunk.length;
@@ -271,17 +298,14 @@ function pinnedFetch(
           }
           chunks.push(chunk);
         });
-        stream.on("end", () => {
-          const body = Buffer.concat(chunks).toString("utf8");
-          const status = res.statusCode ?? 0;
-          finish(resolve, {
-            status,
-            ok: status >= 200 && status < 300,
-            headers: { get: (name: string): string | null => (res.headers[String(name).toLowerCase()] as string | undefined) ?? null },
-            text: async () => body
-          });
-        });
+        stream.on("end", () => respond(Buffer.concat(chunks)));
         stream.on("error", (error: Error) => {
+          // A compression header over no bytes at all (how some CDNs answer a
+          // redirect) is an empty body, not a broken stream.
+          if (rawBytes === 0 && stream !== res) {
+            respond(Buffer.alloc(0));
+            return;
+          }
           req.destroy();
           finish(reject, error);
         });

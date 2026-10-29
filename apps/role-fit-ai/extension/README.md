@@ -171,9 +171,10 @@ the keyboard command is an ES module. Chrome and Edge need 123+
    accepts that option, with a normal fresh-tab fallback elsewhere.
 
 Each preparation handoff is its own independent RoleFit tab. The claim token
-keeps the new posting out of older visible tabs while still allowing a
-no-strand fallback if the new tab never opens or closes before draining the
-import inbox entry.
+keeps the new posting out of older visible tabs: only the tab opened with that
+token can claim the entry. If that tab fails to open, the popup's Try again
+reopens the same hand-off; an entry no tab ever claims expires after ten
+minutes.
 
 Duplicate detection is a workflow gate, not a score. A warning found before or
 after Job analysis asks the user to continue the current pipeline or stop; stopping

@@ -20,6 +20,7 @@ import {
   isRoleFitConnectionServerState,
   isRoleFitExtensionSetupCopyTarget,
   isRoleFitProviderId,
+  isFetchBlockedPort,
   isRoleFitWorkspaceBackupFileName,
   normalizeRoleFitExtensionOrigin,
   normalizeRoleFitDesktopPlatform
@@ -168,6 +169,23 @@ assert.equal(isRoleFitWorkspaceBackupFileName("C:drive.rolefit-backup"), false);
 assert.equal(isRoleFitWorkspaceBackupFileName(".hidden.rolefit-backup"), false);
 assert.equal(isRoleFitWorkspaceBackupFileName("plain.json"), false);
 assert.equal(isRoleFitWorkspaceBackupFileName(`${"n".repeat(300)}.rolefit-backup`), false);
+// A user-chosen name may start with any character that is not a dot or a separator.
+assert.equal(isRoleFitWorkspaceBackupFileName("Été 2026.rolefit-backup"), true);
+assert.equal(isRoleFitWorkspaceBackupFileName("_old.rolefit-backup"), true);
+assert.equal(isRoleFitWorkspaceBackupFileName("(1).rolefit-backup"), true);
+assert.equal(isFetchBlockedPort(6_000), true);
+assert.equal(isFetchBlockedPort(10_080), true);
+assert.equal(isFetchBlockedPort(5_181), false);
+assert.equal(isFetchBlockedPort(6_001), false);
+// The extension keeps its own copy of the list (it shares no module with the
+// companion); the two must refuse exactly the same ports.
+{
+  const extensionSettings = await readFile(new URL("../../extension/settings.js", import.meta.url), "utf8");
+  const listed = extensionSettings.match(/FETCH_BLOCKED_PORTS = new Set\(\[([\s\S]*?)\]\)/)?.[1] ?? "";
+  const extensionPorts = new Set(listed.split(",").map((port) => Number(port.trim())).filter(Number.isInteger));
+  const companionPorts = new Set(Array.from({ length: 65_535 }, (_, index) => index + 1).filter(isFetchBlockedPort));
+  assert.deepEqual([...extensionPorts].sort((a, b) => a - b), [...companionPorts].sort((a, b) => a - b), "extension and companion refuse the same ports");
+}
 assert.equal(normalizeRoleFitDesktopPlatform("darwin"), "darwin");
 assert.equal(normalizeRoleFitDesktopPlatform("freebsd"), "other");
 assert.equal(isRoleFitCliProviderId("claude-cli"), true);
@@ -972,6 +990,15 @@ siteSettingsFailure = Object.assign(new Error("private port-probe detail"), {
 await assert.rejects(
   installedHandlers.get(channels.applyPort)(requestEvent(), 5_193),
   /already in use/
+);
+// A refused port names its reason: the blocked-port message is RoleFit's own
+// text, never a probe diagnostic.
+siteSettingsFailure = Object.assign(new Error("Port 6000 is one browsers refuse to connect to. Choose another port."), {
+  code: "ROLEFIT_DESKTOP_PORT_BLOCKED"
+});
+await assert.rejects(
+  installedHandlers.get(channels.applyPort)(requestEvent(), 6_000),
+  /Port 6000 is one browsers refuse/
 );
 siteSettingsFailure = Object.assign(new Error("private environment detail"), {
   code: "ROLEFIT_DESKTOP_SETTINGS_LOCKED"

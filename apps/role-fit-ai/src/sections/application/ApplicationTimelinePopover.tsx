@@ -108,9 +108,11 @@ export function ApplicationTimelinePopover({
   const [heldHistory, setHeldHistory] = useState<StageHistoryEntry[] | null>(null);
   const listed = heldHistory ?? stageHistory;
   // The open draft shows in place of its saved entry, or after them when new.
+  // A new entry reaches the saved list while its save is still settling, so
+  // it is shown once, as the draft, until the draft closes.
   const shown = draft
     ? draft.isNew
-      ? [...listed, draft.entry]
+      ? [...listed.filter((entry) => entry.id !== draft.entry.id), draft.entry]
       : listed.map((entry) => (entry.id === draft.entry.id ? draft.entry : entry))
     : listed;
   const pendingEntry: StageHistoryEntry | null = pendingStage && pendingStage !== "draft"
@@ -308,7 +310,8 @@ export function ApplicationTimelinePopover({
                       className="text-input is-data"
                       type="date"
                       aria-label="Date"
-                      max="9999-12-31"
+                      min={toDateInput(appliedAt)}
+                      max={draft.entry.type === "stage" ? toDateInput(todayIso()) : "9999-12-31"}
                       value={toDateInput(draft.entry.at)}
                       autoFocus={draft.entry.type !== "interview"}
                       disabled={busy}

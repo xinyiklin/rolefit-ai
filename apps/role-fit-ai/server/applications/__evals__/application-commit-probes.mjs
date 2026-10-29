@@ -167,6 +167,11 @@ try {
     assert.equal(res.json.application.appliedAt, undefined);
     assert.ok(res.json.application.notApplyingAt);
     assert.deepEqual(res.json.application.notApplyingReasons, ["location"]);
+    // A same-stage request carrying documents for a record with no saved
+    // resume is refused rather than silently dropped.
+    const sameStage = await changeStatus(res.json.application.id, { status: "not_applying", documents: resumeOnly });
+    assert.equal(sameStage.status, 400, sameStage.chunk);
+    assert.match(sameStage.json.error, /^documents: this record is already not_applying and has no saved resume/);
   }
   {
     const res = await commit({ application: { ...application, jobUrl: "https://example.test/jobs/4", status: "not_applying", notApplyingReasons: ["fit", "location"], resumeUsed: undefined } });
@@ -293,6 +298,11 @@ try {
     const retried = await changeStatus(saved.id, { status: "applied", documents: resumeOnly });
     assert.equal(retried.json.changed, false, "a retried submission changes nothing");
     assert.match((await changeStatus(saved.id, { status: "interviewing", documents: resumeOnly })).json.error, /^documents: only a first submission/);
+    // A same-stage request is still checked: a date outside the range and
+    // documents for a record that holds no resume are refused, not ignored.
+    const badDate = await changeStatus(saved.id, { status: "applied", date: "1999-01-01" });
+    assert.equal(badDate.status, 400, badDate.chunk);
+    assert.match(badDate.json.error, /^date: must fall between/);
   }
 
   // A failed tracker write removes the document folder it created.

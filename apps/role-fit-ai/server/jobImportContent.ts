@@ -17,19 +17,36 @@ function fromCharRef(code: number): string {
   }
 }
 
+// The named references postings carry (symbols, punctuation, Latin-1 letters).
+// A name outside this table stays as written rather than becoming a space.
+const NAMED_ENTITIES: Record<string, string> = {
+  nbsp: " ", ensp: " ", emsp: " ", thinsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', apos: "'",
+  // Typographic quotes read as the ASCII quotes they always did here.
+  ldquo: '"', rdquo: '"', lsquo: "'", rsquo: "'", sbquo: "'", bdquo: '"',
+  laquo: "«", raquo: "»", mdash: "—", ndash: "–", hellip: "…", bull: "•", middot: "·",
+  euro: "€", pound: "£", yen: "¥", cent: "¢", copy: "©", reg: "®", trade: "™", deg: "°", plusmn: "±",
+  times: "×", divide: "÷", frac12: "½", frac14: "¼", frac34: "¾", sup2: "²", sup3: "³", micro: "µ",
+  sect: "§", para: "¶",
+  agrave: "à", aacute: "á", acirc: "â", atilde: "ã", auml: "ä", aring: "å", aelig: "æ", ccedil: "ç",
+  egrave: "è", eacute: "é", ecirc: "ê", euml: "ë", igrave: "ì", iacute: "í", icirc: "î", iuml: "ï",
+  ntilde: "ñ", ograve: "ò", oacute: "ó", ocirc: "ô", otilde: "õ", ouml: "ö", oslash: "ø",
+  ugrave: "ù", uacute: "ú", ucirc: "û", uuml: "ü", yacute: "ý", yuml: "ÿ", szlig: "ß",
+  Agrave: "À", Aacute: "Á", Acirc: "Â", Atilde: "Ã", Auml: "Ä", Aring: "Å", AElig: "Æ", Ccedil: "Ç",
+  Egrave: "È", Eacute: "É", Ecirc: "Ê", Euml: "Ë", Igrave: "Ì", Iacute: "Í", Icirc: "Î", Iuml: "Ï",
+  Ntilde: "Ñ", Ograve: "Ò", Oacute: "Ó", Ocirc: "Ô", Otilde: "Õ", Ouml: "Ö", Oslash: "Ø",
+  Ugrave: "Ù", Uacute: "Ú", Ucirc: "Û", Uuml: "Ü", Yacute: "Ý"
+};
+
+// One pass, so an already-escaped "&amp;lt;" reads as the literal "&lt;" the
+// page showed instead of being decoded twice into "<".
 export function decodeEntities(text: string): string {
-  return text
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;|&ldquo;|&rdquo;/gi, '"')
-    .replace(/&#39;|&rsquo;|&lsquo;|&apos;/gi, "'")
-    .replace(/&mdash;/gi, "—")
-    .replace(/&ndash;/gi, "–")
-    .replace(/&#(\d+);/g, (_, n) => fromCharRef(Number(n)))
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => fromCharRef(parseInt(n, 16)))
-    .replace(/&[a-z]+;/gi, " ");
+  return text.replace(/&(?:#[xX]([0-9a-fA-F]{1,6})|#(\d{1,7})|([A-Za-z][A-Za-z0-9]{1,31}));/g, (match, hex, decimal, name) => {
+    if (hex !== undefined) return fromCharRef(parseInt(hex, 16));
+    if (decimal !== undefined) return fromCharRef(Number(decimal));
+    // Own keys only: "&constructor;" must not read Object.prototype.
+    const key = Object.hasOwn(NAMED_ENTITIES, name) ? name : name.toLowerCase();
+    return Object.hasOwn(NAMED_ENTITIES, key) ? NAMED_ENTITIES[key] : match;
+  });
 }
 
 // --- Linear HTML scanning ----------------------------------------------------
@@ -98,10 +115,12 @@ function classMatches(tag: string, pattern: RegExp): boolean {
 export function htmlToText(html: unknown): string {
   let markup = replaceSpans(String(html || ""), /<script/gi, /<\/script>/gi, " ");
   markup = replaceSpans(markup, /<style/gi, /<\/style>/gi, " ");
-  markup = replaceSpans(markup, /<li/gi, />/g, "\n• ")
+  markup = replaceSpans(markup, /<li\b/gi, />/g, "\n• ")
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/(p|div|li|h[1-6]|ul|ol|tr|section|header|footer|article)>/gi, "\n");
-  return decodeEntities(replaceSpans(markup, /<(?=[^>])/g, />/g, " "))
+  // As the HTML tokenizer reads it, "<" opens a tag only before a name, "/",
+  // "!" or "?"; "<10 engineers" or "a < b" in prose is text.
+  return decodeEntities(replaceSpans(markup, /<(?=[A-Za-z/!?])/g, />/g, " "))
     .replace(/[ \t]+/g, " ")
     .split("\n")
     .map((line) => line.trim())

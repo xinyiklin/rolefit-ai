@@ -90,6 +90,17 @@ check(
   false
 );
 check("normalizeJobUrl passes invalid urls through", normalizeJobUrl("not a url"), "not a url");
+check(
+  "normalizeJobUrl encodes the query the same way with or without a tracking param",
+  normalizeJobUrl("https://careers.acme.com/job?id=7&loc=New%20York&utm_source=linkedin"),
+  normalizeJobUrl("https://careers.acme.com/job?id=7&loc=New%20York")
+);
+check(
+  "normalizeJobUrl keeps hash routes distinct",
+  normalizeJobUrl("https://careers.acme.com/#/job/123") === normalizeJobUrl("https://careers.acme.com/#/job/456"),
+  false
+);
+check("normalizeJobUrl drops an in-page anchor", normalizeJobUrl("https://acme.com/jobs/1#apply"), "https://acme.com/jobs/1");
 
 // ── ATS posting keys ─────────────────────────────────────────────────────────
 check(
@@ -123,6 +134,16 @@ check(
   "workday:nvidia:JR-90210"
 );
 check(
+  "workday apply url → same req key",
+  atsPostingKey("https://nvidia.wd5.myworkdayjobs.com/en-US/External/job/US-CA-Santa-Clara/Software-Engineer_JR-90210/apply")?.key,
+  "workday:nvidia:JR-90210"
+);
+check(
+  "linkedin guest slug url → same id",
+  atsPostingKey("https://www.linkedin.com/jobs/view/senior-engineer-at-acme-3987654321")?.key,
+  "linkedin:3987654321"
+);
+check(
   "linkedin view url and currentJobId param agree",
   atsPostingKey("https://www.linkedin.com/jobs/view/3987654321/?refId=abc")?.key ===
     atsPostingKey("https://www.linkedin.com/jobs/collections/recommended/?currentJobId=3987654321")?.key,
@@ -154,6 +175,28 @@ check("locations: unknown compatible", locationsCompatible("", "New York, NY"), 
 check("locations: remote compatible", locationsCompatible("Remote (US)", "Austin, TX"), true);
 check("locations: shared token compatible", locationsCompatible("New York, NY", "New York"), true);
 check("locations: different cities contradict", locationsCompatible("Austin, TX", "Seattle, WA"), false);
+check("company accents fold", normalizeCompanyName("Nestlé"), normalizeCompanyName("Nestle"));
+check("company non-Latin names stay distinct", normalizeCompanyName("株式会社メルカリ") === normalizeCompanyName("Яндекс"), false);
+check("company Devanagari vowel signs stay in the word", normalizeCompanyName("बिल").includes(" "), false);
+check("company Devanagari vowel signs distinguish names", normalizeCompanyName("बिल") === normalizeCompanyName("बुल"), false);
+check("company kana voicing marks distinguish names", normalizeCompanyName("ガ") === normalizeCompanyName("カ"), false);
+check("linkedin slug without a full-length id → no key", atsPostingKey("https://www.linkedin.com/jobs/view/engineer-team-123456"), null);
+check(
+  "workday site name never becomes a posting key",
+  atsPostingKey("https://acme.wd5.myworkdayjobs.com/en-US/Intern_2025/job/Boston/Senior-Engineer"),
+  null
+);
+check("locations: a country alone is unknown, not a contradiction", locationsCompatible("United States", "Seattle, WA, United States"), true);
+check("locations: a country alone is unknown either way", locationsCompatible("Bangalore, India", "India"), true);
+check("title accents fold", normalizeRoleTitle("Développeur Senior"), "developpeur senior");
+check(
+  "locations: a shared country word is not a shared place",
+  locationsCompatible("Seattle, WA, United States", "New York, NY, United States"),
+  false
+);
+check("locations: a shared compound prefix is not a shared place", locationsCompatible("San Francisco, CA", "San Diego, CA"), false);
+check("locations: same city with a country suffix compatible", locationsCompatible("New York, NY", "New York, United States"), true);
+check("locations: accents fold", locationsCompatible("Zürich, CH", "Zurich, Switzerland"), true);
 
 // ── Fingerprints ─────────────────────────────────────────────────────────────
 check("identical text similarity 1", jdSimilarity(jdFingerprint(JD_BODY), jdFingerprint(JD_BODY)), 1);
@@ -380,6 +423,13 @@ const baseApp = {
     [{ ...baseApp, jobUrl: "", location: "New York, NY" }]
   );
   check("no-id identical descriptions in different locations → no warning", matches.length, 0);
+}
+{
+  const matches = findDuplicateApplications(
+    { jobUrl: "", jobText: JD_BODY, company: "Acme", role: "Software Engineer II", location: "Seattle, WA, United States" },
+    [{ ...baseApp, jobUrl: "", location: "New York, NY, United States" }]
+  );
+  check("no-id identical descriptions in different cities of one country → no warning", matches.length, 0);
 }
 
 // Unknown company on the board side with an explicit different posting id does

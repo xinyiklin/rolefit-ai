@@ -320,9 +320,12 @@ const TECH_KEYWORDS: Array<[string, RegExp]> = [
   // separate JavaScript requirement.
   ["JavaScript", /\bjavascript\b|(?:^|[^a-z0-9.])js\b/i],
   ["TypeScript", /\btypescript\b/i],
-  ["React", /\breact(?:\.js|js)?\b/i],
+  // "react", "node", "rails" and "elastic" are also prose ("react quickly",
+  // "node pools", "guard rails", "Elastic Beanstalk"): like bare Go, they
+  // count only as a known spelling, an experience phrase, or a list item.
+  ["React", /\breact(?:\.js|js)\b|\breact\s+(?:native|hooks|components?|router|query)\b|(?:\b(?:experience with|proficien(?:t|cy) in|knowledge of|using|with|in|building|build(?:ing)? with)\s+)react(?=\s*(?:[,.;)/]|$|\band\b|\bor\b))|(?:^|[,(;/]\s*)react(?=\s*(?:[,.;)/]|$|\band\b|\bor\b))/i],
   ["Next.js", /\bnext(?:\.js|js)\b/i],
-  ["Node.js", /\bnode(?:\.js|js)?\b/i],
+  ["Node.js", /\bnode(?:\.js|js)\b|\bnode\s+(?:runtime|backend|services?|apis?|modules?)\b|(?:\b(?:experience with|proficien(?:t|cy) in|knowledge of|using|with|in|building|build(?:ing)? with)\s+)node(?=\s*(?:[,.;)/]|$|\band\b|\bor\b))|(?:^|[,(;/]\s*)node(?=\s*(?:[,.;)/]|$|\band\b|\bor\b))/i],
   ["Python", /\bpython\b/i],
   ["Java", /\bjava\b/i],
   ["C++", /\bc\+\+|\bcpp\b/i],  // Fix(JD-test): dropped trailing \b — it never matched "C++," before punctuation
@@ -342,7 +345,7 @@ const TECH_KEYWORDS: Array<[string, RegExp]> = [
   ["Flask", /\bflask\b/i],            // Fix #14
   ["FastAPI", /\bfastapi\b/i],         // Fix #14
   ["Vue", /\bvue(?:\.js|js)?\b/i],     // Fix #14
-  ["Elasticsearch", /\belastic(?:search)?\b/i],  // Fix #14
+  ["Elasticsearch", /\belasticsearch\b|\belastic\s+(?:stack|cloud)\b|(?:\b(?:experience with|proficien(?:t|cy) in|knowledge of|using|with|in)\s+)elastic(?=\s*(?:[,.;)/]|$|\band\b|\bor\b))|(?:^|[,(;/]\s*)elastic(?=\s*(?:[,.;)/]|$|\band\b|\bor\b))/i],
   ["Express.js", /\bexpress\.?js\b/i], // Fix #14: require .js suffix to avoid prose "express"
   ["HTML", /\bhtml\b/i],               // Fix #14
   ["CSS", /\bcss\b/i],                 // Fix #14
@@ -385,7 +388,7 @@ const TECH_KEYWORDS: Array<[string, RegExp]> = [
   ["Spring", /\bspring\s?(?:boot|framework|mvc|cloud|security|data)\b/i],
   ["Django", /\bdjango\b/i],
   ["Angular", /\bangular\b/i],
-  ["Rails", /\bruby on rails\b|\brails\b/i],
+  ["Rails", /\bruby on rails\b|\brails\s+(?:app(?:lication)?s?|apis?|developer|engineer|framework)\b|(?:\b(?:experience with|proficien(?:t|cy) in|knowledge of|using|with|in|building|build(?:ing)? with)\s+)rails(?=\s*(?:[,.;)/]|$|\band\b|\bor\b))|(?:^|[,(;/]\s*)rails(?=\s*(?:[,.;)/]|$|\band\b|\bor\b))/i],
   ["Kafka", /\bkafka\b/i],
   ["Spark", /\bapache spark\b|\bpyspark\b|\bspark\s+(?:streaming|sql)\b/i],  // Fix(JD-test): explicit forms only — bare "spark" is a common verb ("spark ideas")
   ["Terraform", /\bterraform\b/i],
@@ -509,6 +512,9 @@ function isStructureHeading(line: string): boolean {
 
 function matchesHeading(line: string, headings: RegExp[]): boolean {
   const t = headingCore(line);
+  // A sentence ("Bonus programs administration for the sales team.") is an
+  // item, not a heading, however it starts.
+  if (/[.!]$/.test(t)) return false;
   return t.length > 1 && t.length <= 100 && headings.some((re) => re.test(t));
 }
 
@@ -661,7 +667,10 @@ function isPreferredItemStrict(item: string): boolean {
   const checkWindow = firstSentenceEnd > 0
     ? item.slice(0, firstSentenceEnd + 1)
     : item;
-  return /\b(preferred|nice[- ]to[- ]have|bonus|plus)\b/i.test(checkWindow);
+  // "plus" demotes only as the idiom ("is a plus", "a big plus", "plus:"),
+  // never as the conjunction in "a degree plus 3 years"; "bonus" never as the
+  // pay program.
+  return /\b(preferred|nice[- ]to[- ]have)\b|\bbonus\b(?!\s+(?:program|plan|pay|structure|eligib|scheme|compensation))|\b(?:an?|big|huge|strong|definite|major|real|added|significant)\s+plus\b|\bplus\s*[:!]|\bplus\.?\s*$/i.test(checkWindow);
 }
 
 function isListLikeContent(line: string): boolean {
@@ -884,7 +893,9 @@ function valueForLabel(lines: string[], labels: string[]): string {
     const line = lines[i].trim();
     for (const label of labels) {
       const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const sameLine = line.match(new RegExp(`^${escaped}\\s*(?:[:|]|-)\\s*(.+)$`, "i"));
+      // A dash separates only with a space beside it: "Employer-paid ..." is a
+      // hyphenated word, not the Employer label.
+      const sameLine = line.match(new RegExp(`^${escaped}\\s*(?:[:|]\\s*|\\s-\\s*|-\\s+)(.+)$`, "i"));
       if (sameLine?.[1]?.trim()) return sameLine[1].trim();
 
       if (new RegExp(`^${escaped}\\s*:?$`, "i").test(line)) {

@@ -73,14 +73,16 @@ export function withStatusChange<T extends StatusFacts>(
   updatedAt: string,
   at?: string
 ): T {
+  // Only a first submission (from Draft or a job-only Skip) is dated now; a
+  // migrated submitted record without a date never gets one invented.
+  const submitting = status !== "draft" && status !== "not_applying"
+    && (application.status === "draft" || (application.status === "not_applying" && !application.appliedAt));
   return {
     ...application,
     status,
     updatedAt,
     stageHistory: withStageChange(application, status, application.stageHistory, at),
-    appliedAt: status === "draft"
-      ? undefined
-      : status !== "not_applying" && !application.appliedAt ? updatedAt : application.appliedAt,
+    appliedAt: status === "draft" ? undefined : submitting ? updatedAt : application.appliedAt,
     notApplyingAt: status === "not_applying" ? updatedAt : undefined,
     notApplyingReasons: status === "not_applying" ? application.notApplyingReasons : undefined,
     notApplyingNote: status === "not_applying" ? application.notApplyingNote : undefined
@@ -152,8 +154,11 @@ export function deriveTimeline(
     anchors.push({ key: "skipped", kind: "skipped", at: application.notApplyingAt });
   }
 
+  // Entries are day-granular (a date input is stored at local noon) while the
+  // Applied anchor keeps its exact instant, so same-day rows order by the day
+  // and then by the order they were recorded, never by the time within it.
   const byDate = (left: { at: string; order: number }, right: { at: string; order: number }) =>
-    Date.parse(left.at) - Date.parse(right.at) || left.order - right.order;
+    localDay(new Date(left.at)) - localDay(new Date(right.at)) || left.order - right.order;
   const interviewRounds = new Map(
     entries
       .map((entry, order) => ({ entry, at: entry.at, order }))

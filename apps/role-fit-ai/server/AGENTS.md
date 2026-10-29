@@ -28,7 +28,10 @@ for provider, prompt, sanitizer, and review work.
   cover-letter storage separate from strict `.resume` storage and starter
   fallbacks. Workspace open, save, selection, and history restore accept only
   `.resume`; legacy text artifacts may remain recoverable on disk/backups but
-  never become editor documents.
+  never become editor documents. A save or restore stages the replacement
+  beside its target before the live file is archived into `.trash`, and puts
+  the archived file back if the install fails (`replaceWorkspaceFile`), so a
+  disk failure never leaves the live version only in history.
   Each kind exposes a bounded `/candidates` batch read beside its `/select`
   route: ranking saved variants needs several documents at once, and `/select`
   answers with a whole workspace snapshot under the workspace lock, so per-file
@@ -53,7 +56,11 @@ for provider, prompt, sanitizer, and review work.
   `statusService.ts` the server-side stage change, which shares the row menu's
   `stageMenuMoveAllowed` and `withStatusChange` and saves a first submission's
   documents (validated by the commit's `commitDocuments`, resume required)
-  with the stage, restoring the files if the tracker write fails (D101);
+  with the stage, restoring the files if the tracker write fails (D101). A
+  same-stage request changes nothing (the safe retry after a lost reply) but
+  still validates its date and refuses documents on a record with no saved
+  resume, and a stage move never invents `appliedAt`: only a first submission
+  from Draft or a job-only Skip is dated when written;
   `answerService.ts` owns
   answer stamping for both the commit and the later-answers append, and
   `eventService.ts` logs timeline entries through the Log buttons'
@@ -78,7 +85,8 @@ for provider, prompt, sanitizer, and review work.
   strictly and refuses the whole record on any bad entry; Drafts and job-only
   Skipped records carry none. `reconcile.ts` refuses a stage change on a record
   with `appliedAt` unless the upsert adds a new stage entry naming the new
-  stage, so every write path keeps history honest.
+  stage, and refuses an upsert that drops a submitted record's `appliedAt`
+  (which would disarm that guard), so every write path keeps history honest.
   Draft has no `appliedAt` and remains outside submitted metrics. Explicit answer
   saves create or update one revision-checked Draft; Apply/Skip promote that same
   ID. Enriched Q+A revisions use `shared/applicationAnswerStorage.ts` across

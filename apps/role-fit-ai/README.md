@@ -422,7 +422,9 @@ The browser remains the only RoleFit product UI. Electron starts or compatibly
 reuses the same numeric-loopback server, renders only a compact local `file:`
 setup window, and opens the selected local site in the system browser. The
 default is `http://localhost:5181`; **Local site port** accepts an available
-integer from 1 through 65535 and applies it through a clean companion restart.
+integer from 1 through 65535, except the ports browsers refuse to connect to
+(the Fetch standard's bad ports, such as 6000 or 10080), and applies it
+through a clean companion restart.
 `ROLEFIT_DESKTOP_PORT` is a locked per-launch override. Its typed
 preload exposes fixed write-only API-key setup, provider removal/status,
 external-terminal sign-in, install/sign-in-guide, and browser-open methods for

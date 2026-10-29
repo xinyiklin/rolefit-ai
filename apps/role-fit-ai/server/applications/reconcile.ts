@@ -116,6 +116,20 @@ export function reconcileApplicationMutations(
         400
       );
     }
+    // A submission date is a fact: it can be corrected, never dropped, which
+    // would also disarm the history guard below.
+    if (
+      mutation.operation === "upsert" &&
+      current?.appliedAt &&
+      requested &&
+      !requested.appliedAt &&
+      requested.status !== "draft"
+    ) {
+      throw new ApplicationsStorageError(
+        "An application's submission date cannot be removed. No tracker changes were saved.",
+        400
+      );
+    }
     // History starts at submission: every later stage change, from any write
     // path, must add a stage entry naming the new stage.
     if (

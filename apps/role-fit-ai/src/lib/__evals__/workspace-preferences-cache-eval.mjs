@@ -69,4 +69,19 @@ assert.deepEqual(loadSettings(), {
 }, "the browser cache path migrates legacy experience rows into the Background");
 delete globalThis.localStorage;
 
+// A cache write that fails (storage full) must not leave the previous value to
+// be read back as current: loadSettings then answers from memory.
+{
+  const fullCache = new Map([["rolefit:settings", JSON.stringify({ profileBackground: "Stale cached background." })]]);
+  globalThis.localStorage = {
+    getItem: (key) => fullCache.get(key) ?? null,
+    setItem: () => { throw new Error("QuotaExceededError"); },
+    removeItem: (key) => fullCache.delete(key)
+  };
+  saveSettings({ profileBackground: "Fresh background." });
+  assert.equal(loadSettings().profileBackground, "Fresh background.", "a failed cache write never resurfaces the stale cache");
+  assert.equal(fullCache.has("rolefit:settings"), false, "the stale cache entry is cleared");
+  delete globalThis.localStorage;
+}
+
 console.log("workspace preference cache probes passed");

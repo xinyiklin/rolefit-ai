@@ -5,7 +5,7 @@ import {
   greenhouseJobAppUrl,
   workdayCxsUrl
 } from "../jobImport.ts";
-import { ashbyPostingText } from "../jobImportContent.ts";
+import { ashbyPostingText, htmlToText } from "../jobImportContent.ts";
 import { fenceUntrusted } from "../ai/prompts.ts";
 
 const handshakeAshbyUrl = new URL(
@@ -140,6 +140,29 @@ assert(/said "hello"/.test(entities), "named &quot; decodes");
 assert(/—/.test(entities), "named &mdash; decodes");
 assert(/decimal ABC/.test(entities), "decimal &#65;&#66;&#67; decodes to ABC");
 assert(/hex SDE/.test(entities), "hex &#x53;&#x44;&#x45; decodes to SDE");
+
+// References decode exactly once and keep what the page wrote: common symbols
+// and accented letters survive, an escaped "&amp;lt;" stays the literal
+// "&lt;", an uppercase hex marker decodes, and an unknown name is left alone.
+assert.equal(
+  htmlToText("Salary &euro;80k &bull; caf&eacute; &hellip; R&amp;D &amp;lt;b&amp;gt; &#X41; &frac12; &zzzz; here"),
+  "Salary €80k • café … R&D &lt;b&gt; A ½ &zzzz; here",
+  "named, hex, and already-escaped references decode exactly once"
+);
+assert.equal(
+  htmlToText("&constructor; &toString; &__proto__; &hasOwnProperty;"),
+  "&constructor; &toString; &__proto__; &hasOwnProperty;",
+  "a reference named like an Object.prototype member is not an entity"
+);
+// A "<" that starts no tag is prose, as the HTML tokenizer reads it, through
+// the production plain-text path too.
+const comparisons = ashbyDescription("Teams of <10 engineers, <5% travel, 3 -> 4 services, a < b. " + PAD);
+assert(/Teams of <10 engineers, <5% travel, 3 -> 4 services, a < b\./.test(comparisons), "comparison signs survive the tag stripper");
+assert.equal(
+  htmlToText("<html><head><link rel=x href=y><link rel=a href=b></head><body><p>Hello world</p></body></html>"),
+  "Hello world",
+  "<link> and other li-prefixed tags are not list items"
+);
 
 // nested + unclosed tags collapse to text with paragraph/bullet structure kept.
 const nested = ashbyDescription(

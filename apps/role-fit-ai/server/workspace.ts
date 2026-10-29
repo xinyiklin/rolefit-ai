@@ -104,13 +104,48 @@ export function validateBaseResumeText(fileName: string, data: Buffer): string {
   return text;
 }
 
-export async function atomicWriteWorkspaceFile(filePath: string, data: string | Buffer): Promise<void> {
+// Write `data` beside `filePath` and return the steps that install or drop it.
+async function stageWorkspaceFile(
+  filePath: string,
+  data: string | Buffer
+): Promise<{ commit: () => Promise<void>; discard: () => Promise<void> }> {
   const temporaryPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  await writeFile(temporaryPath, data, { mode: 0o600 });
+  return {
+    commit: () => rename(temporaryPath, filePath),
+    discard: () => rm(temporaryPath, { force: true }).catch(() => undefined)
+  };
+}
+
+export async function atomicWriteWorkspaceFile(filePath: string, data: string | Buffer): Promise<void> {
+  const staged = await stageWorkspaceFile(filePath, data);
   try {
-    await writeFile(temporaryPath, data, { mode: 0o600 });
-    await rename(temporaryPath, filePath);
+    await staged.commit();
   } finally {
-    await rm(temporaryPath, { force: true }).catch(() => undefined);
+    await staged.discard();
+  }
+}
+
+// Moves the live file aside and returns how to put it back, or null when
+// there was none.
+export type ArchiveStep = () => Promise<(() => Promise<void>) | null>;
+
+// Replace `filePath` with `data`: the bytes are staged first, the live file is
+// archived only then, and a failure after the archive puts the live file
+// back. A save that fails on disk space or a locked file therefore never
+// leaves the live version only in .trash.
+export async function replaceWorkspaceFile(filePath: string, data: string | Buffer, archive: ArchiveStep): Promise<void> {
+  const staged = await stageWorkspaceFile(filePath, data);
+  let restore: (() => Promise<void>) | null = null;
+  try {
+    restore = await archive();
+    await staged.commit();
+  } catch (error) {
+    await staged.discard();
+    // The original failure is answered; a put-back that also fails leaves the
+    // live version only in history, which must at least be visible in the log.
+    if (restore) await restore().catch(() => console.error("[workspace] the live file could not be put back from .trash after a failed write"));
+    throw error;
   }
 }
 
@@ -250,31 +285,45 @@ async function readBaseResumeOptions(locations: WorkspaceLocations): Promise<{ f
 // known default format into the active workspace's .trash/ directory with a
 // timestamp so a removed or replaced base resume is always recoverable. Named
 // variants such as fullstack.resume stay in place.
-async function clearBaseResumeFiles(locations: WorkspaceLocations): Promise<void> {
-  const trashDir = join(resumeWorkspaceDir(locations), ".trash");
+// Returns how to move every archived file back; a failure part-way moves the
+// ones already archived back itself.
+async function clearBaseResumeFiles(locations: WorkspaceLocations): Promise<(() => Promise<void>) | null> {
+  const dir = resumeWorkspaceDir(locations);
+  const trashDir = join(dir, ".trash");
   await mkdir(trashDir, { recursive: true });
   const stamp = nextTrashStamp();
-  await Promise.all(
-    managedDefaultResumeFiles.map(async (name) => {
-      try {
-        await rename(join(resumeWorkspaceDir(locations), name), join(trashDir, `${stamp}__${name}`));
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") throw error;
-      }
-    })
-  );
+  const moved: Array<{ archived: string; live: string }> = [];
+  const restore = async () => {
+    for (const { archived, live } of [...moved].reverse()) await rename(archived, live);
+  };
+  for (const name of managedDefaultResumeFiles) {
+    const archived = join(trashDir, `${stamp}__${name}`);
+    try {
+      await rename(join(dir, name), archived);
+      moved.push({ archived, live: join(dir, name) });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === "ENOENT") continue;
+      await restore().catch(() => console.error("[workspace] an archived default resume file could not be put back from .trash"));
+      throw error;
+    }
+  }
+  return moved.length ? restore : null;
 }
 
-// Back up a single base-resume file (including named variants) to .trash/.
-async function trashBaseFile(name: string, locations: WorkspaceLocations): Promise<void> {
-  const trashDir = join(resumeWorkspaceDir(locations), ".trash");
+// Back up a single base-resume file (including named variants) to .trash/ and
+// return how to move it back.
+async function trashBaseFile(name: string, locations: WorkspaceLocations): Promise<(() => Promise<void>) | null> {
+  const dir = resumeWorkspaceDir(locations);
+  const trashDir = join(dir, ".trash");
   await mkdir(trashDir, { recursive: true });
-  const stamp = nextTrashStamp();
+  const archived = join(trashDir, `${nextTrashStamp()}__${name}`);
   try {
-    await rename(join(resumeWorkspaceDir(locations), name), join(trashDir, `${stamp}__${name}`));
+    await rename(join(dir, name), archived);
   } catch (error) {
     if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") throw error;
+    return null;
   }
+  return () => rename(archived, join(dir, name));
 }
 
 // One parsed .trash/ filename (stamp + variant stem + extension), and the grouped
@@ -551,13 +600,11 @@ export async function handleWorkspaceBaseResume(
     }
     const snapshot = await withWorkspaceLock(async () => {
       await ensureJobWorkspace(locations.workspaceDir);
-      if (targetName === "default.resume") {
-        await clearBaseResumeFiles(locations);
-      } else {
-        // Named variant: back it up before overwriting so it appears in version history.
-        await trashBaseFile(targetName, locations);
-      }
-      await atomicWriteWorkspaceFile(join(resumeWorkspaceDir(locations), targetName), text);
+      // The current version is archived into history once the replacement is
+      // staged; a named variant keeps its siblings in place.
+      await replaceWorkspaceFile(join(resumeWorkspaceDir(locations), targetName), text, () =>
+        targetName === "default.resume" ? clearBaseResumeFiles(locations) : trashBaseFile(targetName, locations)
+      );
       return workspaceSnapshot(locations, {
         exists: true,
         fileName: targetName,
@@ -611,12 +658,9 @@ export async function handleRestoreBaseResume(
       // Validate the archived bytes before moving the current good version.
       const data = await readFile(sourcePath);
       validateBaseResumeText(targetName, data);
-      if (isNamedVariant) {
-        await trashBaseFile(targetName, locations);
-      } else {
-        await clearBaseResumeFiles(locations);
-      }
-      await atomicWriteWorkspaceFile(join(resumeWorkspaceDir(locations), targetName), data);
+      await replaceWorkspaceFile(join(resumeWorkspaceDir(locations), targetName), data, () =>
+        isNamedVariant ? trashBaseFile(targetName, locations) : clearBaseResumeFiles(locations)
+      );
       return workspaceSnapshot(locations, await readWorkspaceBaseResume(targetName, locations));
     });
 

@@ -169,7 +169,7 @@ function canonicalizeApplicationAiUsage(application: Application): Application {
 // crypto.randomUUID exists only in secure contexts (https / localhost). Served
 // over a LAN IP or plain http it is undefined and would throw, so fall back to a
 // unique-enough id for these client-side pipeline keys.
-function newApplicationId(): string {
+export function newApplicationId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
   }
@@ -699,6 +699,16 @@ export function useApplications() {
     []
   );
 
+  // A create refused because its id already exists is an earlier attempt of
+  // the same Apply or Skip whose reply was lost: the record is saved, and the
+  // refusal's banner must not outlive that answer.
+  const confirmCreated = useCallback((id: string) => {
+    if (!applicationsRef.current.some((application) => application.id === id)) return false;
+    conflictMessage.current = "";
+    setError("");
+    return true;
+  }, []);
+
   // Layered duplicate scan (same-posting/repost/same-company-role, tiered
   // confidence) against every stored application — see src/lib/jobIdentity.ts.
   // This never selects a write target; callers decide how to handle
@@ -1042,6 +1052,7 @@ export function useApplications() {
     markGhosted,
     remove,
     getApplication,
+    confirmCreated,
     findDuplicatesForTarget,
     linkPostingRecords,
     unlinkPostingRecord,

@@ -188,5 +188,40 @@ await expectOk("a public 200 returns the body and pins the validated address", a
   assert.equal(happy.capture.pinnedAddress, "93.184.216.34", "connection pinned to the validated resolved IP");
 });
 
+// 7) A compression header over an empty body is an empty page, not a broken
+// stream: some CDNs answer that way, and zlib otherwise reports an unexpected
+// end of file.
+const emptyGzip = fakeRequest({ status: 200, headers: { "content-encoding": "gzip" }, body: "" });
+await expectOk("an empty compressed body reads as an empty page", async () => {
+  const response = await fetchPublicHtml(new URL("http://jobs.example.com/empty"), {}, {
+    lookup: PUBLIC_LOOKUP,
+    request: emptyGzip.request
+  });
+  assert.equal(response.status, 200);
+  assert.equal(await response.text(), "");
+});
+
+// 8) The declared charset is honored and a byte-order mark is dropped.
+const latin1 = fakeRequest({
+  status: 200,
+  headers: { "content-type": "text/html; charset=windows-1252" },
+  body: Buffer.from([0x63, 0x61, 0x66, 0xe9])
+});
+await expectOk("a windows-1252 page decodes by its declared charset", async () => {
+  const response = await fetchPublicHtml(new URL("http://jobs.example.com/latin1"), {}, {
+    lookup: PUBLIC_LOOKUP,
+    request: latin1.request
+  });
+  assert.equal(await response.text(), "café");
+});
+const bom = fakeRequest({ status: 200, headers: { "content-type": "application/json" }, body: Buffer.from("﻿{\"ok\":true}") });
+await expectOk("a UTF-8 byte-order mark is dropped", async () => {
+  const response = await fetchPublicHtml(new URL("http://jobs.example.com/bom"), {}, {
+    lookup: PUBLIC_LOOKUP,
+    request: bom.request
+  });
+  assert.equal(await response.text(), "{\"ok\":true}");
+});
+
 console.log(`\n${failures ? "FAILED" : "PASS"} network fetch/SSRF probes (${failures} failing)`);
 process.exit(failures ? 1 : 0);

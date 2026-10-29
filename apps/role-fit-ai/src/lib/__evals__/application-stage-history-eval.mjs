@@ -167,6 +167,24 @@ const timeline = deriveTimeline(record({
   ]
 }), today);
 assert.deepEqual(timeline.map((row) => row.key), ["applied", "entry-s1", "entry-i1", "entry-f1", "entry-i2"], "rows run oldest first; same-day rows keep their stored order");
+{
+  // The Applied anchor keeps its exact instant while entries sit at local noon:
+  // a stage entry on the application day still follows the anchor.
+  const sameDay = deriveTimeline(record({
+    status: "interviewing",
+    appliedAt: new Date("2026-09-02T15:00:00").toISOString(),
+    stageHistory: [{ id: "s0", type: "stage", status: "interviewing", at: new Date("2026-09-02T12:00:00").toISOString() }]
+  }), today);
+  assert.deepEqual(sameDay.map((row) => row.key), ["applied", "entry-s0"], "a same-day stage entry never precedes the Applied anchor");
+  const recorded = deriveTimeline(record({
+    status: "interviewing",
+    stageHistory: [
+      { id: "late", type: "followup", at: new Date("2026-09-10T15:00:00").toISOString() },
+      { id: "early", type: "response", at: new Date("2026-09-10T09:00:00").toISOString() }
+    ]
+  }), today);
+  assert.deepEqual(recorded.map((row) => row.key), ["applied", "entry-late", "entry-early"], "same-day entries keep their recorded order, not their time of day");
+}
 const rounds = timeline.filter((row) => row.kind === "interview").map((row) => [row.entry.id, row.round, row.scheduled]);
 assert.deepEqual(rounds, [["i1", 1, false], ["i2", 2, true]], "rounds number by date and future interviews are scheduled");
 assert.equal(
@@ -229,6 +247,16 @@ assert.match(hook, /a\.id === id \? withStatusChange\(a, status, now\) : a/, "ro
   const moved = withStatusChange(submitted, "interviewing", rev2, rev2);
   assert.equal(moved.updatedAt, rev2);
   assert.deepEqual(moved.stageHistory, withStageChange(submitted, "interviewing", submitted.stageHistory, rev2).map((entry, index) => ({ ...entry, id: moved.stageHistory[index].id })), "the shared transform records the stage entry");
+}
+{
+  // A migrated submitted record without a date keeps none; only a first
+  // submission is dated now.
+  const migrated = withStatusChange({ ...record(), appliedAt: undefined, stageHistory: undefined }, "interviewing", rev2, rev2);
+  assert.equal(migrated.appliedAt, undefined, "a stage move never invents an application date");
+  const submittedNow = withStatusChange({ ...record(), status: "draft", appliedAt: undefined, stageHistory: undefined }, "applied", rev2);
+  assert.equal(submittedNow.appliedAt, rev2, "submitting a Draft dates it now");
+  const skipSubmitted = withStatusChange({ ...record(), status: "not_applying", appliedAt: undefined, stageHistory: undefined, notApplyingAt: rev1 }, "applied", rev2);
+  assert.equal(skipSubmitted.appliedAt, rev2, "submitting a job-only Skip dates it now");
 }
 assert.match(hook, /mergeStageHistories\(canonical\.stageHistory, others\.map/, "duplicate merge unions history");
 assert.match(hook, /if \(stageHistory === null\) \{[\s\S]*?return false;/, "an over-limit merge is refused");

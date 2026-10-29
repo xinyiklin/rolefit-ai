@@ -228,6 +228,9 @@ function sanitizedSiteSettingsError(error: unknown): Error {
   if (code === "ROLEFIT_DESKTOP_PORT_UNAVAILABLE") {
     return new Error("That local site port is already in use. Choose another port.");
   }
+  if (code === "ROLEFIT_DESKTOP_PORT_BLOCKED" && error instanceof Error) {
+    return new Error(error.message);
+  }
   return new Error("The local site port could not be saved. Check app permissions and try again.");
 }
 

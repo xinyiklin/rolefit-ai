@@ -131,17 +131,23 @@ const TRACKING_PARAMS = new Set([
   "ref_src", "trk", "trackingid", "originalsubdomain"
 ]);
 
-// Normalize a URL for comparison: strip tracking params, drop the fragment,
-// and remove a trailing slash from the path. Invalid URLs are returned as-is.
+// Normalize a URL for comparison: strip tracking params, drop an in-page
+// fragment, and remove a trailing slash from the path. Invalid URLs are
+// returned as-is.
 export function normalizeJobUrl(url: string): string {
   try {
     const parsed = new URL(url);
-    parsed.hash = "";
+    // A hash route (#/job/123, #!/jobs/456) is the posting's identity on a
+    // client-routed careers site; only an anchor is dropped.
+    if (!/^#!?\//.test(parsed.hash)) parsed.hash = "";
     for (const param of [...parsed.searchParams.keys()]) {
       if (TRACKING_PARAMS.has(param.toLowerCase())) {
         parsed.searchParams.delete(param);
       }
     }
+    // Deleting a param re-serializes the rest in form encoding (%20 becomes +),
+    // so the query is rebuilt the same way whether or not one was removed.
+    parsed.search = parsed.searchParams.toString();
     let pathname = parsed.pathname;
     if (pathname.length > 1 && pathname.endsWith("/")) {
       pathname = pathname.replace(/\/+$/, "");
@@ -260,17 +266,29 @@ export function atsPostingKey(url: string | undefined | null): AtsPostingKey | n
     // The trailing _<REQID> (e.g. _JR-90210, _R123456) is the requisition id.
     if (/(^|\.)myworkdayjobs\.com$/.test(host)) {
       const tenant = host.split(".")[0];
-      const last = segments[segments.length - 1] ?? "";
-      const m = last.match(/_([A-Za-z]{0,4}-?\d{3,}(?:-\d+)?)$/);
-      if (m && tenant && !/^wd\d+$/.test(tenant)) {
-        return makeKey("workday", tenant, m[1].toUpperCase(), true);
+      // The slug may be followed by /apply or an application step, so the
+      // last posting segment carrying a requisition id wins. Only segments
+      // after the job (or details) marker are posting segments: a site name
+      // such as Intern_2025 must not become every posting's key.
+      const marker = Math.max(segments.lastIndexOf("job"), segments.lastIndexOf("details"));
+      const first = marker >= 0 ? marker + 1 : segments.length - 1;
+      let reqId = "";
+      for (let index = segments.length - 1; index >= first && !reqId; index -= 1) {
+        reqId = segments[index].match(/_([A-Za-z]{0,4}-?\d{3,}(?:-\d+)?)$/)?.[1] ?? "";
+      }
+      if (reqId && tenant && !/^wd\d+$/.test(tenant)) {
+        return makeKey("workday", tenant, reqId.toUpperCase(), true);
       }
     }
 
-    // LinkedIn: /jobs/view/<id>(-slug), or list views via ?currentJobId=<id>.
+    // LinkedIn: /jobs/view/<id>(-slug), the guest form /jobs/view/<slug>-<id>,
+    // or list views via ?currentJobId=<id>.
     if (/(^|\.)linkedin\.com$/.test(host)) {
       const viewIdx = segments.indexOf("view");
-      const fromPath = viewIdx >= 0 ? (segments[viewIdx + 1] ?? "").match(/^(\d{6,})/) : null;
+      const viewSegment = viewIdx >= 0 ? segments[viewIdx + 1] ?? "" : "";
+      // The slug form is accepted only with a full-length (ten-digit) id, so a
+      // slug that merely ends in a number cannot become a wrong key.
+      const fromPath = viewSegment.match(/^(\d{6,})/) ?? viewSegment.match(/-(\d{10,})$/);
       const fromParam = (u.searchParams.get("currentJobId") ?? "").match(/^(\d{6,})$/);
       const id = fromPath?.[1] ?? fromParam?.[1];
       if (id) return makeKey("linkedin", "", id);
@@ -326,16 +344,32 @@ export function requisitionIdFromText(text: string | undefined | null): string {
   return postingIdentityFromText(text)?.id ?? "";
 }
 
+// Letters and digits of any script compare, with Latin accents folded so
+// "Nestlé" and "Nestle" are one employer; everything else separates words.
+// Marks are dropped only after a Latin base letter and otherwise stay inside
+// the word: a Devanagari vowel sign or a kana voicing mark is part of it.
+// No lookbehind: Safari before 16.4 throws on it at module load.
+const WORD_SEPARATORS = /[^\p{L}\p{N}\p{M}]+/gu;
+const TITLE_SEPARATORS = /[^\p{L}\p{N}\p{M}+#]+/gu;
+function foldedWords(value: string | undefined | null, separators = WORD_SEPARATORS): string {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/(\p{Script=Latin})\p{M}+/gu, "$1")
+    .toLowerCase()
+    .replace(separators, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Words are space-separated by then, so a suffix is a whole word.
+const LEGAL_SUFFIX_RE =
+  /(^|\s)(?:incorporated|inc|llc|llp|ltd|limited|corp|corporation|company|co|gmbh|plc|ag|bv)(?=\s|$)/g;
+
 // "Acme, Inc." / "ACME Corp" / "acme" all compare equal. Only legal suffixes
 // are stripped — brand words ("Labs", "Health") stay, since removing them
 // would merge genuinely different companies.
 export function normalizeCompanyName(name: string | undefined | null): string {
-  return String(name || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\b(?:incorporated|inc|llc|llp|ltd|limited|corp|corporation|company|co|gmbh|plc|ag|bv)\b/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return foldedWords(name).replace(LEGAL_SUFFIX_RE, "$1").replace(/\s+/g, " ").trim();
 }
 
 // "Software Engineer II (R-1234, Remote)" → "software engineer ii".
@@ -343,25 +377,31 @@ export function normalizeCompanyName(name: string | undefined | null): string {
 // roles. Parentheticals/brackets are dropped: they carry req ids and location
 // tags, not role identity.
 export function normalizeRoleTitle(title: string | undefined | null): string {
-  return String(title || "")
-    .toLowerCase()
-    .replace(/[([{][^)\]}]*[)\]}]/g, " ")
-    .replace(/[^a-z0-9+#]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return foldedWords(String(title || "").replace(/[([{][^)\]}]*[)\]}]/g, " "), TITLE_SEPARATORS);
 }
 
 function normalizeLocationText(value: string | undefined | null): string {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return foldedWords(value);
 }
+
+// Words that name a country, a region, or a compound-name prefix rather than
+// a place: sharing one is not sharing a location ("Seattle, WA, United
+// States" and "New York, NY, United States" still contradict).
+const LOCATION_NOISE_TOKENS = new Set([
+  "united", "states", "usa", "america", "american", "kingdom", "canada", "india", "germany", "france",
+  "australia", "ireland", "singapore", "england", "europe", "emea", "apac", "latam", "global",
+  "new", "san", "santa", "los", "las", "saint", "fort", "port", "north", "south", "east", "west",
+  "greater", "area", "metro", "metropolitan", "city", "region", "county", "district",
+  "hybrid", "onsite", "office", "headquarters"
+]);
+
+const placeTokens = (text: string): Set<string> =>
+  new Set(text.split(" ").filter((token) => token.length >= 3 && !LOCATION_NOISE_TOKENS.has(token)));
 
 // True unless the two locations actively contradict each other. Unknown on
 // either side is compatible (missing data must not block a duplicate warning),
-// "remote" is compatible with anything, and sharing any substantial token
+// and so is a side that names only a country or region ("United States"),
+// "remote" is compatible with anything, and sharing a place-naming token
 // ("new york ny" vs "new york") is compatible.
 export function locationsCompatible(a?: string | null, b?: string | null): boolean {
   const na = normalizeLocationText(a);
@@ -369,8 +409,10 @@ export function locationsCompatible(a?: string | null, b?: string | null): boole
   if (!na || !nb) return true;
   if (na === nb) return true;
   if (na.includes("remote") || nb.includes("remote")) return true;
-  const tokensA = new Set(na.split(" "));
-  return nb.split(" ").some((t) => t.length >= 3 && tokensA.has(t));
+  const placesA = placeTokens(na);
+  const placesB = placeTokens(nb);
+  if (!placesA.size || !placesB.size) return true;
+  return [...placesB].some((token) => placesA.has(token));
 }
 
 const FINGERPRINT_CHARS = 15_000;

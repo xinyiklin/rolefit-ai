@@ -633,4 +633,28 @@ assert(!/video interview|how to prepare|set aside/i.test(anReq), "application-pr
 const doYouQualify = extractJobPosting(`Software Engineer\nAcme\n\nWhat you'll do:\nBuild internal tools.\nDo you qualify? You likely do if you have one of the following:\nA bachelor's degree in a technical field.\nAt least one year of professional experience.`).tailoringText;
 assert.match(doYouQualify, /Required Qualifications:[\s\S]*bachelor's degree in a technical field/i, "'Do you qualify?' routes to required qualifications");
 
+// A hyphenated word at line start is prose, not a label: "Employer-paid" never
+// names the employer.
+const hyphenated = extractJobPosting("Senior Backend Engineer\nEmployer-paid health coverage for the whole family.\nCompany: Acme Corp\nLocation: Austin, TX");
+assert.equal(hyphenated.tracking.company, "Acme Corp", "a hyphenated word at line start is not a label");
+assert.equal(extractJobPosting("Senior Backend Engineer\nCompany - Acme Corp").tracking.company, "Acme Corp", "a spaced dash still separates a label");
+
+// "plus" as a conjunction keeps a requirement required; the idiom still demotes.
+const plusCue = extractJobPosting("Senior Backend Engineer\nAcme\nRequirements\n- Bachelor's degree plus 3 years of relevant experience.\n- Strong SQL skills.\n- Go experience is a plus.\n").tailoringText;
+assert.match(plusCue, /Required Qualifications:[\s\S]*degree plus 3 years/i, "'degree plus N years' stays required");
+assert.match(plusCue, /Preferred Qualifications:[\s\S]*Go experience is a plus/i, "'is a plus' still demotes");
+
+// A sentence that starts with a heading word is an item, never a heading.
+const bonusBullet = extractJobPosting("Senior Backend Engineer\nAcme\nWhat you will do\n- Bonus programs administration for the sales team.\n- Build and operate payment services.\nWhat you bring\n- 5 years of backend experience.\n").tailoringText;
+assert.doesNotMatch(bonusBullet, /Preferred Qualifications:[\s\S]*Build and operate payment services/i, "a 'Bonus ...' bullet does not open a preferred section");
+
+// Prose that merely contains a framework's name is not a stack keyword.
+const prose = extractJobPosting("Platform Engineer\nAcme\nResponsibilities\n- Deploy services to Elastic Beanstalk and manage node pools in the cluster.\n- React quickly to incidents and keep guard rails in place.\nRequirements\n- 3 years of infrastructure experience.\n").tailoringText;
+assert.doesNotMatch(prose, /Tech Stack \/ Keywords:[\s\S]*(?:React|Node\.js|Elasticsearch|Rails)\b/, "react/node/rails/elastic in prose are not keywords");
+const listed = extractJobPosting("Platform Engineer\nAcme\nRequirements\n- Experience with React, Node.js, Rails and Elasticsearch.\n- 3 years of experience.\n").tailoringText;
+const listedStack = listed.slice(listed.indexOf("Tech Stack / Keywords:"));
+for (const name of ["React", "Node.js", "Rails", "Elasticsearch"]) {
+  assert.ok(listedStack.includes(`- ${name}`), `${name} in a tech list still counts`);
+}
+
 console.log("jobExtract evals passed");
