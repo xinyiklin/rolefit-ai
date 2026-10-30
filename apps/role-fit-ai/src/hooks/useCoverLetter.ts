@@ -155,6 +155,18 @@ export function useCoverLetter({
       ),
     [preflight.template.userInputSlots],
   );
+  // Send only answers to slots the letter still has: stale keys would be sent
+  // unseen and could crowd current answers out of the server's 20-answer cap.
+  const currentSlotAnswers = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(slotAnswers).filter(
+          ([slotId, answer]) =>
+            Object.prototype.hasOwnProperty.call(slotLabels, slotId) && answer.trim(),
+        ),
+      ),
+    [slotAnswers, slotLabels],
+  );
   const evidenceItems = useMemo(
     () =>
       buildCoverLetterEvidence({
@@ -390,7 +402,7 @@ export function useCoverLetter({
           detailValues,
           resolvedContext: preflight.resolved,
           evidenceItems,
-          slotAnswers,
+          slotAnswers: currentSlotAnswers,
         }),
         signal: controller.signal,
       });

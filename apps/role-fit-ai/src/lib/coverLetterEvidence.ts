@@ -41,7 +41,8 @@ type BuildCoverLetterEvidenceInput = {
   resumeData?: ResumeData | null;
   candidateContext: string;
   // Answers to the few template slots that name a private fact RoleFit cannot
-  // infer. They enter the corpus as candidate evidence like anything else.
+  // infer. They enter the corpus as candidate evidence like anything else, but
+  // only for a slot the letter still has (a key of slotLabels).
   slotAnswers?: Record<string, string>;
   slotLabels?: Record<string, string>;
 };
@@ -217,12 +218,13 @@ export function buildCoverLetterEvidence({
   }
 
   for (const [slotId, answer] of Object.entries(slotAnswers)) {
-    if (!answer.trim()) continue;
+    const label = Object.prototype.hasOwnProperty.call(slotLabels, slotId) ? slotLabels[slotId] : undefined;
+    if (!answer.trim() || label === undefined) continue;
     pushEvidence(items, occurrences, {
       source: "user_answer",
       text: answer,
       section: "Your answers",
-      entry: slotLabels[slotId] || slotId
+      entry: label || slotId
     });
   }
 
