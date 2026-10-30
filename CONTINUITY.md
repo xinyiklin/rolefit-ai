@@ -109,6 +109,17 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-30
 
+- [TOOL] **Bug-hunt round eleven** (five-area sweep, 16 confirmed): outside
+  writers cannot store a "ready" answer with a placeholder or a blank pair; an
+  MCP correction replaces the earlier answer; follow-ups sort by date; Indeed
+  search-pane captures match their job page; the popup keeps hyphenated
+  titles and names stages; "No-" evidence lines stay affirmative; a typed page
+  margin survives an outside-click close (Escape still cancels). Each
+  reviewed. Reverted after two failed reviews: five AI evidence-check gaps
+  (percent/duration subject, multiplier verbs, scale words, employer/school
+  phrasings), proposed as their own task. Open for the user: a Styles change
+  takes two undos (shared history), captures lose the role and employer (would
+  send the page title), a LinkedIn "Coca-Cola" employer reads "Coca".
 - [TOOL] **Bug-hunt round ten**: the Prepare brief keeps every analyzed
   and saved item and says which ones its 9,000-character budget leaves out;
   the landing page moves keyboard focus with its in-page links; a labelled
