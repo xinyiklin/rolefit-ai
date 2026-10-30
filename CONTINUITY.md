@@ -109,6 +109,17 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-30
 
+- [TOOL] **Bug-hunt round ten**: the Prepare brief keeps every analyzed
+  and saved item and says which ones its 9,000-character budget leaves out;
+  the landing page moves keyboard focus with its in-page links; a labelled
+  answer range ("Word count: 250-300") caps at its second number only when
+  nothing but a waiver or the next question follows (anything unclear keeps
+  the old first-number cap; no new minimum, other limits unchanged; sixteen
+  review rounds); answers with a placeholder are never ready on any edit
+  path; a migrated undated record with documents is refused a move to Skipped
+  until its date is added ([USER] chose refusal). Each reviewed. Residual: the
+  tracker append route (MCP add_application_answers) still stores a "ready"
+  answer that holds a placeholder; reopen re-judges it.
 - [TOOL] **Bug-hunt round nine**: a cover letter past the .cover limits no
   longer crashes RoleFit (it reads changed, recovery keeps its last valid
   version, saves refuse with the codec's message); accented names keep their
@@ -136,23 +147,3 @@ D-entries in `docs/decisions.md`.
   variant last open is reopened; the companion's Providers summary says when
   a reused service does not use its providers. Accepted: Prepare and Polish
   duplicate gates may name a lost-reply record (it is saved).
-- [TOOL] **Bug-hunt round six** (round five's failing cover-letter probe fixed
-  first). Cover letters send slot answers only for slots the letter still has;
-  duplicate detection compares non-English descriptions (ASCII unchanged); an
-  Apply or Skip retry after a lost reply writes over its own record (the retry
-  wins, the row keeps its dates, stage, history and later tracker edits) and
-  is never offered as its own duplicate; a new shortcut import clears a stale
-  failure notice; MCP `draft_answer` saves its call's facts as `userFacts`,
-  and MCP calls go over node:http (no 5-minute header cutoff). Each reviewed.
-  Reverted after review: template-trim hardening (the editor already trims)
-  and an MCP latest-answer merge (the tracker modal edits answers in place, so
-  list order is not recency); a plain MCP correction still sits beside a
-  drafted revision. Open: a migrated undated record moved to Skipped sheds its
-  documents (refuse the move or change the schema: the user's call).
-- [TOOL] **Bug-hunt round five** (first scan of the intake/polish hooks and
-  shared contracts): a failed resume-candidate read is no longer cached;
-  accepting a warned Resume edit no longer dead-ends a pending cover-letter
-  proposal (resume-derived warnings sit in the resume fingerprint); Undo
-  restores the exact text an accept replaced. Each reviewed; refuted: the
-  Prepare recommendation clear (silent by design) and last-bullet removal
-  after a manual edit. Its slot-answer residual was fixed in round six.
