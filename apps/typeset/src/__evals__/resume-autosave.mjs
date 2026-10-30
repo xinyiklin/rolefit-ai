@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { DOC_STYLE_DEFAULTS } from "@typeset/engine/lib/documentStyle.ts";
+import { DOC_STYLE_DEFAULTS, coerceDocStyle } from "@typeset/engine/lib/documentStyle.ts";
 import {
   ResumeFileError,
   parseResumeFile,
@@ -126,4 +126,31 @@ assert.match(
   "a hidden visibilitychange flushes the pending autosave"
 );
 
-console.log("Typeset resume autosave: strict round trip, 4 malformed-draft refusals, unreadable-draft keeping, cross-tab replacement, and hidden-page flush passed");
+// A restored draft is not written back unchanged: another tab may have saved a
+// newer one since this tab read it. The restored bytes re-serialize exactly, so
+// the comparison holds through the editor's seed and style coercion.
+assert.equal(serializeResumeFile(restored.data, { ...DOC_STYLE_DEFAULTS, ...restored.documentStyle }), autosave, "a restored draft re-serializes to its stored bytes");
+for (const style of [DOC_STYLE_DEFAULTS, { ...DOC_STYLE_DEFAULTS, pageMarginTopPt: 50, pageMarginRightPt: 61, pageMarginBottomPt: 47, pageMarginLeftPt: 58 }]) {
+  const stored = serializeResumeFile(buildStarterResume(), style);
+  const parsed = parseResumeFile(stored);
+  // What useDocStyle's replace holds after the seed, with this tab's view preferences.
+  const seeded = coerceDocStyle({ ...parsed.documentStyle, zoom: 1.5, spellCheck: false });
+  assert.equal(serializeResumeFile(parsed.data, seeded), serializeResumeFile(parsed.data, { ...DOC_STYLE_DEFAULTS, ...parsed.documentStyle }), "the seeded editor style serializes as the restore did");
+}
+assert.match(
+  appSource,
+  /if \(draft\.kind === "restored"\) \{[\s\S]{0,300}?restoredDraftRef\.current = \{\s*draft: serializeResumeFile\(initialData, \{ \.\.\.DOC_STYLE_DEFAULTS, \.\.\.initialDocumentStyle \}\),\s*title: initialTitle\s*\};/,
+  "restoring a draft remembers what is already stored"
+);
+assert.match(
+  appSource,
+  /if \(restored && restored\.draft === draft && restored\.title === title\) \{[\s\S]{0,120}?commitDocumentSaveBaseline\(editor\.markClean, docStyle\.markClean\);\s*setSaveStatus\("saved"\);\s*return;\s*\}\s*restoredDraftRef\.current = null;\s*window\.localStorage\.setItem\(AUTOSAVE_KEY, draft\);/,
+  "an unchanged restored draft is not written back, and the first real change is"
+);
+assert.match(
+  appSource,
+  /if \(draftReplacedElsewhere\(event, lastWrittenDraftRef\.current\)\) \{[\s\S]{0,120}?restoredDraftRef\.current = null;\s*setSaveStatus\(\{ state: "error", label: "Replaced by another tab" \}\);/,
+  "once another tab replaces the draft, this tab's next autosave writes its work again"
+);
+
+console.log("Typeset resume autosave: strict round trip, 4 malformed-draft refusals, unreadable-draft keeping, cross-tab replacement, hidden-page flush, and no write-back of an unchanged restored draft passed");

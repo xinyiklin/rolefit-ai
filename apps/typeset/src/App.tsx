@@ -112,6 +112,9 @@ export default function App() {
   const workspaceRef = useRef<HTMLElement>(null);
   const initializedRef = useRef(false);
   const lastWrittenDraftRef = useRef<string | null>(null);
+  // A restored draft is already stored; writing it back unchanged could
+  // overwrite a newer draft another tab saved since this tab read it.
+  const restoredDraftRef = useRef<{ draft: string; title: string } | null>(null);
   const pendingAutosaveRef = useRef<(() => void) | null>(null);
   const autoFitRef = useRef(false);
   const dragDepthRef = useRef(0);
@@ -191,6 +194,14 @@ export default function App() {
         initialData = draft.parsed.data;
         initialDocumentStyle = draft.parsed.documentStyle;
         initialTitle = draft.title || UNTITLED_RESUME_TITLE;
+        try {
+          restoredDraftRef.current = {
+            draft: serializeResumeFile(initialData, { ...DOC_STYLE_DEFAULTS, ...initialDocumentStyle }),
+            title: initialTitle
+          };
+        } catch {
+          // Without the comparison, the first autosave simply writes the draft.
+        }
       } else if (draft.kind === "unreadable") {
         setNotice({
           tone: "error",
@@ -223,9 +234,18 @@ export default function App() {
       pendingAutosaveRef.current = null;
       try {
         const draft = serializeResumeFile(resume, docStyle.style);
+        const title = documentTitle.trim() || UNTITLED_RESUME_TITLE;
+        const restored = restoredDraftRef.current;
+        if (restored && restored.draft === draft && restored.title === title) {
+          // An edit undone before the delay leaves the restored, stored draft.
+          commitDocumentSaveBaseline(editor.markClean, docStyle.markClean);
+          setSaveStatus("saved");
+          return;
+        }
+        restoredDraftRef.current = null;
         window.localStorage.setItem(AUTOSAVE_KEY, draft);
         lastWrittenDraftRef.current = draft;
-        window.localStorage.setItem(DOCUMENT_TITLE_KEY, documentTitle.trim() || UNTITLED_RESUME_TITLE);
+        window.localStorage.setItem(DOCUMENT_TITLE_KEY, title);
         commitDocumentSaveBaseline(editor.markClean, docStyle.markClean);
         setSaveStatus("saved");
       } catch {
@@ -267,6 +287,8 @@ export default function App() {
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
       if (draftReplacedElsewhere(event, lastWrittenDraftRef.current)) {
+        // The restored copy is no longer what is stored, so it must be written.
+        restoredDraftRef.current = null;
         setSaveStatus({ state: "error", label: "Replaced by another tab" });
       }
     };
