@@ -27,8 +27,8 @@ type PinnedResponse = {
 type PinnedFetchOptions = {
   headers?: Record<string, string>;
   timeoutMs?: number;
-  pinnedAddress: string;
-  pinnedFamily: number;
+  // Every address the host resolved to, each already validated as public.
+  pinnedAddresses: readonly [LookupAddress, ...LookupAddress[]];
 };
 
 function isLocalHost(hostname: string): boolean {
@@ -227,7 +227,7 @@ function decompressResponse(res: IncomingMessage): Readable {
   return res;
 }
 
-// Fetch `url`, connecting ONLY to `pinnedAddress` (already validated as public)
+// Fetch `url`, connecting ONLY to `pinnedAddresses` (already validated as public)
 // while keeping the real hostname for the Host header and TLS SNI. This closes
 // the DNS-rebinding TOCTOU: Node's global fetch re-resolves the hostname after
 // validation, so a short-TTL/rebinding host could swap in a private/metadata IP
@@ -236,7 +236,7 @@ function decompressResponse(res: IncomingMessage): Readable {
 // fetch-like response ({ status, ok, headers.get, text }).
 function pinnedFetch(
   url: URL,
-  { headers = {}, timeoutMs = 10_000, pinnedAddress, pinnedFamily }: PinnedFetchOptions,
+  { headers = {}, timeoutMs = 10_000, pinnedAddresses }: PinnedFetchOptions,
   // `requestOverride` defaults to undefined so production selects the real
   // node http/https request fn below; it exists only so offline probes can
   // supply a fake transport and exercise the real byte-cap/decompress/pin logic
@@ -260,17 +260,23 @@ function pinnedFetch(
         method: "GET",
         servername: url.protocol === "https:" ? url.hostname : undefined,
         headers: { "Accept-Encoding": "gzip, deflate, br", ...headers },
-        // Pin DNS to the pre-validated address; never re-resolve the name.
-        // Node's happy-eyeballs path calls lookup with { all: true } and expects
-        // the array form, so support both callback shapes.
+        // Pin DNS to the pre-validated addresses; never re-resolve the name.
+        // Node's happy-eyeballs path calls lookup with { all: true } and tries
+        // each in turn, so a dual-stack host can still fall back across them;
+        // the single-address form honors a requested family.
         lookup: (
           _hostname: string,
           options: Parameters<LookupFunction>[1],
           cb: Parameters<LookupFunction>[2]
-        ) =>
-          options && options.all
-            ? cb(null, [{ address: pinnedAddress, family: pinnedFamily }])
-            : cb(null, pinnedAddress, pinnedFamily)
+        ) => {
+          if (options && options.all) {
+            cb(null, pinnedAddresses.map(({ address, family }) => ({ address, family })));
+            return;
+          }
+          const family = options && typeof options === "object" ? options.family : undefined;
+          const chosen = pinnedAddresses.find((entry) => entry.family === family) ?? pinnedAddresses[0];
+          cb(null, chosen.address, chosen.family);
+        }
       },
       (res: IncomingMessage) => {
         const stream = decompressResponse(res);
@@ -342,13 +348,12 @@ export async function fetchPublicHtml(
     if (!isPublicHttpUrl(current)) {
       throw new BlockedHostError("Only public http or https URLs are allowed.");
     }
-    const [pinned] = await assertPublicHost(current.hostname, deps.lookup);
+    const pinnedAddresses = await assertPublicHost(current.hostname, deps.lookup);
 
     const response = await pinnedFetch(current, {
       headers: { "User-Agent": "Mozilla/5.0 ResumePolisher/0.1", ...extraHeaders },
       timeoutMs: 10_000,
-      pinnedAddress: pinned.address,
-      pinnedFamily: pinned.family
+      pinnedAddresses
     }, deps.request);
 
     if (response.status >= 300 && response.status < 400) {
