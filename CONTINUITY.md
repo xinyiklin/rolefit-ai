@@ -109,19 +109,27 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-29
 
-- [TOOL] **Bug-hunt round three**, uncommitted with the others. Job
-  extraction: prose collocations ("react quickly", "node pools", "guard
-  rails") fabricate no keyword; "plus" demotes only as the idiom; a long
-  sentence is never a heading; a label's dash needs a space beside it. The
-  direct Apply path commits with the latest Fit decision, usage, resume text
-  and tracking. Verified: evals, tsc, app check 205/205; its review's
-  findings (gating too strict, sentence rule too broad) are fixed in a
-  re-checked follow-up. UNCONFIRMED sweep candidates: fit excerpt, advice
-  warnings, Detail stage select, event dates, margin default, companion messages.
+- [TOOL] **Bug-hunt rounds three and four** (round three committed as
+  01ba3b9/4f58e8e). Round four, uncommitted: Fit (unlocated CLEAR quotes
+  dropped, empty-excerpt false conflict, model advice warnings dropped);
+  event dates bounded in route and popover; engine margin default and
+  divider; Detail stage select, persist-path timeline guard, Draft-to-Skipped
+  select; companion (shared live region, Extension-tab polling that keeps
+  ownership over one failed probe, kept pairing rows, reused-listener
+  message through the API-key IPC); Typeset pagehide flush; editor (history
+  clock subscribe for Redo after a style edit, Ctrl/Cmd+Home/End, single-line
+  paste newlines); extraction ("an hour"/"hourly"; "monthly"/"yearly" only on
+  a pay line and never ranking; differentials skipped; "k" boundary; Sr./Jr.
+  titles; Go list entries; "plus relevant/two years"; required cap 8 to 12).
+  Verified: app check, editor/Typeset/engine checks, reviews per area (two for
+  the editor; extraction re-reviewed until clean). Reverted after review
+  rounds regressed real postings: the bulleted-heading and perk-noun rules,
+  so a short bullet that starts with a heading word ("- Requirements
+  gathering sessions") still closes its section.
 
 ## 2026-10-28
 
-- [TOOL] **Bug-hunt round two**, uncommitted with round one. Workspace saves
+- [TOOL] **Bug-hunt round two**, committed with round one (01ba3b9). Workspace saves
   and restores stage the replacement before archiving the live file and put
   it back if the install fails (`replaceWorkspaceFile`); tracker upserts
   cannot drop `appliedAt`, stage moves never invent a date, same-stage status
@@ -140,21 +148,3 @@ D-entries in `docs/decisions.md`.
   undated record moved to Skipped sheds its documents. Unscanned: intake and
   polish hooks, editor hooks, shared contracts. Not fixed: Providers panel
   ignores a reused server.
-
-## 2026-10-27
-
-- [TOOL] **Bug-hunt fixes**, uncommitted on `fix/rolefit-dev-smoke-connection`
-  (open for the user: commit and PR). Duplicate matcher (URL query and hash
-  routes, LinkedIn/Workday ids, accent folding, location noise words); job
-  import (single-pass entities, `<li` boundary, prose `<`, charset and BOM,
-  empty compressed body); cover-letter batch skips unreadable files; port-80
-  Host guard; companion (Fetch bad ports, backup-name pre-check, Safari
-  origins filtered, settings read failure keeps origins); extension (retry
-  keeps the claim token, capture before settings, truthful notice, bad
-  ports); settings cache cleared on a failed
-  write. Verified: app check, server/app/desktop tsc, desktop probes, a
-  code-review pass and one independent review, all findings fixed (incl. no
-  regex lookbehind, for Safari 16.0-16.3). No probe (not simulable here): the
-  settings I/O-error branch, `main.cts` paths, the popup's Settings-from-
-  loading restart. Still not fixed: `jdTokens` is ASCII-only; variant
-  listings do not filter directories.
