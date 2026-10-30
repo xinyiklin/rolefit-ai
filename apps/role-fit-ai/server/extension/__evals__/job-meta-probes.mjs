@@ -23,6 +23,8 @@ probe("LinkedIn page titles name the role and employer", () => {
     { title: "Front-End Engineer", company: "Acme Corp" }
   );
   assert.deepEqual(extractJobMeta("", "Senior SRE At Big Co - LinkedIn"), { title: "Senior SRE", company: "Big Co" });
+  assert.deepEqual(extractJobMeta("", "Engineer at Coca-Cola | LinkedIn"), { title: "Engineer", company: "Coca-Cola" }, "a hyphenated employer stays whole");
+  assert.deepEqual(extractJobMeta("", "Engineer at Rolls-Royce - LinkedIn"), { title: "Engineer", company: "Rolls-Royce" });
   assert.deepEqual(extractJobMeta("", "Engineer at Acme | Careers"), { title: "Engineer at Acme" }, "no LinkedIn marker");
 });
 

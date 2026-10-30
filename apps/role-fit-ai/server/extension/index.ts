@@ -47,7 +47,8 @@ export function extractJobMeta(text: unknown, pageTitle: unknown): { title?: str
     const segments = title.split("|");
     const at = /\s+at\s+/i.exec(title);
     const afterAt = at ? title.slice(at.index + at[0].length) : "";
-    const separator = afterAt.search(/[|–-]/);
+    // A spaced hyphen separates fields, so "Coca-Cola" stays one employer.
+    const separator = afterAt.search(/[|–]|\s-\s/);
     if (segments.length >= 3 && segments.at(-1)?.trim().toLowerCase() === "handshake") {
       const role = segments.slice(0, -2).join("|").trim();
       const company = segments.at(-2)?.trim() ?? "";
