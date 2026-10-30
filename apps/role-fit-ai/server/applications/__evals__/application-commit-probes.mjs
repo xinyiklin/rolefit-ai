@@ -203,6 +203,7 @@ try {
     [{ application: { ...application, status: "not_applying", resumeUsed: undefined, notApplyingReasons: ["fit", "nope"] } }, "application.notApplyingReasons: not stored as sent"],
     [{ application, documents: { resume: { sourceText: resumeSource, fileName: "r".repeat(201) } } }, "documents.resume.fileName: must be a non-empty string of at most 200"],
     [{ application: { ...application, applicationAnswers: [{ question: "Q", answer: "A", savedAt: "yesterday" }] } }, "application.applicationAnswers[0].savedAt: must be a canonical ISO timestamp"],
+    [{ application: { ...application, applicationAnswers: [{ question: "Q", answer: " 	" }] } }, "application.applicationAnswers[0].answer: must not be blank"],
     [{ application: JSON.parse(`{"title":"Proto","status":"applied","__proto__":{"x":1}}`) }, "application.__proto__: dropped"],
     [{ application: { ...application, applicationAnswers: [staleRevision] } }, "application.applicationAnswers[0]: its counts or limits do not match its text"],
     [{ application: { ...application, extra: true }, dryRun: true }, "application.extra: dropped"],
@@ -414,6 +415,8 @@ try {
     assert.match((await addAnswers(applied.id, { answers: [], note: 1 })).json.issues[0], /^note: not an answers field/);
     assert.match((await addAnswers(applied.id, { answers: [] })).json.issues[0], /^answers: send 1 to 40/);
     assert.deepEqual((await addAnswers(applied.id, { answers: [{ question: "Q", answer: "A", savedAt: "yesterday" }] })).json.issues, ["answers[0].savedAt: must be a canonical ISO timestamp"]);
+    assert.deepEqual((await addAnswers(applied.id, { answers: [{ question: "Q", answer: "A" }, { question: "   ", answer: "	" }] })).json.issues,
+      ["answers[1].question: must not be blank", "answers[1].answer: must not be blank"], "a new plain pair must hold text");
     const oversized = await addAnswers(applied.id, JSON.stringify({ answers: [{ question: "Q", answer: "x".repeat(2_100_000) }] }));
     assert.equal(oversized.status, 413);
     assert.match(oversized.json.error, /larger than the supported limit/);

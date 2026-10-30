@@ -43,6 +43,9 @@ export function answerIssues(answers: readonly unknown[], applicationId: string,
     const at = `${path}[${index}]`;
     const parsed = parseSavedApplicationAnswers([answer], applicationId)?.[0];
     if (!parsed) return [`${at}: not a valid answer`];
+    // The stored list check keeps loading blank legacy pairs; a new pair must hold text.
+    const blank = parsed.id ? [] : (["question", "answer"] as const).filter((field) => !parsed[field].trim());
+    if (blank.length) return blank.map((field) => `${at}.${field}: must not be blank`);
     if (!isCanonicalApplicationTimestamp(parsed.savedAt)) return [`${at}.savedAt: must be a canonical ISO timestamp`];
     if (parsed.status === "ready" && hasUnresolvedAnswerPlaceholder(parsed.answer)) {
       return [`${at}.status: an answer holding a placeholder is a draft; replace the placeholder or send status "draft"`];

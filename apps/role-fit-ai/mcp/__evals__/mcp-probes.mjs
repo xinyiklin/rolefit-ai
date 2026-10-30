@@ -270,6 +270,30 @@ const call = async (name, args) => (await rpc("tools/call", { name, arguments: a
   assert.equal((await call("get_answers", { limit: 1 })).structuredContent.answers.length, 1);
 }
 
+// A plain-pair correction and a full revision of the same question collapse to the later one, either way round;
+// two revisions with different questionIds stay two questions even when their text matches.
+{
+  const revision = (id, questionId, question, answer, savedAt) => ({ id, applicationId: "m1", questionId, questionRevision: 1, question, answer, savedAt, status: "ready" });
+  const mixed = {
+    id: "m1", title: "Eng at Acme", company: "Acme", role: "Eng", status: "applied", createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-04T00:00:00.000Z",
+    applicationAnswers: [
+      revision("rev1", "qa", "Why Acme?", "Old Acme answer.", "2026-10-01T00:00:00.000Z"),
+      { question: "why acme? ", answer: "Corrected Acme answer.", savedAt: "2026-10-02T00:00:00.000Z" },
+      { question: "Why now?", answer: "Old timing answer.", savedAt: "2026-10-01T00:00:00.000Z" },
+      revision("rev2", "qn", "Why now?", "Revised timing answer.", "2026-10-03T00:00:00.000Z"),
+      revision("rev3", "qx", "Describe a project.", "First project.", "2026-10-01T00:00:00.000Z"),
+      revision("rev4", "qy", "Describe a project.", "Second project.", "2026-10-02T00:00:00.000Z")
+    ]
+  };
+  const mixedTools = createTools(base, async () => new Response(JSON.stringify({ applications: [mixed], revision: "r1" }), { status: 200, headers: { "Content-Type": "application/json" } }));
+  const run = (name, args) => mixedTools.find((tool) => tool.name === name).run(args);
+  const pkg = (await run("get_submission_package", { id: "m1" })).value;
+  assert.deepEqual(pkg.applicationAnswers.map(({ answer }) => answer), ["Corrected Acme answer.", "Revised timing answer.", "First project.", "Second project."], "the later of a pair and a revision wins");
+  assert.equal(pkg.applicationAnswers[0].status, undefined, "the superseded ready revision's status does not leak onto the correction");
+  const found = (await run("get_answers", { query: "acme" })).value;
+  assert.deepEqual(found.answers.map(({ answer }) => answer), ["Corrected Acme answer."]);
+}
+
 // get_candidate_profile returns the Profile and only declared facts.
 {
   const profile = (await call("get_candidate_profile", {})).structuredContent;

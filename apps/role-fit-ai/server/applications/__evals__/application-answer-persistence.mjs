@@ -53,6 +53,7 @@ for (const stale of [{ counts: { ...receipt.counts, words: 999 } }, { constraint
 assert.equal(parseSavedApplicationAnswers(Array.from({ length: 161 }, (_, n) => ({ ...legacy, question: String(n) })), draft.id), null);
 assert.equal(parseSavedApplicationAnswers([{ ...legacy, answer: "x".repeat(16_001) }], draft.id), null);
 assert.equal(parseSavedApplicationAnswers([legacy], draft.id)[0].generation, undefined, "legacy provenance stays unknown");
+assert.ok(parseSavedApplicationAnswers([{ ...legacy, question: " ", answer: "	" }], draft.id), "a stored blank pair still loads; only new writes refuse it");
 const edited = editedSavedApplicationAnswer(saved, "Why this role? Under 3 words.", "A longer manual answer", "manual-1", later);
 assert.equal(edited.generation, undefined);
 assert.equal(edited.sources, undefined);
