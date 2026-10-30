@@ -1,6 +1,6 @@
 // Base-resume persistence probes in an isolated temporary workspace.
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, readdir, rename, rm, unlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rename, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -119,11 +119,34 @@ try {
     const snapshot = JSON.parse(res.body);
     assert.equal(snapshot.baseResume.exists, false);
     assert.match(snapshot.baseResume.error, /invalid/i, "the base resume carries the error");
+    assert.equal(snapshot.baseResume.fileName, "default.resume", "and names the file that failed");
+    assert.match(snapshot.baseResume.error, /\(default\.resume\) could not be read/);
     assert.equal(snapshot.baseResume.text, undefined, "the starter never stands in for the unreadable default");
     assert.ok(snapshot.baseResumeOptions.some((option) => option.fileName === "frontend.resume"), "other variants can still be chosen");
     assert.ok(Array.isArray(snapshot.baseResumeHistory), "history is still listed");
     assert.ok(Array.isArray(snapshot.coverLetterOptions), "cover letters still load");
     await unlink(join(resumeDir, "frontend.resume"));
+  }
+
+  {
+    // A directory named like a variant is not listed (reading it would fail).
+    const coverDir = join(locations.workspaceDir, "cover-letters");
+    await mkdir(join(resumeDir, "folder.resume"), { recursive: true });
+    await mkdir(join(coverDir, "folder.cover"), { recursive: true });
+    const snapshot = JSON.parse((await invoke(handleWorkspace, "GET", {})).body);
+    assert.ok(!snapshot.baseResumeOptions.some((option) => option.fileName === "folder.resume"), "a directory is not a resume variant");
+    assert.ok(!snapshot.coverLetterOptions.some((option) => option.fileName === "folder.cover"), "a directory is not a cover-letter variant");
+    // A link counts only when it resolves to a file (a junction needs no
+    // elevation on Windows; elsewhere this is a directory symlink).
+    await symlink(join(resumeDir, "folder.resume"), join(resumeDir, "linked.resume"), "junction");
+    await symlink(join(resumeDir, "missing-target"), join(resumeDir, "broken.resume"), "junction");
+    const linked = JSON.parse((await invoke(handleWorkspace, "GET", {})).body).baseResumeOptions.map((option) => option.fileName);
+    assert.ok(!linked.includes("linked.resume"), "a link to a directory is not a resume variant");
+    assert.ok(!linked.includes("broken.resume"), "a broken link is not a resume variant");
+    await rm(join(resumeDir, "linked.resume"), { recursive: true, force: true });
+    await rm(join(resumeDir, "broken.resume"), { recursive: true, force: true });
+    await rm(join(resumeDir, "folder.resume"), { recursive: true });
+    await rm(join(coverDir, "folder.cover"), { recursive: true });
   }
 
   await writeFile(join(resumeDir, "default.resume"), starter, "utf8");

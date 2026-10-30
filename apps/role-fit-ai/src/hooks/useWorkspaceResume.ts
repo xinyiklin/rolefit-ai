@@ -320,7 +320,18 @@ export function useWorkspaceResume({
       updateWorkspaceState(workspace);
       if (workspace.baseResume?.error) {
         // The saved default could not be read. The variant list and history
-        // just published let the user choose or restore; nothing is seeded.
+        // just published let the user choose or restore; nothing is seeded
+        // except the valid variant this user last had open, as at any startup.
+        const rememberedName = applyBaseResume ? loadLastBaseResumeName() : "";
+        if (
+          rememberedName &&
+          rememberedName !== workspace.baseResume.fileName &&
+          (workspace.baseResumeOptions ?? []).some((option) => option.fileName === rememberedName) &&
+          !(await loadBaseResumeVersion(rememberedName, false))
+        ) {
+          setWorkspaceStatus(`${workspace.baseResume.error} ${rememberedName}, the version last open, could not be opened either.`);
+          return;
+        }
         setWorkspaceStatus(workspace.baseResume.error);
         return;
       }

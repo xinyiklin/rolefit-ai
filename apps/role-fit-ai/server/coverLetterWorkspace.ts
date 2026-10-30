@@ -13,6 +13,7 @@ import {
   coverLetterWorkspaceDir,
   ensureJobWorkspace,
   isMissingFile,
+  listVariantFiles,
   nextTrashStamp,
   restoreConflictHandled,
   withWorkspaceLock,
@@ -94,12 +95,7 @@ export function validateCoverLetterText(data: Buffer | string): string {
 export async function readCoverLetterOptions(
   locations: WorkspaceLocations
 ): Promise<CoverLetterOption[]> {
-  const files = await readdir(coverLetterWorkspaceDir(locations)).catch((error) => {
-    if (isMissingFile(error)) return [] as string[];
-    throw error;
-  });
-  return files
-    .filter((name) => coverLetterVariantPattern.test(name))
+  return (await listVariantFiles(coverLetterWorkspaceDir(locations), coverLetterVariantPattern))
     .map((fileName) => ({ fileName, label: coverLetterLabel(fileName) }))
     .sort((a, b) => {
       if (a.fileName === DEFAULT_COVER_LETTER_FILE) return -1;

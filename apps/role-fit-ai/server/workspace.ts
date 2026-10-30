@@ -2,7 +2,7 @@
 // cover-letter storage; embedded runtimes pass explicit app and workspace roots.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { access, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import { readBody, sendJson } from "./http.ts";
@@ -47,14 +47,33 @@ const MAX_BASE_RESUME_BYTES = 200_000;
 const MAX_BASE_RESUME_CANDIDATES = 40;
 
 export class WorkspaceStorageError extends Error {
-  constructor(message = "The base-resume workspace could not be read safely. Check the workspace files and try again.") {
+  // The workspace file that failed, when one did.
+  fileName?: string;
+  constructor(message = "The base-resume workspace could not be read safely. Check the workspace files and try again.", fileName?: string) {
     super(message);
     this.name = "WorkspaceStorageError";
+    this.fileName = fileName;
   }
 }
 
 export function isMissingFile(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT");
+}
+
+// Variant files in `dir` named by `pattern`. A directory named like one is not
+// one, and a link (or Windows junction) counts only when it resolves to a file.
+export async function listVariantFiles(dir: string, pattern: RegExp): Promise<string[]> {
+  const entries = await readdir(dir, { withFileTypes: true }).catch((error) => {
+    if (isMissingFile(error)) return [];
+    throw error;
+  });
+  const names: string[] = [];
+  for (const entry of entries) {
+    if (!pattern.test(entry.name)) continue;
+    if (entry.isFile()) names.push(entry.name);
+    else if (entry.isSymbolicLink() && (await stat(join(dir, entry.name)).catch(() => null))?.isFile()) names.push(entry.name);
+  }
+  return names;
 }
 
 // Serialize reads with mutations as well as mutation-to-mutation cycles. A save
@@ -239,8 +258,8 @@ export async function readWorkspaceBaseResume(
       };
     } catch (error) {
       if (isMissingFile(error)) continue;
-      if (error instanceof WorkspaceStorageError) throw error;
-      throw new WorkspaceStorageError();
+      if (error instanceof WorkspaceStorageError) throw new WorkspaceStorageError(error.message, fileName);
+      throw new WorkspaceStorageError(undefined, fileName);
     }
   }
 
@@ -265,12 +284,7 @@ async function readBundledStarterResume(
 }
 
 async function readBaseResumeOptions(locations: WorkspaceLocations): Promise<{ fileName: string; label: string; kind: string }[]> {
-  const files = await readdir(resumeWorkspaceDir(locations)).catch((error) => {
-    if (isMissingFile(error)) return [] as string[];
-    throw error;
-  });
-  return files
-    .filter((name) => baseResumeVariantPattern.test(name))
+  return (await listVariantFiles(resumeWorkspaceDir(locations), baseResumeVariantPattern))
     .map((fileName) => ({
       fileName,
       label: baseResumeLabel(fileName),
@@ -396,7 +410,13 @@ async function defaultBaseResume(locations: WorkspaceLocations): Promise<BaseRes
   try {
     return await readWorkspaceBaseResume(undefined, locations);
   } catch (error) {
-    if (error instanceof WorkspaceStorageError) return { exists: false, error: error.message };
+    if (error instanceof WorkspaceStorageError) {
+      return {
+        exists: false,
+        ...(error.fileName ? { fileName: error.fileName } : {}),
+        error: error.fileName ? `${baseResumeLabel(error.fileName)} (${error.fileName}) could not be read. ${error.message}` : error.message
+      };
+    }
     throw error;
   }
 }
