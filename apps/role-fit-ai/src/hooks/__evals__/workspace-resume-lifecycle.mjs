@@ -373,4 +373,15 @@ function deferred() {
   assert.equal(await prepare(), true, "a subsequent manual Prepare can claim again");
 }
 
+{
+  // An unreadable saved default arrives as an error on baseResume, with the
+  // rest of the workspace. The lists publish first; nothing is seeded.
+  const load = functionSlice("loadWorkspace", "loadStarterTemplate");
+  assert.match(
+    load,
+    /updateWorkspaceState\(workspace\);\s*if \(workspace\.baseResume\?\.error\) \{[\s\S]{0,240}?setWorkspaceStatus\(workspace\.baseResume\.error\);\s*return;\s*\}/,
+    "an unreadable default shows its error after the variant list and history are published, and seeds nothing"
+  );
+}
+
 console.log("Workspace resume lifecycle probes passed");

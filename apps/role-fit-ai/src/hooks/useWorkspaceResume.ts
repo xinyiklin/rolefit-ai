@@ -43,6 +43,7 @@ export type WorkspaceBaseResume = {
   kind?: string;
   text?: string;
   paragraphs?: number;
+  error?: string;
 };
 
 export type BaseResumeOption = {
@@ -317,6 +318,12 @@ export function useWorkspaceResume({
       if (!loadOwnership.isCurrent(claim)) return;
 
       updateWorkspaceState(workspace);
+      if (workspace.baseResume?.error) {
+        // The saved default could not be read. The variant list and history
+        // just published let the user choose or restore; nothing is seeded.
+        setWorkspaceStatus(workspace.baseResume.error);
+        return;
+      }
       if (workspace.baseResume?.exists) {
         if (applyBaseResume) {
           const rememberedName = loadLastBaseResumeName();

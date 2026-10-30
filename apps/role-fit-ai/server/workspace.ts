@@ -18,6 +18,8 @@ type BaseResumeResult = {
   kind?: string;
   text?: string;
   paragraphs?: number;
+  // Set when the saved default could not be read; the starter never stands in.
+  error?: string;
 };
 
 export type WorkspaceLocations = {
@@ -387,6 +389,18 @@ async function readBaseResumeHistory(locations: WorkspaceLocations, perVariant =
   });
 }
 
+// One unreadable saved resume must not hide the rest of the workspace: the
+// variant list, its history and the cover letters still load, so the error's
+// advice to restore or choose another version can be followed.
+async function defaultBaseResume(locations: WorkspaceLocations): Promise<BaseResumeResult> {
+  try {
+    return await readWorkspaceBaseResume(undefined, locations);
+  } catch (error) {
+    if (error instanceof WorkspaceStorageError) return { exists: false, error: error.message };
+    throw error;
+  }
+}
+
 async function workspaceSnapshot(locations: WorkspaceLocations, baseResume?: BaseResumeResult) {
   // Cover-letter state rides along so one GET /api/workspace seeds both editors
   // and every mutation returns a snapshot that is current for both.
@@ -394,7 +408,7 @@ async function workspaceSnapshot(locations: WorkspaceLocations, baseResume?: Bas
   return {
     path: locations.workspaceDir,
     ...coverLetter,
-    baseResume: baseResume ?? await readWorkspaceBaseResume(undefined, locations),
+    baseResume: baseResume ?? await defaultBaseResume(locations),
     starterResume: await readBundledStarterResume(locations),
     baseResumeOptions: await readBaseResumeOptions(locations),
     baseResumeHistory: await readBaseResumeHistory(locations),

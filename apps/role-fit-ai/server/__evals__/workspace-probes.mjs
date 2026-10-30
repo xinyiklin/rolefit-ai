@@ -1,6 +1,6 @@
 // Base-resume persistence probes in an isolated temporary workspace.
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rename, rm, unlink, writeFile } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -110,6 +110,21 @@ try {
     (error) => error instanceof WorkspaceStorageError,
     "invalid UTF-8 saved .resume bytes fail closed"
   );
+
+  {
+    // The rest of the workspace stays reachable, so the error's advice can be followed.
+    await writeFile(join(resumeDir, "frontend.resume"), starter, "utf8");
+    const res = await invoke(handleWorkspace, "GET", {});
+    assert.equal(res.status, 200, "an unreadable saved default does not fail the whole workspace snapshot");
+    const snapshot = JSON.parse(res.body);
+    assert.equal(snapshot.baseResume.exists, false);
+    assert.match(snapshot.baseResume.error, /invalid/i, "the base resume carries the error");
+    assert.equal(snapshot.baseResume.text, undefined, "the starter never stands in for the unreadable default");
+    assert.ok(snapshot.baseResumeOptions.some((option) => option.fileName === "frontend.resume"), "other variants can still be chosen");
+    assert.ok(Array.isArray(snapshot.baseResumeHistory), "history is still listed");
+    assert.ok(Array.isArray(snapshot.coverLetterOptions), "cover letters still load");
+    await unlink(join(resumeDir, "frontend.resume"));
+  }
 
   await writeFile(join(resumeDir, "default.resume"), starter, "utf8");
   assert.equal((await readWorkspaceBaseResume(undefined, locations)).exists, true, "valid strict .resume loads");
