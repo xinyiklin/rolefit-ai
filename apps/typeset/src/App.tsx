@@ -112,6 +112,7 @@ export default function App() {
   const workspaceRef = useRef<HTMLElement>(null);
   const initializedRef = useRef(false);
   const lastWrittenDraftRef = useRef<string | null>(null);
+  const pendingAutosaveRef = useRef<(() => void) | null>(null);
   const autoFitRef = useRef(false);
   const dragDepthRef = useRef(0);
   const noticeExitTimerRef = useRef<number | null>(null);
@@ -218,7 +219,8 @@ export default function App() {
     if (!initializedRef.current || !resume) return;
     setSaveStatus("saving");
 
-    const timer = window.setTimeout(() => {
+    const save = () => {
+      pendingAutosaveRef.current = null;
       try {
         const draft = serializeResumeFile(resume, docStyle.style);
         window.localStorage.setItem(AUTOSAVE_KEY, draft);
@@ -229,10 +231,33 @@ export default function App() {
       } catch {
         setSaveStatus({ state: "error", label: "Local save unavailable" });
       }
-    }, AUTOSAVE_DELAY_MS);
+    };
+    const timer = window.setTimeout(save, AUTOSAVE_DELAY_MS);
+    pendingAutosaveRef.current = () => {
+      window.clearTimeout(timer);
+      save();
+    };
 
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      pendingAutosaveRef.current = null;
+    };
   }, [docStyle.markClean, documentStyleSignature, documentTitle, editor.markClean, resume]);
+
+  // Mobile browsers and discarded tabs may never fire beforeunload, so a hidden
+  // page writes its pending draft now instead of after the autosave delay.
+  useEffect(() => {
+    const flush = () => pendingAutosaveRef.current?.();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, []);
 
   useEffect(() => {
     document.title = `${documentTitle.trim() || UNTITLED_RESUME_TITLE} — Typeset`;

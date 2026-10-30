@@ -7,6 +7,7 @@
 //
 //   node --experimental-strip-types src/__evals__/resume-autosave.mjs
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import { DOC_STYLE_DEFAULTS } from "@typeset/engine/lib/documentStyle.ts";
 import {
@@ -109,4 +110,20 @@ assert.equal(draftReplacedElsewhere({ key: AUTOSAVE_KEY, newValue: autosave }, n
 assert.equal(draftReplacedElsewhere({ key: null, newValue: null }, autosave), true, "a cleared store keeps nothing");
 assert.equal(draftReplacedElsewhere({ key: DOCUMENT_TITLE_KEY, newValue: "Other" }, autosave), false, "other keys do not replace the draft");
 
-console.log("Typeset resume autosave: strict round trip, 4 malformed-draft refusals, unreadable-draft keeping, and cross-tab replacement passed");
+// Mobile browsers and discarded tabs may skip beforeunload, so hiding the page
+// must write the pending draft instead of waiting out the debounce.
+const appSource = readFileSync(new URL("../App.tsx", import.meta.url), "utf8");
+assert.match(
+  appSource,
+  /pendingAutosaveRef\.current = \(\) => \{\s*window\.clearTimeout\(timer\);\s*save\(\);/,
+  "the autosave effect exposes its pending write as a synchronous flush"
+);
+assert.match(appSource, /const flush = \(\) => pendingAutosaveRef\.current\?\.\(\);/, "a flush runs the pending autosave");
+assert.match(appSource, /window\.addEventListener\("pagehide", flush\)/, "pagehide flushes the pending autosave");
+assert.match(
+  appSource,
+  /document\.visibilityState === "hidden"\) flush\(\)[\s\S]*?document\.addEventListener\("visibilitychange", onVisibilityChange\)/,
+  "a hidden visibilitychange flushes the pending autosave"
+);
+
+console.log("Typeset resume autosave: strict round trip, 4 malformed-draft refusals, unreadable-draft keeping, cross-tab replacement, and hidden-page flush passed");
