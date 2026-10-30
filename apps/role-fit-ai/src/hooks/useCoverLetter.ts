@@ -167,24 +167,29 @@ export function useCoverLetter({
   );
   // Only evidence concerns about the accepted wording carry forward; this
   // draft's length, phrasing, and structure notes are recomputed each run.
+  const acceptedConcernWarnings = lastAppliedResult?.concerns.length
+    ? [COVER_ACCEPTED_CONCERNS_WARNING, ...lastAppliedResult.concerns]
+    : [];
   const inputSourceWarnings = sanitizeContentWarnings([
     ...(sourceWarnings ?? []),
-    ...(lastAppliedResult?.concerns.length ? [COVER_ACCEPTED_CONCERNS_WARNING, ...lastAppliedResult.concerns] : [])
+    ...acceptedConcernWarnings,
   ]) ?? [];
   const proposalContentFingerprint = workflowInputFingerprint({
     sourceRevision,
     currentCoverLetterText,
     jobText,
     customInstructions,
-    sourceWarnings: inputSourceWarnings,
+    acceptedConcernWarnings,
     resolved: preflight.resolved,
     evidenceItems: evidenceItems.filter((item) => item.source !== "resume"),
   });
   // The resume content in use, not the saved baseline: saving the resume as it
-  // stands must not cancel a run or mark a proposal stale.
+  // stands must not cancel a run or mark a proposal stale. Resume-derived
+  // warnings follow resume acceptance, so they only flag the proposal for review.
   const proposalResumeFingerprint = workflowInputFingerprint({
     resumeText: currentResumeText || resumeText,
     evidenceItems: evidenceItems.filter((item) => item.source === "resume"),
+    sourceWarnings: sourceWarnings ?? [],
   });
   const requestInputFingerprint = workflowInputFingerprint({
     proposalContentFingerprint,
