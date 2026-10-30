@@ -2,6 +2,7 @@
 // the reads several tools share. The server owns validation, locking and
 // storage, so this process never touches the workspace itself.
 
+import { request as httpRequest } from "node:http";
 import { coverLetterPlainText, parseCoverLetterFile } from "@typeset/engine/lib/coverLetter.ts";
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import { buildCandidateFactsContext } from "../src/lib/candidateFacts.ts";
@@ -44,6 +45,48 @@ export type DocumentKind = "resume" | "cover";
 export type ReadDocument = { fileName: string; savedAt?: string; label?: string; text: string; sourceText: string };
 
 const REQUEST_TIMEOUT_MS = 60_000;
+
+// Node's fetch gives up waiting for response headers after five minutes, which
+// an AI stage can outlast. Over node:http the request's own signal is the only
+// limit. The loopback origin check below means plain http is all it needs.
+export const loopbackFetch: typeof fetch = (input, init = {}) => new Promise((resolve, reject) => {
+  const { signal } = init;
+  if (typeof input !== "string" && !(input instanceof URL)) return reject(new TypeError("loopbackFetch takes a URL."));
+  if (init.body != null && typeof init.body !== "string") return reject(new TypeError("loopbackFetch sends string bodies only."));
+  if (signal?.aborted) return reject(signal.reason);
+  const onAbort = () => request.destroy(signal?.reason);
+  const settle = (error: unknown) => {
+    signal?.removeEventListener("abort", onAbort);
+    reject(signal?.aborted ? signal.reason : error);
+  };
+  const request = httpRequest(input, {
+    method: init.method ?? "GET",
+    headers: Object.fromEntries(new Headers(init.headers).entries())
+  }, (response) => {
+    const chunks: Buffer[] = [];
+    const cutOff = () => settle(Object.assign(new Error("The reply was cut off."), { name: "ReplyCutOff" }));
+    response.on("data", (chunk: Buffer) => chunks.push(chunk));
+    response.on("error", cutOff);
+    response.on("close", () => { if (!response.complete) cutOff(); });
+    response.on("end", () => {
+      signal?.removeEventListener("abort", onAbort);
+      try {
+        const status = response.statusCode ?? 502;
+        const headers = new Headers();
+        for (const [name, value] of Object.entries(response.headers)) {
+          for (const item of Array.isArray(value) ? value : value === undefined ? [] : [value]) headers.append(name, item);
+        }
+        resolve(new Response([204, 205, 304].includes(status) ? null : Buffer.concat(chunks), { status, headers }));
+      } catch (error) {
+        // An event handler must not throw: it would end the stdio server.
+        reject(error);
+      }
+    });
+  });
+  signal?.addEventListener("abort", onAbort, { once: true });
+  request.on("error", settle);
+  request.end(init.body ?? undefined);
+});
 
 // Loopback only: the tracker holds personal data and this server has no
 // business sending it anywhere else.
@@ -116,7 +159,9 @@ export function createClient(baseUrl: string, fetchImpl: typeof fetch = fetch) {
         value: {
           error: error instanceof Error && error.name === "TimeoutError"
             ? `RoleFit at ${baseUrl} did not answer within ${timeoutMs / 1000} seconds.`
-            : `RoleFit is not reachable at ${baseUrl}. Start it (npm run dev:rolefit or the desktop companion) or set ROLEFIT_URL to its port.`
+            : error instanceof Error && error.name === "ReplyCutOff"
+              ? `RoleFit at ${baseUrl} closed the connection before finishing its reply. Try again.`
+              : `RoleFit is not reachable at ${baseUrl}. Start it (npm run dev:rolefit or the desktop companion) or set ROLEFIT_URL to its port.`
         }
       };
     }

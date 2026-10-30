@@ -7,7 +7,7 @@
 
 import { createInterface } from "node:readline";
 
-import { roleFitBaseUrl, type Tool } from "./client.ts";
+import { loopbackFetch, roleFitBaseUrl, type Tool } from "./client.ts";
 import { createTools } from "./tools.ts";
 
 // Newest first; a client asking for another version is offered the newest.
@@ -139,5 +139,5 @@ if (import.meta.main) {
     process.stderr.write(`rolefit-mcp: ${error instanceof Error ? error.message : String(error)}\n`);
     process.exit(2);
   }
-  await serveStdio(createTools(baseUrl));
+  await serveStdio(createTools(baseUrl, loopbackFetch));
 }
