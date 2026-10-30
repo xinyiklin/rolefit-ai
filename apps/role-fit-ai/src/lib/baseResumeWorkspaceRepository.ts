@@ -14,9 +14,11 @@ import type { VariantCandidate } from "./variantRecommendation.ts";
 
 type CandidateOption = { fileName: string; label: string };
 
+// Resolves null when the read itself failed (transport, HTTP, or body shape),
+// so a caller can tell a transient failure from a real answer and not cache it.
 export async function fetchBaseResumeCandidates(
   options: CandidateOption[]
-): Promise<VariantCandidate[]> {
+): Promise<VariantCandidate[] | null> {
   const fileNames = [...new Set(options.map((option) => option.fileName).filter(Boolean))];
   if (!fileNames.length) return [];
 
@@ -28,12 +30,12 @@ export async function fetchBaseResumeCandidates(
       body: JSON.stringify({ fileNames })
     });
     const body = (await response.json()) as { candidates?: unknown };
-    if (!response.ok || !Array.isArray(body.candidates)) return [];
+    if (!response.ok || !Array.isArray(body.candidates)) return null;
     read = body.candidates as typeof read;
   } catch {
     // Ranking is an affordance over the selector, never the document itself.
     // An unreachable workspace produces no recommendation, not a broken Prepare.
-    return [];
+    return null;
   }
 
   const labels = new Map(options.map((option) => [option.fileName, option.label]));

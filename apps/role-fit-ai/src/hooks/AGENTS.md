@@ -120,7 +120,9 @@ browser-side effects; components render them and App composes them.
   Prepare's deterministic recommendation, but that decision stays session-only;
   its only persisted input is the Settings eligibility pool. It reads every variant through one
   batch request (`lib/baseResumeWorkspaceRepository.ts`), caches the result
-  against a candidate revision, and exposes a settled signal callers await
+  against a candidate revision (a failed read resolves no candidates and is
+  never cached, so one transient failure cannot switch adoption off), and
+  exposes a settled signal callers await
   instead of sampling `isWorkspaceBootstrapping` mid-flight. Metadata-only
   refreshes wait behind that one-shot settlement before claiming a load
   generation, so they cannot supersede startup document hydration. Authoritative

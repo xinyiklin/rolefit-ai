@@ -151,16 +151,16 @@ try {
     globalThis.fetch = async () => ({ ok: false, json: async () => ({ error: "nope" }) });
     check(
       await fetchBaseResumeCandidates([{ fileName: "default.resume", label: "Default" }]),
-      [],
-      "a non-ok response produces no candidates instead of failing preparation"
+      null,
+      "a non-ok response is a failed read, distinct from an empty answer, instead of failing preparation"
     );
     globalThis.fetch = async () => {
       throw new Error("offline");
     };
     check(
       await fetchBaseResumeCandidates([{ fileName: "default.resume", label: "Default" }]),
-      [],
-      "an unreachable workspace produces no candidates instead of failing preparation"
+      null,
+      "an unreachable workspace is a failed read, distinct from an empty answer, instead of failing preparation"
     );
     check(
       await readCoverLetterVariantCandidates([{ fileName: "default.cover", label: "Default" }]),

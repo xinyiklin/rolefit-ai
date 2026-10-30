@@ -687,6 +687,8 @@ export function useWorkspaceResume({
   // existing guarded load path remains the sole document-replacement owner.
   // Results are cached against the authoritative candidate revision, so
   // resolving and then displaying the same ranking costs one request in total.
+  // A failed read is never cached: the revision only moves on the next
+  // snapshot, so caching it would disable adoption for every Prepare until then.
   const readBaseResumeCandidates = useCallback(
     async (options: BaseResumeOption[]): Promise<VariantCandidate[]> => {
       const fileNames = [...new Set(options.map((option) => option.fileName).filter(Boolean))];
@@ -696,6 +698,7 @@ export function useWorkspaceResume({
       if (cached?.key === cacheKey) return cached.candidates;
 
       const candidates = await fetchBaseResumeCandidates(options);
+      if (candidates === null) return [];
       baseResumeCandidateCacheRef.current = { key: cacheKey, candidates };
       return candidates;
     },
