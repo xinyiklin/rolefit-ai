@@ -330,7 +330,7 @@ const TECH_KEYWORDS: Array<[string, RegExp]> = [
   // "go" is a common verb ("go above and beyond"), so bare Go only counts when
   // it looks like a language mention: Golang, "Go programming/development",
   // known experience phrases, or a comma/slash/paren-delimited tech list item.
-  ["Go", /\bgolang\b|\bgo\s+(?:language|programming|development|developer|engineer|services?|apis?|backend|microservices?)\b|(?:\b(?:experience with|proficien(?:t|cy) in|knowledge of|using|with|in|write(?:s|ing)?|build(?:ing)? with|building)\s+)go(?=\s*(?:[,.;)/]|$|\band\b|\bor\b|\s+(?:services?|apis?|backend|microservices?)\b))|(?:^|[,(;/]\s*)go(?=\s*(?:[,.;)/]|$|\band\b|\bor\b))/i],
+  ["Go", /\bgolang\b|\bgo\s+(?:language|programming|development|developer|engineer|services?|apis?|backend|microservices?)\b|(?:\b(?:experience with|proficien(?:t|cy) in|knowledge of|using|with|in|write(?:s|ing)?|build(?:ing)? with|building)\s+)go(?=\s*(?:[,.;)/]|$|\band\b|\bor\b|\s+(?:services?|apis?|backend|microservices?)\b))|(?:^|[,(;/]\s*)go(?!\s*\/\s*no[- ]?go)(?=\s*(?:[,.;)/]|$|\band\b|\bor\b))/i],
   ["Ruby", /\bruby\b/i],
   // Fix(JD-test): Salesforce platform/ecosystem (was entirely absent — central tech of the Honeywell Sparta role)
   ["Salesforce", /\bsalesforce(?:dx)?\b|\bapex\b|\bagentforce\b|\bdatacloud\b|\bsfdx\b|\bsf cli\b|\blightning web components?\b|\blwc\b/i],
@@ -675,8 +675,9 @@ function isPreferredItemStrict(item: string): boolean {
   // "plus" demotes only as the idiom ("is a plus", "a big plus", "plus:"),
   // never as the conjunction in "a degree plus 3 years"; "bonus" never as the
   // pay program.
-  // The idiom is never followed by a number ("an MBA plus 5 years").
-  return /\b(preferred|nice[- ]to[- ]have)\b|\bbonus\b(?!\s+(?:program|plan|pay|structure|eligib|scheme|compensation))|\ban?\s+(?:\w+\s+)?plus\b(?!\s*,?\s*(?:\d|an?\b|at least|minimum|additional))|\bplus\s*[:!]|\bplus\.?\s*$|^plus\b/i.test(checkWindow);
+  // The idiom is never followed by a number or an experience qualifier ("an
+  // MBA plus 5 years", "a degree plus relevant experience").
+  return /\b(preferred|nice[- ]to[- ]have)\b|\bbonus\b(?!\s+(?:program|plan|pay|structure|eligib|scheme|compensation))|\ban?\s+(?:(?:big|huge|great|strong|nice|major|definite|real|added|significant|distinct|clear|solid|key|massive|extra|additional|absolute)\s+)?plus\b(?!\s*,?\s*(?:\d|(?:an?|at least|minimum|additional)\b))|\ban?\s+\w+\s+plus\b(?!\s*,?\s*(?:\d|(?:an?|at least|minimum|additional)\b)|\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|relevant|related|equivalent|professional|industry|hands-on|practical|demonstrated|proven|experience)\b)|\bplus\s*[:!]|\bplus\.?\s*$|^plus\b/i.test(checkWindow);
 }
 
 function isListLikeContent(line: string): boolean {
@@ -967,9 +968,9 @@ function parseAmount(value: string): number {
 }
 
 function normalizePeriod(value: string): ExtractedSalaryPeriod | undefined {
-  if (/^(hour|hr)$/i.test(value)) return "hr";
-  if (/^(month|mo)$/i.test(value)) return "mo";
-  if (/^(year|yr|annum|annual|annually)$/i.test(value)) return "yr";
+  if (/^(hour|hr|hourly)$/i.test(value)) return "hr";
+  if (/^(month|mo|monthly)$/i.test(value)) return "mo";
+  if (/^(year|yr|annum|annual|annually|yearly)$/i.test(value)) return "yr";
   return undefined;
 }
 
@@ -1015,14 +1016,17 @@ function extractSalary(lines: string[]): Pick<
   // a $20/hr salary. With \b, only genuine pay-period forms ("/hr", "per hour",
   // "annually", "/year") match; a plural count noun ("hours"/"years") does not, so
   // the looksLikeCount guard below can reject it.
-  const PERIOD = String.raw`(?:\s*(?:\/|per)?\s*(year|yr|annum|annual|annually|hour|hr|month|mo)\b)`;
+  // "an hour" is a rate; "a year" / "a month" stay unmarked because perk
+  // amounts ("$1,500 a year learning budget") use that wording.
+  const PERIOD = String.raw`(?:\s*(?:\/|per|an(?=\s+hour\b))?\s*(year|yr|annum|annual|annually|hour|hr|hourly|month|mo)\b)`;
   // groups: 1=currency symbol, 2=min, 3=period-after-min, 4=max, 5=period-after-max.
   // A period token is allowed BEFORE the range connector so "$71,100/yr - $127,000/yr"
   // parses as ONE range instead of two lone candidates (which made the sort report
   // the ceiling as the floor). The connector also accepts "and" ("$71,100 and $127,000").
   // Number groups END IN A DIGIT (`\d(?:[\d,.]*\d)?`) so a sentence-final amount
   // ("$111,000.00.") captures "111,000.00" and not the trailing period.
-  const NUM = String.raw`\d(?:[\d,.]*\d)?(?:\s?[kK])?`;
+  // A "k" suffix is a word of its own: "80 Kubernetes" is not 80,000.
+  const NUM = String.raw`\d(?:[\d,.]*\d)?(?:\s?[kK](?:\b|(?=USD|EUR|GBP|CAD|AUD)))?`;
   const money = new RegExp(
     String.raw`(?:(?<![A-Za-z])(${CUR}))?\s*(${NUM})${PERIOD}?(?:\s*(?:-|–|—|to|and)\s*(?:${CUR})?\s*(${NUM}))?${PERIOD}?`,
     "gi"
@@ -1053,8 +1057,24 @@ function extractSalary(lines: string[]): Pick<
       const sym = match[1] ?? "";
       let min = parseAmount(match[2] ?? "");
       let max = match[4] ? parseAmount(match[4]) : null;
-      const period = normalizePeriod(match[5] || match[3] || "");
+      // A bare "monthly" / "yearly" after the amount is a period only on a pay
+      // line: perks use the same words ("$1,500 yearly learning budget"). A
+      // line that only mentions compensation ("Total compensation includes a
+      // $1,000 yearly wellness stipend") still reads a perk noun after it as a
+      // perk; a labelled pay line or one under a Compensation heading does not.
+      const tail = line.slice((match.index ?? 0) + match[0].length).trimStart();
+      const labelledPay = COMP_LABEL.test(prev) || /^\s*(?:[-•*]\s*)?(?:salary|pay|compensation|base (?:pay|salary)|stipend)\s*:/i.test(line);
+      const perkAfter = /^(?:monthly|yearly)\s+(?:[a-z-]+\s+){0,2}?(?:budgets?|stipends?|allowances?|reimbursements?|credits?|assistance|subsid(?:y|ies)|funds?)\b/i.test(tail);
+      const payWord = !match[5] && !match[3] && compContext && (labelledPay || !perkAfter)
+        ? /^(monthly|yearly)\b/i.exec(tail)?.[1]
+        : undefined;
+      // "$15 hourly childcare credit" is a perk worded as a rate.
+      if (/^hourly$/i.test(match[5] || match[3] || "") && !labelledPay
+        && /^(?:[a-z-]+\s+){0,2}?(?:budgets?|stipends?|allowances?|reimbursements?|credits?|assistance|subsid(?:y|ies)|funds?)\b/i.test(tail)) continue;
+      const period = normalizePeriod(match[5] || match[3] || payWord || "");
       if (!min) continue;
+      // "an extra $10 an hour" is a differential, not the pay rate.
+      if (!compContext && /\b(?:extra|additional|differential)\s*$/i.test(line.slice(0, match.index ?? 0))) continue;
 
       // Shared-k range: "120-150k" / "$90-120k" — the trailing k applies to BOTH
       // numbers, but parseAmount scales per-token, so min comes back unscaled
@@ -1104,7 +1124,9 @@ function extractSalary(lines: string[]): Pick<
       let score = 0;
       if (compContext) score += 5;
       if (range) score += 4;
-      if (period) score += 2;
+      // A period inferred from a bare "monthly" / "yearly" only labels the
+      // amount; ranking it would let a "$2,000 monthly bonus" outrank the base.
+      if (period && !payWord) score += 2;
       if (highValue || hourly) score += 1;
       candidates.push({ min, max, period, currency: currencyFromSymbol(sym), isUpTo, score });
     }
@@ -1298,8 +1320,15 @@ function looksLikeJobTitle(value: string): boolean {
   // Sentence punctuation as a break ("…X. You…") or a trailing stop signals prose,
   // not a title. A mid-token dot ("Node.js Developer") is fine — require a space
   // after the stop, or end-of-string.
-  if (/[.!?]\s/.test(t) || /[.!?]$/.test(t)) return false;
+  const bare = withoutTitleAbbreviationDots(t);
+  if (/[.!?]\s/.test(bare) || /[.!?]$/.test(bare)) return false;
   return true;
+}
+
+// "Sr. Software Engineer II" is a title, not prose: the abbreviation dot is
+// not a sentence stop.
+function withoutTitleAbbreviationDots(value: string): string {
+  return value.replace(/\b(Sr|Jr|Snr|Sen|Assoc|Asst|Mgr|Dir)\./gi, "$1");
 }
 
 // Lower-case prose roles get title-cased; a role that already carries caps
@@ -1623,7 +1652,7 @@ function extractTracking(lines: string[], url?: string): ExtractedJobTracking {
         .replace(/^(?:now hiring|we['‘’]?re hiring|hiring|job opening|open (?:role|position|req))\s*[:\-–—]\s*/i, "")
         .trim();
       if (!cand || cand.length < 8 || cand.length > 90) continue;
-      if (/[.!?]/.test(cand)) continue;
+      if (/[.!?]/.test(withoutTitleAbbreviationDots(cand))) continue;
       if ((cand.match(/,/g) ?? []).length > 1) continue;
       // Must be a real role title: an AGENT role noun (not "Engineering"), at least
       // two words, and not a nav listing ("Engineering Jobs", "Developer Roles").
@@ -1688,7 +1717,7 @@ function extractTracking(lines: string[], url?: string): ExtractedJobTracking {
       // Sentence-terminal punctuation signals prose; a comma is a normal title
       // separator ("Software Engineer, Safety", "SWE Intern, Internal Apps").
       // Allow at most one comma so a multi-clause prose line is still rejected.
-      if (/[.!?;]/.test(candidate)) continue;
+      if (/[.!?;]/.test(withoutTitleAbbreviationDots(candidate))) continue;
       if ((candidate.match(/,/g) ?? []).length > 1) continue;
       // The comma relaxation must not admit prose: reject a sentence opener or a
       // ", <pronoun/article/verb>" clause ("At Acme, we build great software").
@@ -2060,7 +2089,9 @@ function extractQualifications(lines: string[]) {
     // Filter the COMBINED list (incl. the keyword-sweep fallback, which otherwise
     // bypasses the noise filter) so an intro paragraph matched via "knowledge of"
     // or a "drug test" line can't land as a required qualification.
-    required: uniqueItems([...required, ...requiredFallback].filter((item) => !RESP_INTRO_NOISE.test(item)), 8),
+    // 12, like responsibilities, so an ordinary long requirements list is not
+    // cut at 8; the brief's character budget still bounds its length.
+    required: uniqueItems([...required, ...requiredFallback].filter((item) => !RESP_INTRO_NOISE.test(item)), 12),
     preferred: uniqueItems(preferredRaw, 9)  // Fix #18: 6→9
   };
 }
@@ -2084,9 +2115,30 @@ const PROSE_TECH_COLLOCATIONS = [
   /\belastic[ \t]+(?:beanstalk|kubernetes|container|compute|load|ip|block|file|network|ecs|eks)\b/gi
 ];
 
+const TECH_LIST_HEADING = /^(?:(?:programming\s+)?languages|skills|technical\s+skills|tech(?:nical)?\s+stack|stack|technologies|tools)\b[^.!?]*:?\s*$/i;
+
+// Go as a list entry, judged line by line (the catalog regex reads the whole
+// text at once): a bulleted "- Go", a line led by "Go, Rust", or a bare "Go"
+// inside a tech list (after a skills, languages, or stack heading, or beside
+// another bare catalog name). "Go/no-go" and scraped navigation are not it.
+const GO_LIST_ENTRY = /^(?:[•·‣◦▪●○]\s*|[-*–—]\s+|\d+[.)]\s+)go(?!\s*\/\s*no[- ]?go)(?:[,;/)]|\.?$)|^go(?!\s*\/\s*no[- ]?go)\s*[,;/]|^(?:(?:programming\s+)?languages|skills|tech(?:nical)?\s+stack|stack|technologies|tools)\s*:\s*go(?!\s*\/\s*no[- ]?go)\s*(?:[,;/]|$)/i;
+function hasGoListEntry(text: string): boolean {
+  const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
+  const bareName = (line: string | undefined) =>
+    Boolean(line) && TECH_KEYWORDS.some(([label]) => label.toLowerCase() === line!.replace(/[.,;]$/, "").toLowerCase());
+  // A line-final ", Go" counts beside another named technology ("Python, Java,
+  // Go"), never in prose ("Join us, go").
+  const endsList = (line: string) => /[,(;/]\s*go\.?$/i.test(line)
+    && TECH_KEYWORDS.some(([label, re]) => label !== "Go" && re.test(line));
+  return lines.some((line, index) => GO_LIST_ENTRY.test(line) || endsList(line) || (/^go[.,;]?$/i.test(line)
+    && (TECH_LIST_HEADING.test(lines[index - 1] ?? "") || bareName(lines[index - 1]) || bareName(lines[index + 1]))));
+}
+
 export function extractKnownTechKeywords(source: unknown): string[] {
   const text = PROSE_TECH_COLLOCATIONS.reduce((scrubbed, re) => scrubbed.replace(re, " "), String(source ?? ""));
-  return TECH_KEYWORDS.filter(([, re]) => re.test(text)).map(([label]) => label);
+  return TECH_KEYWORDS
+    .filter(([label, re]) => re.test(text) || (label === "Go" && hasGoListEntry(text)))
+    .map(([label]) => label);
 }
 
 function extractTechKeywords(lines: string[], tracking: ExtractedJobTracking): string[] {
