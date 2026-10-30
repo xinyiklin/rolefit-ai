@@ -393,7 +393,8 @@ All fixtures are synthetic and generated in memory; never commit a PDF.
   `__evals__/support/importCorpus.mjs`.
 - `pdf-import-units.mjs` covers the audit's mutation-style rejections (invented,
   duplicated, dropped, or smuggled-as-structure text), field rendering, separator
-  splitting, dates (alone or beside a place or duration), the font-family
+  splitting (private-use glyphs, even one per run, are never separators; a
+  private-use bulleted list of section words stays a list), dates (alone or beside a place or duration), the font-family
   table (upstream names, lookalike designs that fall back, and RoleFit's
   internal export names), columns, and bullet markers.
 - `pdf-import-edge-cases.mjs` holds layouts found in review: Symbol-font
@@ -402,7 +403,10 @@ All fixtures are synthetic and generated in memory; never commit a PDF.
   restored away by Q), and annotations that only draw, paint spaces, or show a
   ZapfDingbats or Wingdings check; one run per glyph (readable text, word
   count, and unmapped glyphs); unmapped glyphs alternating with readable runs,
-  and private-use bullets and icons that still import; formatting code split
+  and private-use bullets and icons that still import; an icon between
+  contact details and a run of three or more rating dots after a skill
+  (separator and Not placed, never text), and bold or ruled bulleted lists of
+  section words that stay bullets; formatting code split
   across runs; superscripts; a role title at a page break; right-aligned
   dates, flush-right years, and left-tab-stop values (places, single-word
   cities, GPAs, wide date-and-place values, numeric months with durations, a

@@ -70,21 +70,26 @@ export function markedField(pieces: readonly LinePiece[]): FieldDraft {
   return { lines: [[...pieces]], marks: true };
 }
 
-// Splits pieces wherever a spaced separator glyph (" | ", " • ", " · ") stands
-// between items. Separators come back separately so the caller can account for
-// every consumed character.
+// Splits pieces wherever a spaced separator glyph (" | ", " • ", " · ") or a
+// dingbat icon of at most two glyphs stands between items: a dingbat face is
+// never content. Private-use glyphs are not separators, since they may be
+// unmapped text. Separators come back separately so the caller can account
+// for every consumed character.
 const SEPARATOR_CHARS = "|•·◦▪∙";
 const SEPARATOR_RE = new RegExp(`(^|\\s)[${SEPARATOR_CHARS}](?=\\s|$)`, "gu");
 
-function isSeparatorText(text: string): boolean {
-  return text.length > 0 && [...text.trim()].every((char) => SEPARATOR_CHARS.includes(char));
+function isSeparatorText(current: LinePiece): boolean {
+  const glyphs = [...current.text.trim()];
+  if (!glyphs.length) return false;
+  if (current.span.dingbat) return glyphs.length <= 2;
+  return glyphs.every((char) => SEPARATOR_CHARS.includes(char));
 }
 
 export function splitOnSeparators(pieces: readonly LinePiece[]): { parts: LinePiece[][]; separators: LinePiece[] } {
   const parts: LinePiece[][] = [[]];
   const separators: LinePiece[] = [];
   for (const current of pieces) {
-    if (isSeparatorText(current.text)) {
+    if (isSeparatorText(current)) {
       separators.push(current);
       if (parts[parts.length - 1].length) parts.push([]);
       continue;

@@ -441,6 +441,63 @@ test("a one-off gap, a gap past 1.5pt, or a value that only contains a year stay
   assert.equal(result.findings.filter((finding) => /combined/.test(finding.reason)).length, 9);
 });
 
+// Icon glyphs past the start of a line are structure or a picture, never text.
+const DOT = String.fromCharCode(0x25cf);
+test("an icon between contact details separates them instead of joining them as a letter", async () => {
+  const result = await importResumePdf(await pdf(async ({ doc, text, fonts }) => {
+    const dingbats = await doc.embedFont(StandardFonts.ZapfDingbats);
+    text("Jane Doe", 54, 730, 18, fonts.bold);
+    text("jane@example.test", 54, 712);
+    text(DOT, 150, 713, 6, dingbats);
+    text("555-0100", 162, 712);
+    text("EXPERIENCE", 54, 684, 12, fonts.bold);
+    text("Acme Corp", 54, 668, 10, fonts.bold);
+    text("Built the billing service", 54, 654);
+  }), pdfjs);
+  assert.ok(result.audit.ok, JSON.stringify(result.audit));
+  assert.deepEqual(result.data.header.contact.map(stripInlineMarks), ["jane@example.test", "555-0100"]);
+});
+
+test("rating dots after a skill are listed as not placed, never imported as letters", async () => {
+  const result = await importResumePdf(await pdf(async ({ doc, text, fonts }) => {
+    const dingbats = await doc.embedFont(StandardFonts.ZapfDingbats);
+    header({ text, fonts });
+    text("Built the billing service", 54, 654);
+    text("SKILLS", 54, 626, 12, fonts.bold);
+    text("Python", 54, 610);
+    text(DOT.repeat(5), 120, 611, 6, dingbats);
+    text("Go", 54, 596);
+    text(DOT.repeat(3), 120, 597, 6, dingbats);
+  }), pdfjs);
+  assert.ok(result.audit.ok, JSON.stringify(result.audit));
+  const skills = result.data.sections.find((section) => section.heading === "SKILLS");
+  const skillText = JSON.stringify(skills);
+  assert.ok(skillText.includes("Python") && skillText.includes("Go"), skillText);
+  assert.ok(!/lll/.test(skillText), skillText);
+  assert.equal(unplaced(result).filter((finding) => finding.reason === "Icon or rating glyphs, not text.").length, 2);
+});
+
+test("a dingbat-bulleted list of section words stays a list, bold or under a ruled heading", async () => {
+  for (const style of ["bold", "ruled"]) {
+    const result = await importResumePdf(await pdf(async ({ doc, text, fonts, pages }) => {
+      const dingbats = await doc.embedFont(StandardFonts.ZapfDingbats);
+      text("Jane Doe", 54, 730, 18, fonts.bold);
+      text("jane@example.test | 555-0100", 54, 712);
+      text("ACTIVITIES", 54, 684, 12, fonts.bold);
+      if (style === "ruled") pages[0].drawLine({ start: { x: 54, y: 678 }, end: { x: 558, y: 678 }, thickness: 0.8 });
+      ["Leadership", "Projects", "Volunteering"].forEach((item, index) => {
+        const y = 666 - index * 14;
+        text(DOT, 57, y + 1, 6, dingbats);
+        text(item, 68, y, 10, style === "bold" ? fonts.bold : fonts.regular);
+      });
+      text("EDUCATION", 54, 610, 12, fonts.bold);
+      text("State University", 54, 594, 10, fonts.bold);
+    }), pdfjs);
+    assert.ok(result.audit.ok, style);
+    assert.deepEqual(result.data.sections.map((section) => section.heading), ["ACTIVITIES", "EDUCATION"], style);
+  }
+});
+
 // A same-baseline sidebar beside the main column's rows, read as its own column.
 // Bullets are a separate glyph, painted with their line ("• text"), or a
 // ZapfDingbats glyph. Headings are larger and bold, bold only, or plain.
