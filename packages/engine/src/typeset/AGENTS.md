@@ -128,6 +128,15 @@ it truthfully.
   a PDF that pdf-lib itself could not reopen. Escape those bytes and
   percent-encode everything outside printable ASCII; `pdf-links.mjs` locks the
   round trip for brackets, backslashes, non-ASCII, and percent-encoded paths.
+- fontkit caches each glyph with the first character that reached it. If
+  U+00AD reaches a fontkit instance before "-" in a face whose cmap shares the
+  hyphen glyph, every later "-" shapes as a zero-width space; and pdf-lib's
+  ToUnicode map keeps that first character, so a U+2010 or U+2011 drawn first
+  makes "-" extract as it. So `pdfSafeText` drops U+00AD before shaping (it
+  never paints mid-line), and `emitPdf` primes each embedded face with the
+  printable ASCII it maps before any document text; `pdf-hyphens.mjs` fails
+  if either is removed. Layout still measures U+00AD as an unknown glyph
+  (0.5 em), a pre-existing gap that belongs in `measure.ts` if fixed.
 - Underline and link rules come from `underlineSpans` plus `underlineRule`, so
   every renderer draws one rule per contiguous underlined phrase at one
   face-derived depth. Never derive a rule from the text a renderer happens to

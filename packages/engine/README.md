@@ -76,6 +76,7 @@ npm run eval:pdf-font-parity --workspace packages/engine
 npm run eval:glyph-fallback --workspace packages/engine
 npm run eval:pdf-export-scheduling --workspace packages/engine
 npm run eval:pdf-links --workspace packages/engine
+npm run eval:pdf-hyphens --workspace packages/engine
 npm run fonts:check --workspace packages/engine
 ```
 
