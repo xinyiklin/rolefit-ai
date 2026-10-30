@@ -7,6 +7,7 @@ import {
   interviewLabel,
   newStageEntryId,
   stageHistoryFits,
+  timelineDateProblem,
   type TimelineRow
 } from "../../lib/applicationStageHistory";
 import { toDateInput, toIso, todayIso } from "../../lib/dateInput";
@@ -44,6 +45,12 @@ type ApplicationTimelinePopoverProps = {
 };
 
 const PENDING_STAGE_ID = "pending-stage";
+const DATE_PROBLEM_ID = "application-timeline-date-problem";
+
+const DATE_PROBLEM_MESSAGE = {
+  before_application: "Choose a date on or after the application date.",
+  future: "Only an interview can be dated in the future. Choose today or earlier."
+} as const;
 
 const ROW_TITLE: Record<"applied" | "skipped" | "response" | "followup", string> = {
   applied: "Applied",
@@ -126,6 +133,11 @@ export function ApplicationTimelinePopover({
   });
   const savedEntry = draft && !draft.isNew ? stageHistory.find((entry) => entry.id === draft.entry.id) : undefined;
   const draftChanged = draft ? draft.isNew || JSON.stringify(savedEntry) !== JSON.stringify(draft.entry) : false;
+  // The date input's min and max are advisory; a typed day can pass either.
+  // Only a changed day is checked, so a note edit still saves on an entry the
+  // application date has since moved past.
+  const dateChanged = draft ? draft.isNew || toDateInput(draft.entry.at) !== toDateInput(savedEntry?.at) : false;
+  const dateProblem = draft && dateChanged ? timelineDateProblem(draft.entry, appliedAt) : null;
 
   useEffect(() => onUnsavedChange(draftChanged), [draftChanged, onUnsavedChange]);
 
@@ -228,7 +240,7 @@ export function ApplicationTimelinePopover({
   }
 
   function save() {
-    if (draft) void run(() => onSaveEntry(draft.entry), "This entry could not be saved. It is still here; try again.");
+    if (draft && !dateProblem) void run(() => onSaveEntry(draft.entry), "This entry could not be saved. It is still here; try again.");
   }
 
   function remove() {
@@ -311,10 +323,14 @@ export function ApplicationTimelinePopover({
                       type="date"
                       aria-label="Date"
                       min={toDateInput(appliedAt)}
-                      max={draft.entry.type === "stage" ? toDateInput(todayIso()) : "9999-12-31"}
+                      // Only an interview can be scheduled ahead, as the
+                      // server's event and status routes require.
+                      max={draft.entry.type === "interview" ? "9999-12-31" : toDateInput(todayIso())}
                       value={toDateInput(draft.entry.at)}
                       autoFocus={draft.entry.type !== "interview"}
                       disabled={busy}
+                      aria-invalid={dateProblem ? true : undefined}
+                      aria-describedby={dateProblem ? DATE_PROBLEM_ID : undefined}
                       onChange={(event) => changeDate(event.target.value)}
                     />
                     {draft.entry.type !== "stage" ? (
@@ -334,6 +350,7 @@ export function ApplicationTimelinePopover({
                     {locked ? (
                       <p className="application-timeline__hint">This application changed elsewhere. Choose Use latest version, then save this entry.</p>
                     ) : null}
+                    {dateProblem ? <p id={DATE_PROBLEM_ID} className="application-timeline__error" role="alert">{DATE_PROBLEM_MESSAGE[dateProblem]}</p> : null}
                     {error ? <p className="application-timeline__error" role="alert">{error}</p> : null}
                     <div className="application-timeline__entry-actions">
                       {!draft.isNew ? (
@@ -350,7 +367,15 @@ export function ApplicationTimelinePopover({
                       <button ref={cancelRef} type="button" className="secondary-button is-compact" disabled={busy} onClick={finishDraft}>
                         Cancel
                       </button>
-                      <button ref={saveRef} type="button" className="primary-button is-compact" disabled={locked || !draftChanged} aria-disabled={busy} onClick={save}>
+                      <button
+                        ref={saveRef}
+                        type="button"
+                        className="primary-button is-compact"
+                        disabled={locked || !draftChanged}
+                        aria-disabled={busy || Boolean(dateProblem)}
+                        aria-describedby={dateProblem ? DATE_PROBLEM_ID : undefined}
+                        onClick={save}
+                      >
                         {busy ? "Saving…" : "Save"}
                       </button>
                     </div>

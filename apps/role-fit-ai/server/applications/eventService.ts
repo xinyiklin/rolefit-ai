@@ -13,6 +13,7 @@ import {
 import {
   STAGE_HISTORY_FULL_MESSAGE,
   newStageEntryId,
+  timelineDateProblem,
   withEntrySaved
 } from "../../src/lib/applicationStageHistory.ts";
 import { exactDayIso, todayIso } from "../../src/lib/dateInput.ts";
@@ -74,6 +75,9 @@ export async function logApplicationEvent(workspaceDir: string, id: string, body
       );
     }
     if (!current.appliedAt) throw refuse("Only a submitted application has a timeline; this record has no application date.");
+    const dateProblem = timelineDateProblem(entry, current.appliedAt);
+    if (dateProblem === "before_application") throw refuse("date: must not fall before the application date.");
+    if (dateProblem === "future") throw refuse("date: a response or follow-up cannot be dated in the future.");
     const saved = withEntrySaved(current, entry);
     if ((saved.stageHistory?.length ?? 0) > STAGE_HISTORY_MAX_ENTRIES) throw refuse(STAGE_HISTORY_FULL_MESSAGE);
     const next = { ...current, ...saved, updatedAt: nextApplicationRevision(current.updatedAt) };

@@ -437,6 +437,8 @@ try {
       [{ type: "followup", note: "  " }, /^note: must be non-blank text/],
       [{ type: "followup", date: "2026-02-30" }, /^date: must be a YYYY-MM-DD/],
       [{ type: "followup", at: "2026-10-01" }, /^at: not an event field/],
+      [{ type: "followup", date: "2000-01-01" }, /^date: must not fall before the application date/],
+      [{ type: "response", date: "2099-01-15" }, /^date: a response or follow-up cannot be dated in the future/],
       [{ type: "followup", baseUpdatedAt: "2026-01-01T00:00:00.000Z" }, /changed since it was read/]
     ]) {
       const res = await logEvent(applied.id, payload);

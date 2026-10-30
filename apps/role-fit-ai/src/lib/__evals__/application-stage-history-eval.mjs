@@ -10,6 +10,7 @@ import {
   withEntryRemoved,
   withEntrySaved,
   stageHistoryFits,
+  timelineDateProblem,
   withStageChange,
   withStatusChange
 } from "../applicationStageHistory.ts";
@@ -261,15 +262,62 @@ assert.match(hook, /a\.id === id \? withStatusChange\(a, status, now\) : a/, "ro
 assert.match(hook, /mergeStageHistories\(canonical\.stageHistory, others\.map/, "duplicate merge unions history");
 assert.match(hook, /if \(stageHistory === null\) \{[\s\S]*?return false;/, "an over-limit merge is refused");
 assert.match(hook, /if \(!stageHistoryFits\(existing, status\)\) \{\s*setError\(STAGE_HISTORY_FULL_MESSAGE\);/, "a row-menu move on a full timeline is refused with a clear message");
-assert.match(
-  source("../../sections/ApplicationModal.tsx"),
-  /if \(activeApplication && !stageHistoryFits\(activeApplication, statusOverride\)\) \{\s*setSaveError\(STAGE_HISTORY_FULL_MESSAGE\);/,
-  "Detail refuses a stage move that would overflow the timeline"
-);
+{
+  const detail = source("../../sections/ApplicationModal.tsx");
+  assert.match(
+    detail,
+    /function timelineFullFor\(status: ApplicationStatus\): boolean \{\s*if \(!activeApplication \|\| stageHistoryFits\(activeApplication, status\)\) return false;\s*setSaveError\(STAGE_HISTORY_FULL_MESSAGE\);\s*return true;/,
+    "Detail refuses a stage move that would overflow the timeline"
+  );
+  assert.match(detail, /if \(timelineFullFor\(statusOverride\)\) return;\s*setIsSaving\(true\);/, "Save refuses a full timeline up front");
+  // Opening the preparation or a related record, and unlinking or merging, all
+  // persist the form's pending stage first, so each refuses the same way.
+  const persistPaths = detail.split(/\n  (?=async function |function )/).filter((body) => body.includes("buildApplication(form.status)"));
+  assert.equal(persistPaths.length, 3, "three paths persist the form's stage before leaving it");
+  for (const body of persistPaths) {
+    const guard = body.indexOf("timelineFullFor(form.status)) return;");
+    assert.ok(guard >= 0 && guard < body.indexOf("buildApplication(form.status)"), `${body.slice(0, 60)} refuses a full timeline before persisting`);
+  }
+}
 assert.match(
   source("../../sections/ApplicationModal.tsx"),
   /stageHistory: statusOverride === "draft"\s*\? undefined\s*: withStageChange\(base, statusOverride, base\.stageHistory\)/,
   "Application Detail records a stage change on save"
 );
+
+// --- Timeline dates: nothing before the application; only an interview ahead
+{
+  const now = new Date(2026, 9, 20, 9, 0);
+  const appliedDay = toIso("2026-10-01");
+  assert.equal(timelineDateProblem({ type: "followup", at: toIso("2026-09-30") }, appliedDay, now), "before_application");
+  assert.equal(timelineDateProblem({ type: "interview", at: toIso("2026-09-30") }, appliedDay, now), "before_application", "an interview cannot predate the application either");
+  assert.equal(timelineDateProblem({ type: "followup", at: toIso("2026-10-01") }, new Date(2026, 9, 1, 23, 30).toISOString(), now), null, "the application day itself fits, whatever its time");
+  for (const type of ["response", "followup", "stage"]) {
+    assert.equal(timelineDateProblem({ type, at: toIso("2026-10-21") }, appliedDay, now), "future", `a ${type} cannot be dated ahead`);
+    assert.equal(timelineDateProblem({ type, at: toIso("2026-10-20") }, appliedDay, now), null, `a ${type} can be dated today`);
+  }
+  assert.equal(timelineDateProblem({ type: "interview", at: toIso("2027-01-15") }, appliedDay, now), null, "an interview can be scheduled ahead");
+  assert.equal(timelineDateProblem({ type: "followup", at: toIso("2026-10-10") }, undefined, now), null);
+
+  const popover = source("../../sections/application/ApplicationTimelinePopover.tsx");
+  assert.match(
+    popover,
+    /const dateChanged = draft \? draft\.isNew \|\| toDateInput\(draft\.entry\.at\) !== toDateInput\(savedEntry\?\.at\) : false;\s*const dateProblem = draft && dateChanged \? timelineDateProblem\(draft\.entry, appliedAt\) : null;/,
+    "the popover checks a typed date, never an unchanged saved one"
+  );
+  assert.match(popover, /function save\(\) \{\s*if \(draft && !dateProblem\) void run\(\(\) => onSaveEntry/, "an out-of-range date is never sent");
+  assert.match(popover, /\{dateProblem \? <p id=\{DATE_PROBLEM_ID\} className="application-timeline__error" role="alert">\{DATE_PROBLEM_MESSAGE\[dateProblem\]\}<\/p> : null\}/, "the problem shows inline");
+  assert.match(
+    popover,
+    /aria-invalid=\{dateProblem \? true : undefined\}\s*aria-describedby=\{dateProblem \? DATE_PROBLEM_ID : undefined\}\s*onChange=\{\(event\) => changeDate/,
+    "the date input is marked invalid and names the problem"
+  );
+  assert.match(
+    popover,
+    /aria-disabled=\{busy \|\| Boolean\(dateProblem\)\}\s*aria-describedby=\{dateProblem \? DATE_PROBLEM_ID : undefined\}\s*onClick=\{save\}/,
+    "Save reads as unavailable and names the problem"
+  );
+  assert.match(source("../../../server/applications/eventService.ts"), /const dateProblem = timelineDateProblem\(entry, current\.appliedAt\);/, "the event route applies the same rule");
+}
 
 console.log("application stage history eval passed");

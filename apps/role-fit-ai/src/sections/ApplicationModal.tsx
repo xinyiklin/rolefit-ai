@@ -268,6 +268,7 @@ export function ApplicationModal({
   const panelRef = useRef<HTMLElement>(null);
   const tablistRef = useRef<HTMLDivElement>(null);
   const primaryInputRef = useRef<HTMLElement>(null);
+  const skippedTriggerRef = useRef<HTMLButtonElement>(null);
   const timelineTriggerRef = useRef<HTMLButtonElement>(null);
   const statusSectionRef = useRef<HTMLElement>(null);
   const lastSeededId = useRef<string | null>(seedApplication?.id ?? null);
@@ -347,7 +348,7 @@ export function ApplicationModal({
 
   const closeSkipDecision = useCallback((restoreFocus = false) => {
     setSkipDecisionOpen(false);
-    if (restoreFocus) window.requestAnimationFrame(() => primaryInputRef.current?.focus());
+    if (restoreFocus) window.requestAnimationFrame(() => skippedTriggerRef.current?.focus());
   }, []);
 
   const closeTimeline = useCallback((restoreFocus = false) => {
@@ -582,7 +583,8 @@ export function ApplicationModal({
 
   // A timeline entry saves on its own against the saved record, leaving other
   // unsaved form edits alone. When an interview moves the stage, the form's
-  // baseline moves first so the saved record does not read as a conflict.
+  // baseline moves first so the saved record does not read as a conflict, and
+  // the form's stage follows unless its pending choice is still offered.
   async function saveTimeline(
     update: (saved: Application) => Pick<Application, "status" | "stageHistory">
   ): Promise<boolean> {
@@ -590,15 +592,16 @@ export function ApplicationModal({
     if (!saved?.appliedAt || controlsLocked) return false;
     const next: Application = { ...saved, ...update(saved) };
     const previousBaseline = formBaselineRef.current;
+    const previousStatus = formRef.current.status;
     const moved = next.status !== saved.status;
-    if (moved) {
-      formBaselineRef.current = { ...previousBaseline, status: next.status };
-      changeForm((current) => (current.status === previousBaseline.status ? { ...current, status: next.status } : current));
-    }
+    const followsMove = moved
+      && (previousStatus === previousBaseline.status || !applicationStatusOptions(next.status).includes(previousStatus));
+    if (moved) formBaselineRef.current = { ...previousBaseline, status: next.status };
+    if (followsMove) changeForm((current) => ({ ...current, status: next.status }));
     const ok = await onSave(next).catch(() => false);
-    if (!ok && moved) {
-      formBaselineRef.current = previousBaseline;
-      changeForm((current) => (current.status === next.status ? { ...current, status: previousBaseline.status } : current));
+    if (!ok && moved) formBaselineRef.current = previousBaseline;
+    if (!ok && followsMove) {
+      changeForm((current) => (current.status === next.status ? { ...current, status: previousStatus } : current));
     }
     return ok;
   }
@@ -619,12 +622,16 @@ export function ApplicationModal({
     }
   }
 
+  // Every path that persists the form's stage refuses a full timeline up front.
+  function timelineFullFor(status: ApplicationStatus): boolean {
+    if (!activeApplication || stageHistoryFits(activeApplication, status)) return false;
+    setSaveError(STAGE_HISTORY_FULL_MESSAGE);
+    return true;
+  }
+
   async function save(statusOverride: ApplicationStatus = form.status) {
     if (controlsLocked || !(await confirmDiscardTimelineEntry())) return;
-    if (activeApplication && !stageHistoryFits(activeApplication, statusOverride)) {
-      setSaveError(STAGE_HISTORY_FULL_MESSAGE);
-      return;
-    }
+    if (timelineFullFor(statusOverride)) return;
     setIsSaving(true);
     setSaveError("");
     let saved = false;
@@ -652,6 +659,7 @@ export function ApplicationModal({
       );
       return;
     }
+    if (mustPersistFirst && timelineFullFor(form.status)) return;
     setIsOpeningPreparation(true);
     setSaveError("");
     try {
@@ -687,6 +695,7 @@ export function ApplicationModal({
       setSaveError("Add a company, role, or job URL before leaving this record. Your edits are still here.");
       return;
     }
+    if (timelineFullFor(form.status)) return;
     setIsSaving(true);
     setSaveError("");
     try {
@@ -740,6 +749,7 @@ export function ApplicationModal({
       setSaveError("Add a company, role, or job URL before changing related records. Your edits are still here.");
       return;
     }
+    if (formHasUnsavedChanges && timelineFullFor(form.status)) return;
     setIsSaving(true);
     setSaveError("");
     try {
@@ -847,6 +857,40 @@ export function ApplicationModal({
   // same way headerMeta does.
   const headerPosting = postingIdentity(activeApplication);
   const historyCount = activeApplication.stageHistory?.length ?? 0;
+  // A saved Skip is final and replaces the Stage select; a Draft's pending Skip
+  // keeps the select, so it can be undone, and opens its reasons beside it.
+  const showsSkippedTrigger = activeApplication.status === "not_applying" || form.status === "not_applying";
+  const skippedTrigger = (primary: boolean) => (
+    <button
+      ref={(node) => {
+        skippedTriggerRef.current = node;
+        if (primary) primaryInputRef.current = node;
+      }}
+      type="button"
+      className={`application-skipped-trigger${skipDecisionOpen ? " is-open" : ""}`}
+      aria-labelledby={primary ? "application-stage-label application-skipped-trigger-label" : undefined}
+      aria-haspopup="dialog"
+      aria-expanded={skipDecisionOpen}
+      aria-controls="application-skipped-decision"
+      onClick={() => {
+        void confirmDiscardTimelineEntry().then((discard) => {
+          if (!discard) return;
+          setTimelineOpen(false);
+          setSkipDecisionOpen((current) => !current);
+        });
+      }}
+    >
+      <span className="stage-dot stage-dot--not_applying" aria-hidden="true" />
+      <span className="application-skipped-trigger__copy">
+        <strong id="application-skipped-trigger-label">Skipped</strong>
+        <span aria-hidden="true">·</span>
+        <span>
+          {formatNotApplyingReasons(form.notApplyingReasons, 2) || "Reason not recorded"}
+        </span>
+      </span>
+      <ChevronDown size={14} aria-hidden="true" />
+    </button>
+  );
 
   return (
     <div
@@ -985,47 +1029,23 @@ export function ApplicationModal({
                     </button>
                     <div className="application-stage-control field">
                       <span id="application-stage-label">Stage</span>
-                      {form.status === "not_applying" ? (
-                        <button
-                          ref={(node) => { primaryInputRef.current = node; }}
-                          type="button"
-                          className={`application-skipped-trigger${skipDecisionOpen ? " is-open" : ""}`}
-                          aria-labelledby="application-stage-label application-skipped-trigger-label"
-                          aria-haspopup="dialog"
-                          aria-expanded={skipDecisionOpen}
-                          aria-controls="application-skipped-decision"
-                          onClick={() => {
-                            void confirmDiscardTimelineEntry().then((discard) => {
-                              if (!discard) return;
-                              setTimelineOpen(false);
-                              setSkipDecisionOpen((current) => !current);
-                            });
-                          }}
-                        >
-                          <span className="stage-dot stage-dot--not_applying" aria-hidden="true" />
-                          <span className="application-skipped-trigger__copy">
-                            <strong id="application-skipped-trigger-label">Skipped</strong>
-                            <span aria-hidden="true">·</span>
-                            <span>
-                              {formatNotApplyingReasons(form.notApplyingReasons, 2) || "Reason not recorded"}
-                            </span>
+                      {activeApplication.status === "not_applying" ? skippedTrigger(true) : (
+                        <>
+                          <span className="application-status-select">
+                            <span className={`stage-dot stage-dot--${form.status}`} aria-hidden="true" />
+                            <select
+                              ref={(node) => { primaryInputRef.current = node; }}
+                              aria-labelledby="application-stage-label"
+                              value={form.status}
+                              onChange={(event) => update("status", event.target.value as ApplicationStatus)}
+                            >
+                              {editableStatuses.map((status) => (
+                                <option key={status} value={status}>{STATUS_LABEL[status]}</option>
+                              ))}
+                            </select>
                           </span>
-                          <ChevronDown size={14} aria-hidden="true" />
-                        </button>
-                      ) : (
-                        <span className="application-status-select">
-                          <span className={`stage-dot stage-dot--${form.status}`} aria-hidden="true" />
-                          <select
-                            ref={(node) => { primaryInputRef.current = node; }}
-                            aria-labelledby="application-stage-label"
-                            value={form.status}
-                            onChange={(event) => update("status", event.target.value as ApplicationStatus)}
-                          >
-                            {editableStatuses.map((status) => (
-                              <option key={status} value={status}>{STATUS_LABEL[status]}</option>
-                            ))}
-                          </select>
-                        </span>
+                          {form.status === "not_applying" ? skippedTrigger(false) : null}
+                        </>
                       )}
                     </div>
                     {noResponse ? <p className="application-stage-hint">{noResponseLabel(noResponse)}</p> : null}
@@ -1266,10 +1286,10 @@ export function ApplicationModal({
 
         </div>
 
-        {form.status === "not_applying" ? (
+        {showsSkippedTrigger ? (
           <SkippedDecisionPopover
             open={skipDecisionOpen}
-            triggerRef={primaryInputRef}
+            triggerRef={skippedTriggerRef}
             reasons={form.notApplyingReasons}
             savedReasons={activeApplication.notApplyingReasons ?? []}
             note={form.notApplyingNote}

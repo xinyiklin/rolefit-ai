@@ -5,7 +5,7 @@ import {
   STAGE_HISTORY_MAX_ENTRIES,
   type StageHistoryEntry
 } from "../../shared/applicationStageHistoryContract.ts";
-import { todayIso } from "./dateInput.ts";
+import { toDateInput, todayIso } from "./dateInput.ts";
 
 // Plain record facts rather than the hook's Application type: the server's
 // status route imports this module.
@@ -57,6 +57,19 @@ export function stageHistoryFits(
 ): boolean {
   const next = withStageChange(saved, nextStatus, [...(saved.stageHistory ?? []), ...added]);
   return (next?.length ?? 0) <= STAGE_HISTORY_MAX_ENTRIES;
+}
+
+// Nothing on the timeline falls before the application, and only an interview
+// can be scheduled ahead. Compared by local calendar day.
+export function timelineDateProblem(
+  entry: Pick<StageHistoryEntry, "type" | "at">,
+  appliedAt: string | undefined,
+  now = new Date()
+): "before_application" | "future" | null {
+  const day = toDateInput(entry.at);
+  if (day < toDateInput(appliedAt)) return "before_application";
+  if (entry.type !== "interview" && day > toDateInput(todayIso(now))) return "future";
+  return null;
 }
 
 type StatusFacts = HistoryFacts & {
