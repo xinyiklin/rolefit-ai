@@ -113,8 +113,11 @@ D-entries in `docs/decisions.md`.
   the snapshot, not a failed workspace (variants, history and letters stay
   reachable); over-limit contacts are refused, not cut; tracker months group
   by local day; a new Typeset tab never writes its restored draft back over
-  another tab's. Each reviewed. Open (low): the unreadable file is unnamed and
-  a remembered valid variant is not reopened automatically.
+  another tab's. Each reviewed. Follow-up: variant lists skip directories and
+  links that do not resolve to a file; the unreadable file is named and the
+  variant last open is reopened; the companion's Providers summary says when
+  a reused service does not use its providers. Accepted: Prepare and Polish
+  duplicate gates may name a lost-reply record (it is saved).
 - [TOOL] **Bug-hunt round six** (round five's failing cover-letter probe fixed
   first). Cover letters send slot answers only for slots the letter still has;
   duplicate detection compares non-English descriptions (ASCII unchanged); an
@@ -127,9 +130,7 @@ D-entries in `docs/decisions.md`.
   and an MCP latest-answer merge (the tracker modal edits answers in place, so
   list order is not recency); a plain MCP correction still sits beside a
   drafted revision. Open: a migrated undated record moved to Skipped sheds its
-  documents (refuse the move or change the schema: the user's call); the
-  Prepare and Polish duplicate gates can still match a lost-reply row; the
-  Providers panel ignores a reused server; variant listings list directories.
+  documents (refuse the move or change the schema: the user's call).
 - [TOOL] **Bug-hunt round five** (first scan of the intake/polish hooks and
   shared contracts): a failed resume-candidate read is no longer cached;
   accepting a warned Resume edit no longer dead-ends a pending cover-letter
