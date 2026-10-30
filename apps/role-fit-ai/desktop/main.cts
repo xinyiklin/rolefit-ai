@@ -146,6 +146,9 @@ app.enableSandbox();
 
 let mainWindow: BrowserWindow | null = null;
 let desktopServer: DesktopServerHandle | null = null;
+// Relaunch and activate may recreate a closed window only after startDesktop
+// created its own, or a second untrusted window would remain open.
+let desktopStartupComplete = false;
 let cliProviderManager: CliProviderManager | null = null;
 let providerVault: ProviderVault | null = null;
 let desktopSettingsManager: DesktopSettingsManager | null = null;
@@ -1800,6 +1803,7 @@ async function startDesktop(): Promise<void> {
     desktopServer.launchKind,
     desktopServer.origin
   );
+  desktopStartupComplete = true;
 }
 
 const isSquirrelStartup = process.platform === "win32" && squirrelStartup;
@@ -1813,7 +1817,7 @@ if (isSquirrelStartup || !hasSingleInstanceLock) {
       console.log("ROLEFIT_DESKTOP_SECOND_INSTANCE_FOCUSED");
     }
     if (mainWindow) bringWindowForward();
-    else if (desktopServer) {
+    else if (desktopStartupComplete && desktopServer) {
       const companionPath = join(__dirname, "companion.html");
       mainWindow = createMainWindow(
         companionPath,
@@ -1826,7 +1830,7 @@ if (isSquirrelStartup || !hasSingleInstanceLock) {
   });
   app.on("activate", () => {
     if (shuttingDown) return;
-    if (!mainWindow && desktopServer) {
+    if (!mainWindow && desktopStartupComplete && desktopServer) {
       const companionPath = join(__dirname, "companion.html");
       mainWindow = createMainWindow(
         companionPath,

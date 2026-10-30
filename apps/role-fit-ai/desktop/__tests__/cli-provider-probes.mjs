@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -364,6 +364,50 @@ const missingStatuses = await missingManager.getStatuses();
 assert(missingStatuses.every((status) => status.installed === false));
 assert(missingStatuses.every((status) => status.authState === "unknown"));
 await missingManager.shutdown();
+
+// Windows runs probes through cmd.exe, which exits 1 for a missing command
+// rather than failing to spawn; a non-zero version probe never proves installation.
+const failedVersionRequests = [];
+const failedVersionManager = createCliProviderManager({
+  runProbe: async (request) => {
+    failedVersionRequests.push(request.args.join(" "));
+    return completed("", "'claude' is not recognized as an internal or external command", 1);
+  }
+});
+const failedVersionStatuses = await failedVersionManager.getStatuses();
+assert(failedVersionStatuses.every((status) => status.installed === false));
+assert(failedVersionStatuses.every((status) => status.authState === "unknown"));
+assert.equal(failedVersionStatuses[0].guidance, "Install Claude Code to connect this provider.");
+assert.deepEqual(failedVersionRequests, ["--version", "--version"], "no status probe runs for a missing CLI");
+await failedVersionManager.shutdown();
+
+// The real spawn path: an empty PATH on Windows reaches cmd.exe's not-recognized
+// exit; on POSIX a broken shim exits non-zero. Neither may read as installed.
+const missingCliDirectory = await mkdtemp(join(tmpdir(), "rolefit-missing-cli-"));
+try {
+  if (process.platform !== "win32") {
+    for (const command of ["claude", "codex"]) {
+      const shim = join(missingCliDirectory, command);
+      await writeFile(shim, "#!/bin/sh\nexit 127\n");
+      await chmod(shim, 0o755);
+    }
+  }
+  const realSpawnManager = createCliProviderManager({
+    processEnvironment: {
+      PATH: missingCliDirectory,
+      ...(process.platform === "win32" ? { SYSTEMROOT: process.env.SYSTEMROOT ?? "C:\\Windows" } : {})
+    },
+    additionalSearchPaths: []
+  });
+  const realSpawnStatuses = await realSpawnManager.getStatuses();
+  assert(
+    realSpawnStatuses.every((status) => status.installed === false),
+    "a CLI missing from PATH or failing its version probe reads as not installed"
+  );
+  await realSpawnManager.shutdown();
+} finally {
+  await rm(missingCliDirectory, { recursive: true, force: true });
+}
 
 await manager.shutdown();
 await manager.shutdown();
