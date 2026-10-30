@@ -858,7 +858,7 @@ assert.match(
 );
 assert.match(
   clientHook,
-  /lastAppliedResult\?\.concerns\.length \? \[/,
+  /lastAppliedResult\?\.concerns\.length\s*\? \[/,
   "only the accepted letter's evidence concerns are carried into the next request",
 );
 assert.doesNotMatch(clientHook, /lastAppliedResult\?\.warnings/, "draft-only warnings are never carried forward");
