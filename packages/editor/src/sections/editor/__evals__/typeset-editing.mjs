@@ -1954,6 +1954,22 @@ assert.match(
   }
 }
 
+// A replaced document (New, Open, seed) never inherits the previous document's
+// saved selection as a toolbar command target.
+assert.match(
+  editorSource,
+  /if \(inputGenerationRef\.current !== generation\) \{\s*inputGenerationRef\.current = generation;[\s\S]{0,200}?lastRangeRef\.current = null;\s*lastRangesRef\.current = null;/,
+  "a document replacement clears the saved single- and cross-field selections"
+);
+// And while a replacement's pages wait on fonts (no host yet, so that clear
+// has not run), every reader still ignores a range saved under another
+// document generation.
+assert.match(editorSource, /const savedRangeIsCurrent = \(\) => savedRangeGenerationRef\.current === actions\.getDocumentGeneration\(\);/);
+assert.equal((editorSource.match(/savedRangeGenerationRef\.current = actions\.getDocumentGeneration\(\);/g) ?? []).length, 2, "both saved-range writes record their generation");
+assert.match(editorSource, /readSelection\(\) \?\? \(savedRangeIsCurrent\(\) \? lastRangeRef\.current : null\)/, "focusSelection ignores another document's range");
+assert.match(editorSource, /editorToolbarOwnsFocus\(\) && savedRangeIsCurrent\(\) \? lastRangeRef\.current : null/, "the caret overlay ignores another document's range");
+assert.match(editorSource, /const saved = savedRangeIsCurrent\(\);\s*const ranges = readRanges\(\) \?\? \(saved \? lastRangesRef\.current : null\);[\s\S]{0,120}?return saved && lastRangeRef\.current \?/, "toolbar commands ignore another document's ranges");
+
 console.log(
   `typeset editing: whitespace, rich clipboard, bounded typography, indentation stops, drag hit-area, selection-boundary resolution, ${FONT_FAMILY_OPTIONS.length}-family tag round-trip, literal tag text, and hyperlink-editing checks passed`
 );

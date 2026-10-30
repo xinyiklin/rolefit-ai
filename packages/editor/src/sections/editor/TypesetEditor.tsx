@@ -811,6 +811,10 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   // keeps the selected text visible while the command commits.
   const lastRangeRef = useRef<TypesetSelection | null>(null);
   const lastRangesRef = useRef<FieldRange[] | null>(null);
+  // The document generation those ranges were read in. A replacement (New,
+  // Open, seed) leaves them behind even while its pages wait on fonts.
+  const savedRangeGenerationRef = useRef(-1);
+  const savedRangeIsCurrent = () => savedRangeGenerationRef.current === actions.getDocumentGeneration();
   const typingFormatRef = useRef<TypingFormat | null>(null);
   const typingTargetRef = useRef<string | null>(null);
   // Focusing the page fires `focusin` BEFORE the saved range is re-applied, and
@@ -847,7 +851,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
 
   const focusSelection = useCallback(() => {
     const host = hostRef.current;
-    const selection = readSelection() ?? lastRangeRef.current;
+    const selection = readSelection() ?? (savedRangeIsCurrent() ? lastRangeRef.current : null);
     if (!host || !selection) return;
     const value = valueForField(dataRef.current, selection.src);
     const map = mapFor(selection.src, value);
@@ -966,6 +970,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       if (selection) {
         lastRangeRef.current = selection;
         lastRangesRef.current = null;
+        savedRangeGenerationRef.current = actions.getDocumentGeneration();
         // Kept in VALUE indexes, not display indexes: this outlives the painted
         // DOM it was read from, and a remount re-paints from the value.
         lastCaretRef.current = {
@@ -985,6 +990,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         const ranges = readRanges();
         lastRangesRef.current = ranges;
         lastRangeRef.current = null;
+        savedRangeGenerationRef.current = actions.getDocumentGeneration();
         setCaretOverlay(null);
         if (ranges) {
           typingFormatRef.current = null;
@@ -1247,7 +1253,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   useLayoutEffect(() => {
     const selection =
       readSelection() ??
-      (editorToolbarOwnsFocus() ? lastRangeRef.current : null);
+      (editorToolbarOwnsFocus() && savedRangeIsCurrent() ? lastRangeRef.current : null);
     syncCaretOverlay(selection, {
       fontFamily: inlineFormatState.fontFamily ?? docStyle.style.fontFamily,
       fontSizePt: inlineFormatState.fontSizePt ?? styleFieldDefaultSizePt("body"),
@@ -2695,9 +2701,10 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     | null => {
     const selection = readSelection();
     if (selection) return { kind: "single", selection };
-    const ranges = readRanges() ?? lastRangesRef.current;
+    const saved = savedRangeIsCurrent();
+    const ranges = readRanges() ?? (saved ? lastRangesRef.current : null);
     if (ranges) return { kind: "cross", ranges };
-    return lastRangeRef.current ? { kind: "single", selection: lastRangeRef.current } : null;
+    return saved && lastRangeRef.current ? { kind: "single", selection: lastRangeRef.current } : null;
   }, [readRanges, readSelection]);
 
   const replaceHeaderPlainText = useCallback(
@@ -3280,6 +3287,10 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     const generation = actions.getDocumentGeneration();
     if (inputGenerationRef.current !== generation) {
       inputGenerationRef.current = generation;
+      // A selection saved from the previous document must never become a
+      // toolbar command target in the replacement.
+      lastRangeRef.current = null;
+      lastRangesRef.current = null;
       replayQueueRef.current = [];
       pendingCaretRef.current = null;
       typingFormatRef.current = null;
