@@ -107,6 +107,17 @@ D-entries in `docs/decisions.md`.
   state labels (user's call); unverified Firefox/Safari, print, forced colors,
   macOS, native window-control rendering, and real unpacked popup installs.
 
+## 2026-10-30
+
+- [TOOL] **Bug-hunt round eight** (product-delivery; two reviewers per shared
+  package): the editor never applies a toolbar command to a replaced
+  document's selection; PDF export drops U+00AD and primes each face, so a
+  soft hyphen no longer turns every later "-" blank and U+2010/U+2011 no
+  longer change how "-" extracts (content byte-identical otherwise, 30
+  families); Ghosted marks are dated after a follow-up hold; pinned job
+  fetches fall back across every validated address. Residual: layout still
+  measures U+00AD as 0.5 em (measure.ts; a layout decision).
+
 ## 2026-10-29
 
 - [TOOL] **Bug-hunt round seven**: an unreadable saved resume is an error on
@@ -138,21 +149,3 @@ D-entries in `docs/decisions.md`.
   restores the exact text an accept replaced. Each reviewed; refuted: the
   Prepare recommendation clear (silent by design) and last-bullet removal
   after a manual edit. Its slot-answer residual was fixed in round six.
-- [TOOL] **Bug-hunt rounds three and four** (round three committed as
-  01ba3b9/4f58e8e). Round four, committed d12893a..bfb5ba4: Fit
-  (unlocated CLEAR quotes dropped, empty-excerpt false conflict, model advice
-  warnings dropped);
-  event dates bounded in route and popover; engine margin default and
-  divider; Detail stage select, persist-path timeline guard, Draft-to-Skipped
-  select; companion (shared live region, Extension-tab polling that keeps
-  ownership over one failed probe, kept pairing rows, reused-listener
-  message through the API-key IPC); Typeset pagehide flush; editor (history
-  clock subscribe for Redo after a style edit, Ctrl/Cmd+Home/End, single-line
-  paste newlines); extraction ("an hour"/"hourly"; "monthly"/"yearly" only on
-  a pay line and never ranking; differentials skipped; "k" boundary; Sr./Jr.
-  titles; Go list entries; "plus relevant/two years"; required cap 8 to 12).
-  Verified: app check, editor/Typeset/engine checks, reviews per area (two for
-  the editor; extraction re-reviewed until clean). Reverted after review
-  rounds regressed real postings: the bulleted-heading and perk-noun rules,
-  so a short bullet that starts with a heading word ("- Requirements
-  gathering sessions") still closes its section.
