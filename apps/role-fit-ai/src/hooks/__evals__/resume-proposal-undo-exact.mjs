@@ -112,4 +112,14 @@ for (const suggestion of [rewrite, removal, clean]) {
 assert.deepEqual(bullets(), original, "Undo after Accept all restores every row exactly");
 assert.equal(proposal.outstanding, 3);
 
+// A row the user settled by hand (the bullet deleted in the editor) reads as
+// accepted with no recorded decision; its Undo still restores the original.
+actions.removeBullet("exp", "acme", "b2");
+proposal = hook();
+assert.equal(proposal.decisions[removal.id], undefined);
+proposal.revert(removal);
+proposal = hook();
+assert.deepEqual(bullets().map(([id]) => id), ["b1", "b2", "b3", "b4"], "Undo on a hand-settled removal restores the bullet in place");
+assert.equal(proposal.isPending(removal), true);
+
 console.log("resume proposal undo-exact probes passed");

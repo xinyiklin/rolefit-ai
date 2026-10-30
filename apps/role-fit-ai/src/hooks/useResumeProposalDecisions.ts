@@ -127,6 +127,10 @@ export function useResumeProposalDecisions({
     if (state !== "accepted" && state !== "discarded") return;
     if (decision?.kind === "accepted") {
       applyTarget(resume, actions, suggestion, decision.replaced ?? proposalBaseline(suggestion));
+    } else if (state === "accepted" && !decision) {
+      // Edited in the document to match the proposal (a bullet deleted or
+      // reordered by hand): Undo still restores the proposal's original.
+      applyTarget(resume, actions, suggestion, proposalBaseline(suggestion));
     }
     setDecisionState((current) => clearProposalDecision(current, proposalKey, suggestion.id));
   }, [actions, decisions, proposalKey, resume, isDocumentReplaced]);
