@@ -109,6 +109,14 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-29
 
+- [TOOL] **Bug-hunt round five** (first scan of the intake/polish hooks and
+  shared contracts): a failed resume-candidate read is no longer cached;
+  accepting a warned Resume edit no longer dead-ends a pending cover-letter
+  proposal (resume-derived warnings sit in the resume fingerprint); Undo
+  restores the exact text an accept replaced. Each reviewed; refuted: the
+  Prepare recommendation clear (silent by design) and last-bullet removal
+  after a manual edit. Not verified: unanswered template-slot answers are
+  still sent as evidence (`coverLetterEvidence.ts:219`, low).
 - [TOOL] **Bug-hunt rounds three and four** (round three committed as
   01ba3b9/4f58e8e). Round four, uncommitted: Fit (unlocated CLEAR quotes
   dropped, empty-excerpt false conflict, model advice warnings dropped);
