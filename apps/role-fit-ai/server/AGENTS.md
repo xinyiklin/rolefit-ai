@@ -74,8 +74,10 @@ for provider, prompt, sanitizer, and review work.
   and capped per application. Only the same original name (ignoring case, at
   most the label's 120 characters) replaces an attachment; any other name that
   folds to a taken stored name gets the first free `-2`, `-3`, ... variant.
-  Notes and interview preparation past `APPLICATION_NOTES_MAX_LENGTH` are
-  refused, never clipped. Every byte served back is a download (narrow content
+  Notes and interview preparation past `APPLICATION_NOTES_MAX_LENGTH`, and
+  more than `APPLICATION_CONTACTS_MAX` non-blank contacts or a contact field
+  past `APPLICATION_CONTACT_FIELD_MAX_LENGTH`, are refused, never clipped or
+  dropped. Every byte served back is a download (narrow content
   type, `nosniff`, no inline render).
   Draft and skipped records cannot mutate document packets; either may retain
   application answers:
@@ -183,7 +185,10 @@ for provider, prompt, sanitizer, and review work.
   monotonically. Preserve recoverable history/trash behavior.
 - Treat corrupt application JSON and malformed strict `.resume` content as
   visible fail-closed errors. Never erase, reseed, or guess over corrupt user
-  data. Tracker format changes go through `applications/trackerVersion.ts`
+  data. An unreadable saved default resume is an error on the workspace
+  snapshot's `baseResume`, never a failed snapshot, so its variants, history,
+  and cover letters stay reachable. Tracker format changes go through
+  `applications/trackerVersion.ts`
   (D095): a file without `schemaVersion` is version 0, each version step has one
   migration with a fixture, a migrated file is validated strictly and rewritten
   once at the current version, and a legacy shape inside a current-version file

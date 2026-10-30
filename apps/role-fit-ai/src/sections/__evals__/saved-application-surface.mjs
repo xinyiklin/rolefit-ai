@@ -417,3 +417,12 @@ assert.match(
 );
 assert.ok(!inspector.includes('<label className="field">'));
 assert.ok(!inspector.includes("APPLICATION_SOURCES"));
+
+// The Prep tab stops at the tracker's contact limits instead of letting the
+// schema refuse (or, before, silently cut) what the user typed.
+assert.match(modal, /disabled=\{form\.contacts\.length >= APPLICATION_CONTACTS_MAX\}/, "Add contact stops at the contact cap");
+assert.equal(
+  (modal.match(/updateContact\(index, "(?:name|title|email|phone)", e\.target\.value\)\} maxLength=\{APPLICATION_CONTACT_FIELD_MAX_LENGTH\}/g) ?? []).length,
+  4,
+  "every contact field stops input at the stored limit"
+);

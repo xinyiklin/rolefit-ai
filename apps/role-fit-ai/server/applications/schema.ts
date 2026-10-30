@@ -1,5 +1,9 @@
 import { parseSavedApplicationAnswers } from "../../shared/applicationAnswerStorage.ts";
-import { APPLICATION_NOTES_MAX_LENGTH } from "../../shared/applicationNotesContract.ts";
+import {
+  APPLICATION_CONTACT_FIELD_MAX_LENGTH,
+  APPLICATION_CONTACTS_MAX,
+  APPLICATION_NOTES_MAX_LENGTH
+} from "../../shared/applicationNotesContract.ts";
 import { sanitizeJobAnalysisWarnings } from "../../shared/jobAnalysisWarnings.ts";
 import { dedupeSourceUrls } from "../../src/lib/jobIdentity.ts";
 import {
@@ -102,18 +106,22 @@ function hasOwnRetiredTrackerField(value: Record<string, unknown>): boolean {
   return RETIRED_TRACKER_FIELDS.some((field) => Object.hasOwn(value, field));
 }
 
-function sanitizeContacts(raw: unknown) {
-  if (!Array.isArray(raw)) return undefined;
+const CONTACT_FIELDS = ["name", "title", "email", "phone"] as const;
+type SanitizedContact = Record<(typeof CONTACT_FIELDS)[number], string>;
+
+// Refused whole rather than cut: a dropped contact or clipped field is user
+// text lost silently.
+function sanitizeContacts(raw: unknown): { contacts?: SanitizedContact[]; problem?: string } {
+  if (!Array.isArray(raw)) return {};
   const contacts = raw
-    .slice(0, 8)
-    .map((c) => ({
-      name: sanitizeString(c?.name, 200),
-      title: sanitizeString(c?.title, 200),
-      email: sanitizeString(c?.email, 200),
-      phone: sanitizeString(c?.phone, 200)
-    }))
-    .filter((c) => c.name || c.title || c.email || c.phone);
-  return contacts.length ? contacts : undefined;
+    .map((c) => Object.fromEntries(CONTACT_FIELDS.map((field) => [field, typeof c?.[field] === "string" ? c[field] : ""])) as SanitizedContact)
+    .filter((c) => CONTACT_FIELDS.some((field) => c[field]));
+  if (contacts.length > APPLICATION_CONTACTS_MAX) return { problem: `contacts: more than ${APPLICATION_CONTACTS_MAX}` };
+  for (const [index, contact] of contacts.entries()) {
+    const long = CONTACT_FIELDS.find((field) => contact[field].length > APPLICATION_CONTACT_FIELD_MAX_LENGTH);
+    if (long) return { problem: `contacts[${index}].${long}: longer than ${APPLICATION_CONTACT_FIELD_MAX_LENGTH} characters` };
+  }
+  return contacts.length ? { contacts } : {};
 }
 
 // What one document kind has on disk. Both the resume and the cover letter use
@@ -368,6 +376,8 @@ function sanitizeApplication(raw: unknown, problems?: string[]) {
   const interviewTips = typeof r.interviewTips === "string" ? r.interviewTips : "";
   if (notes.length > APPLICATION_NOTES_MAX_LENGTH) return refuse(`notes: longer than ${APPLICATION_NOTES_MAX_LENGTH} characters`);
   if (interviewTips.length > APPLICATION_NOTES_MAX_LENGTH) return refuse(`interviewTips: longer than ${APPLICATION_NOTES_MAX_LENGTH} characters`);
+  const contacts = sanitizeContacts(r.contacts);
+  if (contacts.problem) return refuse(contacts.problem);
   // History starts at submission, so a Draft or job-only Skipped decision has none.
   const stageHistory = parseStageHistory(r.stageHistory);
   if (stageHistory === null) return refuse("stageHistory: invalid entry, duplicate id, or too many entries");
@@ -406,7 +416,7 @@ function sanitizeApplication(raw: unknown, problems?: string[]) {
     salaryCurrency: typeof r.salaryCurrency === "string" ? r.salaryCurrency.slice(0, 8) : "",
     salaryPeriod: inList(SALARY_PERIODS, r.salaryPeriod) ? r.salaryPeriod : undefined,
     interviewTips,
-    contacts: sanitizeContacts(r.contacts),
+    contacts: contacts.contacts,
     resumeArtifacts,
     coverLetterArtifacts,
     attachments: jobOnlySkipped ? undefined : sanitizeAttachments(r.attachments),

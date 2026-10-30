@@ -1,5 +1,9 @@
 import { editedSavedApplicationAnswer } from "../../shared/applicationAnswerStorage.ts";
-import { APPLICATION_NOTES_MAX_LENGTH } from "../../shared/applicationNotesContract.ts";
+import {
+  APPLICATION_CONTACT_FIELD_MAX_LENGTH,
+  APPLICATION_CONTACTS_MAX,
+  APPLICATION_NOTES_MAX_LENGTH
+} from "../../shared/applicationNotesContract.ts";
 import { FitFindings } from "../components/FitFindings";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -1222,17 +1226,28 @@ export function ApplicationModal({
               <section className="application-prep-section application-contacts" aria-labelledby="application-contacts-title">
                 <header className="application-contacts__head">
                   <h3 id="application-contacts-title">Contacts</h3>
-                  <button type="button" className="ghost-button is-compact" onClick={addContact}>
+                  <button
+                    type="button"
+                    className="ghost-button is-compact"
+                    onClick={addContact}
+                    disabled={form.contacts.length >= APPLICATION_CONTACTS_MAX}
+                    aria-describedby={form.contacts.length >= APPLICATION_CONTACTS_MAX ? "application-contacts-limit" : undefined}
+                  >
                     <Plus size={13} aria-hidden="true" /> Add contact
                   </button>
                 </header>
+                {form.contacts.length >= APPLICATION_CONTACTS_MAX ? (
+                  <p className="application-muted" id="application-contacts-limit">
+                    An application keeps up to {APPLICATION_CONTACTS_MAX} contacts.
+                  </p>
+                ) : null}
                 {form.contacts.length ? (
                   form.contacts.map((contact, index) => (
                     <div className="application-contact-row" key={index} role="group" aria-label={`Contact ${index + 1}`}>
-                      <input aria-label={`Contact ${index + 1} name`} className="text-input" value={contact.name ?? ""} onChange={(e) => updateContact(index, "name", e.target.value)} placeholder="Name" />
-                      <input aria-label={`Contact ${index + 1} title`} className="text-input" value={contact.title ?? ""} onChange={(e) => updateContact(index, "title", e.target.value)} placeholder="Title (Recruiter…)" />
-                      <input aria-label={`Contact ${index + 1} email`} className="text-input" value={contact.email ?? ""} onChange={(e) => updateContact(index, "email", e.target.value)} placeholder="Email" />
-                      <input aria-label={`Contact ${index + 1} phone`} className="text-input" value={contact.phone ?? ""} onChange={(e) => updateContact(index, "phone", e.target.value)} placeholder="Phone" />
+                      <input aria-label={`Contact ${index + 1} name`} className="text-input" value={contact.name ?? ""} onChange={(e) => updateContact(index, "name", e.target.value)} maxLength={APPLICATION_CONTACT_FIELD_MAX_LENGTH} placeholder="Name" />
+                      <input aria-label={`Contact ${index + 1} title`} className="text-input" value={contact.title ?? ""} onChange={(e) => updateContact(index, "title", e.target.value)} maxLength={APPLICATION_CONTACT_FIELD_MAX_LENGTH} placeholder="Title (Recruiter…)" />
+                      <input aria-label={`Contact ${index + 1} email`} className="text-input" value={contact.email ?? ""} onChange={(e) => updateContact(index, "email", e.target.value)} maxLength={APPLICATION_CONTACT_FIELD_MAX_LENGTH} placeholder="Email" />
+                      <input aria-label={`Contact ${index + 1} phone`} className="text-input" value={contact.phone ?? ""} onChange={(e) => updateContact(index, "phone", e.target.value)} maxLength={APPLICATION_CONTACT_FIELD_MAX_LENGTH} placeholder="Phone" />
                       <button type="button" className="ghost-button is-icon" aria-label={`Remove contact ${index + 1}`} onClick={() => removeContact(index)}>
                         <Trash2 size={14} aria-hidden="true" />
                       </button>
