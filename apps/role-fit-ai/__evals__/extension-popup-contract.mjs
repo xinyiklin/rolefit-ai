@@ -71,6 +71,19 @@ const manifest = JSON.parse(
   readFileSync(new URL("../extension/manifest.json", import.meta.url), "utf8")
 );
 
+// ── Tracker row labels ─────────────────────────────────────────────────────
+
+// Every stored status reads as the app's label, never as a raw storage key.
+const trackerStatusSource = /^function trackerStatus\(app\) \{[\s\S]*?^\}$/m.exec(popup)?.[0];
+assert.ok(trackerStatusSource, "trackerStatus stays a top-level function this contract can read");
+const trackerStatus = new Function("formatDate", `${trackerStatusSource}; return trackerStatus;`)(() => "");
+for (const [status, label] of [
+  ["draft", "Draft"], ["not_applying", "Skipped"], ["applied", "Applied"], ["interviewing", "Interviewing"],
+  ["offer", "Offer"], ["rejected", "Not selected"], ["ghosted", "Ghosted"], ["withdrawn", "Withdrawn"]
+]) {
+  assert.equal(trackerStatus({ status }).label, label, `tracker status ${status} is labeled`);
+}
+
 // ── Popup states ───────────────────────────────────────────────────────────
 
 for (const state of [

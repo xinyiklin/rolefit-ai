@@ -341,11 +341,11 @@ export async function importPosting(apiBase, pageData, claimToken) {
       signal: timeoutSignal(IMPORT_TIMEOUT_MS)
     });
   } catch (error) {
-    // The server queues the posting before it answers, so a timed-out import
-    // has probably landed. Say that rather than asserting it was refused, and
-    // leave it untagged so the popup does not offer a pointless port change.
+    // An entry queued without a confirmed tab stays reserved for its token and
+    // expires undelivered, so only a new import can hand the posting off. Left
+    // untagged so the popup does not offer a pointless port change.
     if (isTimeout(error)) {
-      throw bridgeError("RoleFit did not confirm this import in time; it may already be queued.");
+      throw bridgeError("RoleFit did not confirm this import in time. Try again.");
     }
     throw bridgeError("RoleFit stopped responding on this localhost port.", "connection");
   }

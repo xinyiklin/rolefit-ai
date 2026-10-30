@@ -294,9 +294,9 @@ export function atsPostingKey(url: string | undefined | null): AtsPostingKey | n
       if (id) return makeKey("linkedin", "", id);
     }
 
-    // Indeed: /viewjob?jk=<hex>
+    // Indeed: /viewjob?jk=<hex>, or the search page's open pane via ?vjk=<hex>.
     if (/(^|\.)indeed\.com$/.test(host)) {
-      const jk = u.searchParams.get("jk");
+      const jk = u.searchParams.get("jk") ?? u.searchParams.get("vjk");
       if (jk && /^[0-9a-f]{8,}$/i.test(jk)) return makeKey("indeed", "", jk.toLowerCase());
     }
 

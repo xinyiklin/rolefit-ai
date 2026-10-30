@@ -63,10 +63,11 @@ export function extractJobMeta(text: unknown, pageTitle: unknown): { title?: str
 
   // 2. Indeed: "<Title> - <Company> - <Location> | ..."
   if ((!meta.title || !meta.company) && title) {
-    const dashed = title.slice(0, Math.max(0, title.lastIndexOf("|"))).split("-");
+    // Only a spaced hyphen separates fields, so "Front-End Developer" stays whole.
+    const dashed = title.slice(0, Math.max(0, title.lastIndexOf("|"))).split(/\s-\s/);
     const role = dashed[0]?.trim() ?? "";
     const company = dashed[1]?.trim() ?? "";
-    if (dashed.length >= 3 && role && company && dashed.slice(2).join("-")) {
+    if (dashed.length >= 3 && role && company && dashed.slice(2).join(" - ")) {
       if (!meta.title) meta.title = role;
       if (!meta.company) meta.company = company;
     }
@@ -87,7 +88,7 @@ export function extractJobMeta(text: unknown, pageTitle: unknown): { title?: str
 
   // 4. Generic: first segment of the page title is the role.
   if (!meta.title && title) {
-    const first = title.split(/[|–\-]/)[0]?.trim() ?? "";
+    const first = title.split(/[|–]|\s-\s/)[0]?.trim() ?? "";
     if (first.length >= 3 && first.length <= 100) meta.title = first;
   }
 

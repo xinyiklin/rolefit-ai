@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { analyzePosting } from "../extension/bridge.js";
+import { analyzePosting, importPosting } from "../extension/bridge.js";
 
 // Analyze failures name their cause: a workspace saved by a newer RoleFit (423,
 // D095) asks for an update rather than showing a bare status code.
@@ -27,5 +27,18 @@ assert.match(busy.message, /busy/);
 
 const other = await analyzeFailure(500, { error: "x" });
 assert.equal(other.message, "RoleFit could not check this posting (500).");
+
+// A timed-out import is never delivered (its entry stays reserved for a tab that
+// was not opened), so the copy asks for a retry instead of implying it queued.
+globalThis.fetch = async () => { throw new DOMException("timed out", "TimeoutError"); };
+try {
+  await assert.rejects(importPosting("http://127.0.0.1:5181", pageData, "token-1"), (error) => {
+    assert.equal(error.message, "RoleFit did not confirm this import in time. Try again.");
+    assert.equal(error.kind, undefined, "a slow import is a retry, not a port problem");
+    return true;
+  });
+} finally {
+  globalThis.fetch = realFetch;
+}
 
 console.log("extension analyze errors passed");

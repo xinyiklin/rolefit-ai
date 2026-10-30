@@ -38,6 +38,20 @@ probe("Indeed page titles name the role and employer", () => {
   );
 });
 
+probe("hyphenated titles stay whole and do not become the employer", () => {
+  assert.deepEqual(
+    extractJobMeta("", "Front-End Developer - Acme Corp - Austin, TX | Indeed.com"),
+    { title: "Front-End Developer", company: "Acme Corp" }
+  );
+  assert.deepEqual(
+    extractJobMeta("", "Co-op Student, Data - Acme - Toronto, ON | Indeed.com"),
+    { title: "Co-op Student, Data", company: "Acme" }
+  );
+  assert.deepEqual(extractJobMeta("", "Front-End Developer - Acme Corp - Austin, TX - Indeed.com"), { title: "Front-End Developer" });
+  assert.deepEqual(extractJobMeta("", "Full-Stack Engineer | Acme Careers"), { title: "Full-Stack Engineer" });
+  assert.deepEqual(extractJobMeta("", "Full-Stack Engineer | Acme | LinkedIn"), { title: "Full-Stack Engineer" });
+});
+
 probe("Handshake page titles name the role and employer ahead of LinkedIn", () => {
   assert.deepEqual(
     extractJobMeta("", "Platform Engineer - Data Tools | Example Clinic Co | Handshake"),

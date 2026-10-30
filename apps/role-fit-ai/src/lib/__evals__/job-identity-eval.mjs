@@ -154,6 +154,11 @@ check(
   atsPostingKey("https://www.indeed.com/viewjob?jk=abcdef0123456789&from=serp")?.key,
   "indeed:abcdef0123456789"
 );
+check(
+  "indeed search-pane vjk param and viewjob jk agree",
+  atsPostingKey("https://www.indeed.com/jobs?q=backend+engineer&l=Remote&vjk=abcdef0123456789")?.key,
+  "indeed:abcdef0123456789"
+);
 check("plain company page → no key", atsPostingKey("https://acme.com/careers/software-engineer"), null);
 
 // ── Requisition ids ──────────────────────────────────────────────────────────
@@ -358,6 +363,15 @@ const baseApp = {
     level: "same-company-role",
     confidence: "possible"
   });
+}
+
+// A posting tracked from Indeed's viewjob page matches its search-pane capture.
+{
+  const matches = findDuplicateApplications(
+    { jobUrl: "https://www.indeed.com/jobs?q=engineer&vjk=00000000cafebabe", jobText: JD_BODY },
+    [{ ...baseApp, jobUrl: "https://www.indeed.com/viewjob?jk=00000000cafebabe" }]
+  );
+  check("indeed search pane and viewjob → exact same posting", matches[0]?.confidence, "exact");
 }
 
 // Conflicting ids plus ordinary similarity are still treated as different jobs.

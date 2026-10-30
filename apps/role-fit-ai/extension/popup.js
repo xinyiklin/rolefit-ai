@@ -339,6 +339,8 @@ function renderNotice(className, title, copy, actions = []) {
 function trackerStatus(app) {
   if (!app) return { tone: "idle", label: "Not tracked" };
   switch (app.status) {
+    case "draft": return { tone: "ended", label: "Draft" };
+    case "not_applying": return { tone: "ended", label: "Skipped" };
     case "applied": {
       const on = formatDate(app.appliedAt);
       return { tone: "filed", label: on ? `Applied · ${on}` : "Applied" };
