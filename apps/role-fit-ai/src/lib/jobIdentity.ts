@@ -433,12 +433,17 @@ const CONFLICTING_ID_REVIEW_MIN_SIMILARITY = 0.96;
 const CONFLICTING_ID_REVIEW_MIN_SEQUENCE_OVERLAP = 0.94;
 const CONFLICTING_ID_REVIEW_MIN_LENGTH_RATIO = 0.9;
 
+// Any script counts, so a non-English posting is still comparable; plain
+// ASCII text tokenizes exactly as the a-z0-9+#. split always did. Unspaced
+// scripts (CJK, Thai) yield clause tokens: exact reposts match, edits miss.
+const DESCRIPTION_SEPARATORS = /[^\p{L}\p{N}\p{M}+#.]+/gu;
+// NFKD would spell ™/℠ as letters and keep emoji variation selectors as marks.
+const DESCRIPTION_SYMBOLS = /[\u2120\u2122\uFE00-\uFE0F]/g;
 function jdTokens(text: string | undefined | null): string[] {
-  return String(text || "")
-    .toLowerCase()
-    .slice(0, FINGERPRINT_CHARS)
-    .split(/[^a-z0-9+#.]+/)
-    .filter((token) => token.length >= 4 && !/^[\d.]+$/.test(token));
+  const raw = String(text || "").slice(0, FINGERPRINT_CHARS).replace(DESCRIPTION_SYMBOLS, " ");
+  return foldedWords(raw, DESCRIPTION_SEPARATORS)
+    .split(" ")
+    .filter((token) => token.length >= 4 && !/^[\p{N}.]+$/u.test(token));
 }
 
 // Compact content fingerprint of a job description: the set of distinct

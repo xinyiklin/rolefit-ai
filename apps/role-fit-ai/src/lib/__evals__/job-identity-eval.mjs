@@ -208,6 +208,23 @@ check(
   true
 );
 check("empty fingerprint never matches", jdSimilarity(jdFingerprint(""), jdFingerprint(JD_BODY)), 0);
+const legacyAsciiTokens = (text) => [...new Set(
+  text.toLowerCase().split(/[^a-z0-9+#.]+/).filter((token) => token.length >= 4 && !/^[\d.]+$/.test(token))
+)];
+check("ASCII descriptions tokenize exactly as before", [...jdFingerprint(JD_BODY)], legacyAsciiTokens(JD_BODY).slice(0, jdFingerprint(JD_BODY).size));
+const ASCII_STACK = "Build C++ and C# services on .NET 8, ASP.NET, Notepad++, Sharp#Lang, node.js, and snake_case_tools v1.2.3; build C++ again. Salary 120,000.";
+check("ASCII stack names tokenize exactly as before", [...jdFingerprint(ASCII_STACK)], legacyAsciiTokens(ASCII_STACK));
+check("a trademark sign or emoji selector never changes a word", [...jdFingerprint("Java™ ✔️Python Kotlin")], ["java", "python", "kotlin"]);
+const RU_BODY = "Мы ищем опытного разработчика для создания распределённых сервисов обработки платежей. Требования: опыт работы с Kubernetes, PostgreSQL и очередями сообщений, проектирование отказоустойчивых систем, наставничество младших инженеров.";
+const RU_OTHER = "Требуется менеджер по продажам для работы с ключевыми клиентами розничной сети. Обязанности: ведение переговоров, подготовка коммерческих предложений, выполнение плана продаж, развитие партнёрских отношений.";
+check("a Cyrillic posting yields a comparable fingerprint", jdFingerprint(RU_BODY).size >= 15, true);
+check("a Cyrillic repost matches itself", jdSimilarity(jdFingerprint(RU_BODY), jdFingerprint(RU_BODY)), 1);
+check("different Cyrillic roles stay distinct", jdSimilarity(jdFingerprint(RU_BODY), jdFingerprint(RU_OTHER)) < 0.2, true);
+check(
+  "accented and unaccented Latin words share tokens",
+  jdSimilarity(jdFingerprint("Développeur expérimenté pour équipe données"), jdFingerprint("Developpeur experimente pour equipe donnees")),
+  1
+);
 
 // ── Layered matcher ──────────────────────────────────────────────────────────
 const baseApp = {
