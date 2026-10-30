@@ -109,6 +109,13 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-30
 
+- [TOOL] **Bug-hunt round nine**: a cover letter past the .cover limits no
+  longer crashes RoleFit (it reads changed, recovery keeps its last valid
+  version, saves refuse with the codec's message); accented names keep their
+  letters in file names; Undo works on a row settled by hand; diff views keep
+  each side's spacing; PDF import splits contact items at dingbat icons and
+  sets rating runs aside. Each reviewed. Reverted after two failed reviews:
+  icon-prefixed headings and private-use separators (open, src/resume/AGENTS.md).
 - [TOOL] **Bug-hunt round eight** (product-delivery; two reviewers per shared
   package): the editor never applies a toolbar command to a replaced
   document's selection; PDF export drops U+00AD and primes each face, so a
