@@ -109,6 +109,12 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-29
 
+- [TOOL] **Bug-hunt round seven**: an unreadable saved resume is an error on
+  the snapshot, not a failed workspace (variants, history and letters stay
+  reachable); over-limit contacts are refused, not cut; tracker months group
+  by local day; a new Typeset tab never writes its restored draft back over
+  another tab's. Each reviewed. Open (low): the unreadable file is unnamed and
+  a remembered valid variant is not reopened automatically.
 - [TOOL] **Bug-hunt round six** (round five's failing cover-letter probe fixed
   first). Cover letters send slot answers only for slots the letter still has;
   duplicate detection compares non-English descriptions (ASCII unchanged); an
