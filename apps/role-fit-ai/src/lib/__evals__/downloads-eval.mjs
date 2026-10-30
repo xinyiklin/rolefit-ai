@@ -142,4 +142,11 @@ assert.equal(
   "a letter titled from an automatic resume title names the same application"
 );
 
+// Accented names and companies keep their letters, without accents, in every
+// file name; a typed "Résumé" (composed or not) is recognized as a kind.
+assert.equal(buildResumeDocumentTitle("José García", "Société Générale"), "Jose_Garcia_Societe_Generale_Resume");
+assert.equal(buildResumeDocumentTitle("Lena Müller", "Acme"), "Lena_Muller_Acme_Resume");
+assert.equal(swapDocumentTitleKind("Jane Doe Résumé", "coverLetter"), "Jane Doe Cover Letter", "an accented résumé title swaps instead of stacking two kinds");
+assert.equal(swapDocumentTitleKind("Jane Doe Résumé".normalize("NFD"), "coverLetter"), "Jane Doe Cover Letter", "decomposed accents swap too");
+
 console.log("PASS resume and cover-letter document and export naming");
