@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { ArrowRight, Check, Circle, LoaderCircle } from "lucide-react";
 
 import { APPLICATION_SOURCES, JOB_TYPES, type Application } from "../../hooks/useApplications";
@@ -7,7 +7,7 @@ import type { ImportedJobSnapshot } from "../../hooks/useJobIntake";
 import type { CoverLetterOption } from "../../lib/coverLetterWorkspaceRepository";
 import type { AiStageState, PolishProgressState } from "../../lib/aiWorkflow";
 import type { ExtractedJobTracking } from "../../lib/jobExtract";
-import { preparedJobName, preparedJobRoleContext, type PreparedJobBriefField } from "../../lib/preparedJobBrief";
+import { preparedJobBriefOmittedItems, preparedJobName, preparedJobRoleContext, type PreparedJobBriefField } from "../../lib/preparedJobBrief";
 import type { PreparationReadiness } from "../../lib/preparationReadiness";
 import type { PreparationPrimaryAction } from "../../lib/preparationSession";
 import type { VariantRecommendation } from "../../lib/variantRecommendation";
@@ -152,6 +152,19 @@ export type PrepareTabProps = {
   onSkip: () => void | Promise<void>;
 };
 
+// The brief budget leaves these items out of Polish and the saved
+// application; saying so keeps the editor honest about what is used.
+function BriefLimitNote({ omitted }: { omitted: number }) {
+  if (!omitted) return null;
+  return (
+    <p className="prepare-note" role="status">
+      {omitted === 1 ? "1 brief item does" : `${omitted} brief items do`} not fit the brief's 9,000-character limit, so
+      Polish and the saved application leave {omitted === 1 ? "it" : "them"} out. Shorten or remove items to include{" "}
+      {omitted === 1 ? "it" : "them"}.
+    </p>
+  );
+}
+
 export function PrepareTab({
   jobUrl,
   onJobUrlChange,
@@ -236,6 +249,11 @@ export function PrepareTab({
   const hasPreparedPreview = Boolean(jobPrepared || (isPreparing && localPreparedPreview));
   const tracking = displayedJob?.tracking ?? {};
   const brief = displayedJob?.brief;
+  // Assembling the brief costs a budget pass; only an edit can change the count.
+  const briefOmitted = useMemo(
+    () => (displayedJob?.brief ? preparedJobBriefOmittedItems(displayedJob.tracking, displayedJob.brief) : 0),
+    [displayedJob?.tracking, displayedJob?.brief]
+  );
   const { role, company } = preparedJobName(tracking);
   const manualReviewFields = hasPreparedPreview ? (displayedJob?.manualReviewFields ?? []) : [];
   const sourceLength = (jobRawText || jobDescription).trim().length;
@@ -683,6 +701,7 @@ export function PrepareTab({
                   </label>
 
                   <PreparedJobBriefSections sections={BRIEF_SECTIONS} brief={brief} onChange={onJobBriefChange} />
+                  <BriefLimitNote omitted={briefOmitted} />
                 </fieldset>
 
                 <div className="prepare-gaps">

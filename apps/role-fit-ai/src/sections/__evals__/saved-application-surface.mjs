@@ -283,7 +283,7 @@ assert.match(
   /aria-labelledby="application-job-activity-title"[\s\S]{0,500}?relatedApplications\.length \?/,
   "Job activity keeps its populated and empty states"
 );
-assert.ok(jobSnapshot.includes("buildPreparedJobBrief(preparedText, preparedText)"));
+assert.ok(jobSnapshot.includes("buildSavedPreparedJobBrief(preparedText)"), "the snapshot reopens the saved brief without count caps");
 for (const part of [
   "Overview",
   "Responsibilities",

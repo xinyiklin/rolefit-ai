@@ -2,7 +2,7 @@ import { memo, useMemo } from "react";
 import { ArrowRight, FileText } from "lucide-react";
 import type { Application } from "../../hooks/useApplications";
 import {
-  buildPreparedJobBrief,
+  buildSavedPreparedJobBrief,
   removePreparedJobRoleSummary
 } from "../../lib/preparedJobBrief";
 
@@ -73,7 +73,7 @@ export const ApplicationJobSnapshot = memo(function ApplicationJobSnapshot({
     const preparedText = application.jobDescription?.trim() ?? "";
     const sourceText = application.rawJobDescription?.trim() || preparedText;
     const brief = removePreparedJobRoleSummary(
-      buildPreparedJobBrief(preparedText, preparedText),
+      buildSavedPreparedJobBrief(preparedText),
       application.roleDescription
     );
     const overview = uniqueProse([application.roleDescription, brief.companyContext]);

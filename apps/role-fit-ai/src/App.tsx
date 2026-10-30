@@ -123,6 +123,7 @@ import {
   assemblePreparedJobApplicationText,
   assemblePreparedJobTailoringText,
   buildPreparedJobBrief,
+  buildSavedPreparedJobBrief,
   preparedJobBriefFieldFromText,
   preparedJobName,
   reconcilePreparedJobManualReviewFields,
@@ -2595,7 +2596,7 @@ function App() {
         roleDescription: app.roleDescription
       });
       const storedBrief = removePreparedJobRoleSummary(
-        buildPreparedJobBrief(restoredJobDescription, restoredJobDescription),
+        buildSavedPreparedJobBrief(restoredJobDescription),
         app.roleDescription
       );
       const fallbackBrief = buildPreparedJobBrief(restoredExtraction.tailoringText, restoredSourceText);

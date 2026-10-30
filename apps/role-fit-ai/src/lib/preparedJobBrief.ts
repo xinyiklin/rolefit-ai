@@ -45,7 +45,9 @@ function cleanListItem(value: string): string {
     .trim();
 }
 
-function uniqueItems(values: string[], limit = 16): string[] {
+// Lists are never cut by count: analysis output is already bounded upstream,
+// and the 9,000-character brief budget is the one bound on what is sent.
+function uniqueItems(values: string[], limit = Number.POSITIVE_INFINITY): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
   for (const value of values) {
@@ -59,7 +61,7 @@ function uniqueItems(values: string[], limit = 16): string[] {
   return result;
 }
 
-export function parseTailoringSections(tailoringText: string, listLimit = 16): Omit<PreparedJobBrief, "benefits"> {
+export function parseTailoringSections(tailoringText: string, listLimit = Number.POSITIVE_INFINITY): Omit<PreparedJobBrief, "benefits"> {
   const lists: Record<Exclude<PreparedJobBriefField, "companyContext" | "benefits">, string[]> = {
     responsibilities: [],
     requiredQualifications: [],
@@ -121,7 +123,8 @@ const SECTION_BOUNDARY =
 const BENEFIT_CUE =
   /\b(?:health|medical|dental|vision|insurance|401\s*\(?k\)?|retirement|paid time off|pto|vacation|parental leave|family leave|sick leave|wellness|tuition|education assistance|commuter|life insurance|disability|employee assistance|stock options?|equity|home office|professional development)\b/i;
 
-export function extractBenefitsFromPosting(sourceText: string): string[] {
+// A raw posting yields at most `limit` benefits; a saved brief keeps every one.
+export function extractBenefitsFromPosting(sourceText: string, limit = 12): string[] {
   const lines = String(sourceText ?? "")
     .replace(/\r\n?/g, "\n")
     .split("\n")
@@ -143,13 +146,18 @@ export function extractBenefitsFromPosting(sourceText: string): string[] {
     sectionItems.push(line);
   }
 
-  const fromSection = uniqueItems(sectionItems, 12);
+  const fromSection = uniqueItems(sectionItems, limit);
   if (fromSection.length) return fromSection;
 
   return uniqueItems(
     lines.filter((line) => BENEFIT_CUE.test(line)),
-    12
+    limit
   );
+}
+
+// A brief reopened from a saved application keeps every item it saved.
+export function buildSavedPreparedJobBrief(savedText: string): PreparedJobBrief {
+  return { ...EMPTY_BRIEF, ...parseTailoringSections(savedText), benefits: extractBenefitsFromPosting(savedText, Number.POSITIVE_INFINITY) };
 }
 
 export function buildPreparedJobBrief(tailoringText: string, sourceText = ""): PreparedJobBrief {
@@ -191,7 +199,8 @@ export function preparedJobBriefFieldFromText(
   value: string
 ): PreparedJobBrief[PreparedJobBriefField] {
   if (field === "companyContext") return value.replace(/\s+/g, " ").trim();
-  return uniqueItems(value.split("\n"));
+  // What the user typed is never cut by count; the brief budget decides.
+  return uniqueItems(value.split("\n"), Number.POSITIVE_INFINITY);
 }
 
 export function preparedJobBriefFieldToText(value: PreparedJobBrief[PreparedJobBriefField]): string {
@@ -233,6 +242,31 @@ export function assemblePreparedJobTailoringText(tracking: ExtractedJobTracking,
     domains: brief.domainSignals
   };
   return assembleTailoringText(parts);
+}
+
+const BRIEF_LISTS = ["responsibilities", "requiredQualifications", "preferredQualifications", "techKeywords", "senioritySignals", "domainSignals"] as const;
+
+// The renderer straightens quotes and spaces; an item is compared the same way.
+const CURLY_SINGLE = new RegExp(`[${String.fromCharCode(0x2018, 0x2019)}]`, "g");
+const CURLY_DOUBLE = new RegExp(`[${String.fromCharCode(0x201c, 0x201d)}]`, "g");
+const NBSP = new RegExp(String.fromCharCode(0xa0), "g");
+function renderedKey(item: string): string {
+  return item.replace(NBSP, " ").replace(CURLY_SINGLE, "'").replace(CURLY_DOUBLE, '"').replace(/\s+/g, " ").trim()
+    .replace(/\s+page is loaded$/i, "").toLowerCase();
+}
+
+// Brief items the 9,000-character budget leaves out of what Polish and the
+// saved application read, so the editor can say so instead of losing them.
+// An item counts as sent only when it arrived whole, so a cut fragment never
+// passes for the item it came from.
+export function preparedJobBriefOmittedItems(tracking: ExtractedJobTracking, brief: PreparedJobBrief): number {
+  const kept = parseTailoringSections(assemblePreparedJobTailoringText(tracking, brief));
+  return BRIEF_LISTS.reduce((sum, key) => {
+    const sent = new Set(kept[key].map(renderedKey));
+    // Brief items are already clean: cleaning again would strip "3." from "3.0 GPA".
+    const items = new Set(brief[key].map(renderedKey).filter(Boolean));
+    return sum + [...items].filter((item) => !sent.has(item)).length;
+  }, 0);
 }
 
 export function assemblePreparedJobApplicationText(tracking: ExtractedJobTracking, brief: PreparedJobBrief): string {
