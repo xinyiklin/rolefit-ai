@@ -554,7 +554,13 @@ export function installCompanionIpc(options: CompanionIpcOptions): () => void {
             await options.saveApiProvider(args[0], apiKey),
             args[0]
           );
-        } catch {
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "";
+          if (message.includes("let this companion start the local service")) {
+            throw new Error(
+              "Restart RoleFit and let this companion start the local service before changing providers."
+            );
+          }
           throw new Error("Unable to save API provider.");
         }
       }

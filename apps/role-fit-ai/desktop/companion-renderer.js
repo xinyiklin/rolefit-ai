@@ -175,6 +175,7 @@ let workspaceOperationPending = false;
 let liveConnectionStatus = null;
 let connectionStatusLoaded = false;
 let connectionStatusGeneration = 0;
+let connectionStatusFailures = 0;
 let connectionPollTimer = 0;
 
 function storedTab() {
@@ -217,12 +218,17 @@ function activateTab(value, { persist = true, refresh = true } = {}) {
     window.clearTimeout(workspacePollTimer);
     workspacePollTimer = 0;
   }
-  if (tab === "settings") {
+  if (pollsConnectionStatus(tab)) {
     if (hasUsableBridge()) void refreshConnectionStatus();
   } else {
     window.clearTimeout(connectionPollTimer);
     connectionPollTimer = 0;
   }
+}
+
+// The extension tab gates Approve/Remove on server ownership, so it keeps that status live too.
+function pollsConnectionStatus(tab) {
+  return tab === "settings" || tab === "extension";
 }
 
 function storedExtensionBrowser() {
@@ -311,7 +317,8 @@ function announce(message) {
   });
 }
 
-function announceExtensionSetupCopy(message) {
+// This region sits outside the panels, so it announces from whichever tab is active.
+function announceStatus(message) {
   elements.extensionSetupStatus.textContent = "";
   window.requestAnimationFrame(() => {
     elements.extensionSetupStatus.textContent = message;
@@ -380,7 +387,7 @@ async function copyExtensionSetupValue(button) {
   if (!action || !hasUsableBridge()) return;
   if (extensionCopyPending) {
     showTemporaryExtensionSetupCopyFeedback(button, action, "Wait", "pending");
-    announceExtensionSetupCopy("Another copy is already in progress.");
+    announceStatus("Another copy is already in progress.");
     return;
   }
 
@@ -392,10 +399,10 @@ async function copyExtensionSetupValue(button) {
   try {
     await bridge.copyExtensionSetupValue(target);
     showTemporaryExtensionSetupCopyFeedback(button, action, "Copied", "success");
-    announceExtensionSetupCopy(target === "directory" ? extensionFolderFeedback("success") : action.success);
+    announceStatus(target === "directory" ? extensionFolderFeedback("success") : action.success);
   } catch {
     showTemporaryExtensionSetupCopyFeedback(button, action, "Try again", "error");
-    announceExtensionSetupCopy(target === "directory" ? extensionFolderFeedback("error") : action.error);
+    announceStatus(target === "directory" ? extensionFolderFeedback("error") : action.error);
   } finally {
     extensionCopyPending = false;
     button.removeAttribute("aria-busy");
@@ -672,6 +679,8 @@ async function loadExtensionPairingSettings() {
     window.clearTimeout(extensionPairingRetryTimer);
     extensionPairingRetryTimer = 0;
   } catch {
+    // After a successful load, a failed poll keeps the last rows; the next poll retries.
+    if (extensionPairingLoadState === "ok") return;
     // A just-started server can stall for seconds (dev mode compiles the app
     // on first load), so failures before any success keep Loading and retry.
     if (extensionPairingLoadState === "loading" && extensionPairingStartupRetriesLeft > 0) {
@@ -709,6 +718,14 @@ function localSitePortErrorMessage(error) {
   const refused = message.match(/Port \d+ is one browsers refuse to connect to\. Choose another port\./);
   if (refused) return refused[0];
   return "The port could not be saved. Check app permissions and try again.";
+}
+
+function providerMutationErrorMessage(error, fallback) {
+  const message = error instanceof Error ? error.message : String(error);
+  // A reused listener names its fix: RoleFit's own sentence, without the
+  // "Error invoking remote method" prefix Electron wraps around it.
+  const reused = message.match(/Restart RoleFit and let this companion start the local service[^.]*\./);
+  return reused ? reused[0] : fallback;
 }
 
 function connectionStatus(provider, record) {
@@ -890,12 +907,19 @@ function renderProviders() {
   }
   elements.providerList.dataset.rendered = "true";
   elements.providerList.setAttribute("aria-busy", "false");
-  elements.providerSummary.textContent = configuredCount === 0
-    ? "No providers added yet. Add a CLI or API provider to begin."
-    : `${configuredCount} added · ${readyCount} ready for RoleFit.`;
-  elements.overviewProviderSummary.textContent = configuredCount === 0
-    ? "No providers connected"
-    : `${readyCount} ready of ${configuredCount} connected`;
+  // No records yet means the first status check is still running (a
+  // completed check holds every supported provider), not an empty setup.
+  const checking = providerRecords.size === 0;
+  elements.providerSummary.textContent = checking
+    ? "Checking providers…"
+    : configuredCount === 0
+      ? "No providers added yet. Add a CLI or API provider to begin."
+      : `${configuredCount} added · ${readyCount} ready for RoleFit.`;
+  elements.overviewProviderSummary.textContent = checking
+    ? "Checking providers"
+    : configuredCount === 0
+      ? "No providers connected"
+      : `${readyCount} ready of ${configuredCount} connected`;
   const providerAttention = configuredCount > 0 && readyCount === 0;
   elements.navProvidersAttention.hidden = !providerAttention;
   setCardTone(elements.overviewProvidersCard, providerAttention);
@@ -982,8 +1006,8 @@ async function runProviderAction(providerId, task, successMessage, failureMessag
   try {
     await task();
     announce(successMessage);
-  } catch {
-    announce(failureMessage);
+  } catch (error) {
+    announce(providerMutationErrorMessage(error, failureMessage));
   } finally {
     pendingProviders.delete(providerId);
     await refreshProviders({ announceResult: false });
@@ -1008,8 +1032,11 @@ async function saveApiProvider(providerId, form) {
     await request;
     replacingApiProviders.delete(providerId);
     announce(`${PROVIDER_BY_ID.get(providerId)?.name ?? "API provider"} added securely.`);
-  } catch {
-    announce("The API provider could not be saved. Check secure credential storage and try again.");
+  } catch (error) {
+    announce(providerMutationErrorMessage(
+      error,
+      "The API provider could not be saved. Check secure credential storage and try again."
+    ));
   } finally {
     input.value = "";
     pendingProviders.delete(providerId);
@@ -1215,7 +1242,7 @@ function renderConnectionStatus() {
 function scheduleConnectionPoll() {
   window.clearTimeout(connectionPollTimer);
   connectionPollTimer = 0;
-  if (!hasUsableBridge() || activeTabId !== "settings" || document.visibilityState === "hidden") {
+  if (!hasUsableBridge() || !pollsConnectionStatus(activeTabId) || document.visibilityState === "hidden") {
     return;
   }
   connectionPollTimer = window.setTimeout(() => {
@@ -1235,9 +1262,13 @@ async function refreshConnectionStatus() {
       throw new Error("Invalid connection status.");
     }
     liveConnectionStatus = status;
+    connectionStatusFailures = 0;
   } catch {
     if (generation !== connectionStatusGeneration) return;
-    liveConnectionStatus = null;
+    // One failed probe keeps the last ownership so the extension rows, an armed
+    // removal, and keyboard focus survive; a second consecutive failure clears it.
+    connectionStatusFailures += 1;
+    if (connectionStatusFailures >= 2) liveConnectionStatus = null;
   } finally {
     if (generation === connectionStatusGeneration) {
       connectionStatusLoaded = true;
@@ -1582,9 +1613,9 @@ async function openRoleFitInBrowser(button) {
   button.disabled = true;
   try {
     await bridge.openBrowserApp();
-    announce("RoleFit opened in your default browser.");
+    announceStatus("RoleFit opened in your default browser.");
   } catch {
-    announce("RoleFit could not be opened. Keep the desktop app running and try again.");
+    announceStatus("RoleFit could not be opened. Keep the desktop app running and try again.");
   } finally {
     button.disabled = false;
   }
@@ -1596,14 +1627,24 @@ for (const button of [elements.openRoleFit, elements.overviewOpenRoleFit]) {
   });
 }
 
+function setOpenExtensionDirectoryLabel(label, title = "") {
+  // The label is the button's leading text node, before its decorative arrow.
+  elements.openExtensionDirectory.firstChild.nodeValue = `${label} `;
+  elements.openExtensionDirectory.title = title;
+}
+
 elements.openExtensionDirectory.addEventListener("click", async () => {
   if (!hasUsableBridge()) return;
   elements.openExtensionDirectory.disabled = true;
+  setOpenExtensionDirectoryLabel("Open folder");
   try {
     await bridge.openExtensionDirectory();
-    announce(`Opened the bundled browser-extension folder for ${activeExtensionPortLabel()}.`);
+    announceStatus(`Opened the bundled browser-extension folder for ${activeExtensionPortLabel()}.`);
   } catch {
-    announce(`The browser-extension folder for ${activeExtensionPortLabel()} could not be opened. Restart RoleFit and try again.`);
+    const message = `The browser-extension folder for ${activeExtensionPortLabel()} could not be opened. Restart RoleFit and try again.`;
+    // The status region is visually hidden, so the control itself shows the failure until the next try.
+    setOpenExtensionDirectoryLabel("Couldn't open, try again", message);
+    announceStatus(message);
   } finally {
     elements.openExtensionDirectory.disabled = false;
   }

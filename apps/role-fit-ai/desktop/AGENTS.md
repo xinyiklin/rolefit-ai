@@ -112,8 +112,13 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
     value. Step-control feedback sits beside the control so it never covers
     the instruction text.
 - The sidebar service line (and its tooltip sentence) derives from the last
-  connection-status probe (startup, window re-show, and Settings' poll), never
-  a fixed "ready". Each page's hidden `h1` is the page's sidebar label.
+  connection-status probe (startup, window re-show, and the Settings and
+  Browser extension polls), never a fixed "ready". The extension tab polls
+  because Approve/Remove are gated on server ownership, so a transient probe
+  failure recovers without a tab switch; one failed probe keeps the last
+  ownership (rows, armed removal, and focus survive) and only a second
+  consecutive failure clears it. Each page's hidden `h1` is the page's sidebar
+  label.
 - `runtime-paths.cts` owns the source-versus-package application, server, and
   writable-workspace resolution. `build-package.mjs` owns the minimal staged
   runtime; `forge.config.cjs` owns ASAR, native makers, signing/notarization,
