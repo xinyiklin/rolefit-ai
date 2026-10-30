@@ -109,6 +109,19 @@ assert.match(
   /if \(nextPt === null\) \{\s*setDraft\(formatMarginInches\(valuePt\)\);\s*return;/,
   "a reverted margin draft never flips the preset to custom"
 );
+// An outside click unmounts the Page menu before the margin's blur reaches
+// React, so the typed draft commits on unmount; Escape cancels it instead.
+assert.match(
+  page,
+  /window\.removeEventListener\("keydown", cancelOnEscape, true\);\s*commitRef\.current\(\);/,
+  "a typed margin commits when the Page menu closes on an outside click"
+);
+assert.match(page, /commitRef\.current = commit;/, "the unmount commit reads the latest margin draft");
+// The Popover closes on Escape in a document capture listener, so only a window
+// capture listener runs before it and can cancel the draft.
+assert.match(page, /event\.key === "Escape" && event\.target === inputRef\.current\) cancelledRef\.current = true;/, "Escape in the margin box cancels its draft");
+assert.match(page, /window\.addEventListener\("keydown", cancelOnEscape, true\)/, "the Escape cancel runs in the capture phase on window");
+assert.match(page, /const commit = \(\) => \{\s*if \(cancelledRef\.current\) return;/, "a cancelled margin draft is never committed by blur or close");
 
 // ----- Zoom steps below the smallest preset (a phone's Fit) -----
 {

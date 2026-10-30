@@ -118,7 +118,8 @@ paints).
 - Numeric text inputs follow the draft pattern: local draft state, commit on
   blur/Enter (parse, clamp, round), reset on Escape — except a `StyleRange`
   value box inside a popover, which commits when Escape closes its menu (see
-  above). Each control keeps its
+  above). The Page menu's custom margin box commits on an outside-click close
+  but still cancels on Escape. Each control keeps its
   own units and precision; there is deliberately no shared draft-input hook.
   `toolbar/numericDraft.ts` is only the shared commit decision: an empty,
   unparsable, or unchanged draft reverts without calling `onChange`.
