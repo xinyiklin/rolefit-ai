@@ -21,7 +21,7 @@ import {
   openImportTab,
   randomClaimToken
 } from "./bridge.js";
-import { createLocalSiteOrigin, loadExtensionSettings, saveShortcutNotice } from "./settings.js";
+import { clearShortcutNotice, createLocalSiteOrigin, loadExtensionSettings, saveShortcutNotice } from "./settings.js";
 
 const IMPORT_COMMAND = "import-job";
 const BADGE_WORKING = "···";
@@ -66,6 +66,12 @@ async function runShortcutImport() {
   if (importInFlight) return;
   importInFlight = true;
   setBadge(BADGE_WORKING, BADGE_INK);
+  // A new attempt supersedes an earlier failure's notice, whatever it reports.
+  try {
+    await clearShortcutNotice();
+  } catch {
+    // A stale notice is only advisory; the import itself still runs.
+  }
 
   try {
     const settings = await loadExtensionSettings();

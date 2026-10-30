@@ -215,6 +215,11 @@ assert.match(
 );
 assert.match(background, /commands\?\.onCommand/, "the background listens for the shortcut command");
 assert.match(background, /command !== IMPORT_COMMAND/, "the background handles only its own command");
+assert.match(
+  background,
+  /importInFlight = true;[\s\S]{0,200}?await clearShortcutNotice\(\);[\s\S]{0,400}?const settings = await loadExtensionSettings\(\);/,
+  "a new shortcut import clears an earlier failure's notice before it runs"
+);
 assert.match(background, /importInFlight/, "a held shortcut cannot fan out duplicate imports");
 assert.match(background, /saveShortcutNotice/, "a headless failure is reported back to the popup");
 assert.match(popup, /readShortcutNotice[\s\S]*clearShortcutNotice/, "the popup shows the notice once and clears it");
