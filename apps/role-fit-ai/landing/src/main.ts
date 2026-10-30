@@ -22,9 +22,10 @@ function scrollToTarget(id: string): void {
     return;
   }
   target.scrollIntoView({ behavior, block: "start" });
-  if (id === "main") {
-    (target as HTMLElement).focus({ preventScroll: true });
-  }
+  // Move focus with the view, so keyboard and screen-reader users land where
+  // the page scrolled (a section is focusable only programmatically).
+  if (!target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
+  target.focus({ preventScroll: true });
 }
 
 for (const trigger of document.querySelectorAll<HTMLElement>("[data-scroll-to]")) {

@@ -1212,7 +1212,8 @@ origins and product API paths, plus any `@font-face`, `@import`, `url()`, or
 The offline release probe covers valid complete signed and unsigned-preview
 releases, signed-release precedence, and malformed tags, mismatched
 draft/prerelease state, wrong origins, zero-sized, missing, duplicate, and
-unexpected assets.
+unexpected assets. The nav-focus probe checks that in-page navigation moves
+keyboard focus to the section it scrolls to.
 
 Real-browser QA must cover desktop and 390px widths, a clean console, keyboard
 focus, and both release states: the live empty/unavailable response links every

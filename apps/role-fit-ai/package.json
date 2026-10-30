@@ -11,7 +11,7 @@
     "prebuild": "npm run sync-fonts",
     "build": "tsc && tsc -p tsconfig.server.json && vite build",
     "dev:landing": "vite --config vite.landing.config.ts --base=/",
-    "test:landing": "node landing/src/__evals__/release-catalog.mjs",
+    "test:landing": "node landing/src/__evals__/release-catalog.mjs && node landing/src/__evals__/nav-focus.mjs",
     "build:landing": "tsc && npm run test:landing && vite build --config vite.landing.config.ts && node scripts/verify-landing-build.mjs",
     "preview:landing": "vite preview --config vite.landing.config.ts",
     "preview": "NODE_ENV=production node server.ts",
