@@ -89,6 +89,8 @@ for provider, prompt, sanitizer, and review work.
   with `appliedAt` unless the upsert adds a new stage entry naming the new
   stage, and refuses an upsert that drops a submitted record's `appliedAt`
   (which would disarm that guard), so every write path keeps history honest.
+  It also refuses moving an undated record that holds documents to Skipped
+  (`skipDropsDocuments`), since a job-only Skipped record keeps none.
   Draft has no `appliedAt` and remains outside submitted metrics. Explicit answer
   saves create or update one revision-checked Draft; Apply/Skip promote that same
   ID. Enriched Q+A revisions use `shared/applicationAnswerStorage.ts` across

@@ -139,6 +139,20 @@ assert.throws(
   (error) => error instanceof ApplicationsStorageError && error.status === 400 && /submission date cannot be removed/.test(error.message),
   "a submitted record cannot lose its application date"
 );
+// A migrated submission saved without a date keeps its documents: Skipped would shed them.
+{
+  const undated = sanitizeApplications([record({ id: "undated-app", status: "applied", appliedAt: undefined, resumeArtifacts: { hasPdf: true } })]);
+  assert.ok(undated[0].resumeArtifacts, "the fixture holds documents");
+  const skip = (overrides) => save({ status: "not_applying", notApplyingAt: rev2, ...overrides }, undated);
+  assert.throws(() => skip({}), (error) => error instanceof ApplicationsStorageError && error.status === 400 && /would remove its saved documents/.test(error.message),
+    "an undated record with documents is refused a move to Skipped");
+  assert.ok(skip({ appliedAt: applied, stageHistory: [{ id: "s8", type: "stage", status: "not_applying", at: rev2 }] })[0].resumeArtifacts,
+    "with its application date added, the Skip keeps the documents");
+  const bare = sanitizeApplications([record({ id: "bare-app", status: "applied", appliedAt: undefined })]);
+  assert.equal(save({ status: "not_applying", notApplyingAt: rev2 }, bare)[0].status, "not_applying", "an undated record without documents may still be skipped");
+  const labelled = sanitizeApplications([record({ id: "label-app", status: "applied", appliedAt: undefined, resumeUsed: "base" })]);
+  assert.throws(() => save({ status: "not_applying", notApplyingAt: rev2 }, labelled), /would remove its saved documents/, "which resume was used counts as a saved document");
+}
 rejectsUnrecorded(
   { status: "interviewing", stageHistory: [fullHistory[3], { ...moved, status: "offer" }] },
   saved,

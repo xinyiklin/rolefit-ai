@@ -19,6 +19,19 @@ type HistoryFacts = {
 export const STAGE_HISTORY_FULL_MESSAGE =
   "This application's timeline is full. Remove a timeline entry, then try again.";
 
+export const SKIP_DROPS_DOCUMENTS_MESSAGE =
+  "This application has no application date, so marking it Skipped would remove its saved documents. Add its application date and save, then mark it Skipped.";
+
+// A Skipped record without an application date holds no documents, so a record
+// that has some (a migrated submission saved without a date) cannot move there.
+export function skipDropsDocuments(
+  application: Pick<HistoryFacts, "status" | "appliedAt"> & { resumeArtifacts?: unknown; coverLetterArtifacts?: unknown; attachments?: readonly unknown[]; resumeUsed?: unknown },
+  nextStatus: ApplicationStatus
+): boolean {
+  return nextStatus === "not_applying" && application.status !== "not_applying" && !application.appliedAt
+    && Boolean(application.resumeArtifacts || application.coverLetterArtifacts || application.attachments?.length || application.resumeUsed);
+}
+
 export function newStageEntryId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }

@@ -58,7 +58,9 @@ import {
 import { applicationStatusOptions } from "../lib/applicationStatusTransitions";
 import { noResponseCandidate } from "../lib/noResponse";
 import {
+  SKIP_DROPS_DOCUMENTS_MESSAGE,
   STAGE_HISTORY_FULL_MESSAGE,
+  skipDropsDocuments,
   stageHistoryFits,
   withEntryRemoved,
   withEntrySaved,
@@ -626,16 +628,24 @@ export function ApplicationModal({
     }
   }
 
-  // Every path that persists the form's stage refuses a full timeline up front.
-  function timelineFullFor(status: ApplicationStatus): boolean {
-    if (!activeApplication || stageHistoryFits(activeApplication, status)) return false;
-    setSaveError(STAGE_HISTORY_FULL_MESSAGE);
-    return true;
+  // Every path that persists the form's stage refuses a full timeline, or a Skip
+  // that would drop documents, up front.
+  function stageChangeRefused(status: ApplicationStatus): boolean {
+    if (!activeApplication) return false;
+    if (!stageHistoryFits(activeApplication, status)) {
+      setSaveError(STAGE_HISTORY_FULL_MESSAGE);
+      return true;
+    }
+    if (skipDropsDocuments({ ...activeApplication, appliedAt: toIso(form.appliedAt) || activeApplication.appliedAt }, status)) {
+      setSaveError(SKIP_DROPS_DOCUMENTS_MESSAGE);
+      return true;
+    }
+    return false;
   }
 
   async function save(statusOverride: ApplicationStatus = form.status) {
     if (controlsLocked || !(await confirmDiscardTimelineEntry())) return;
-    if (timelineFullFor(statusOverride)) return;
+    if (stageChangeRefused(statusOverride)) return;
     setIsSaving(true);
     setSaveError("");
     let saved = false;
@@ -663,7 +673,7 @@ export function ApplicationModal({
       );
       return;
     }
-    if (mustPersistFirst && timelineFullFor(form.status)) return;
+    if (mustPersistFirst && stageChangeRefused(form.status)) return;
     setIsOpeningPreparation(true);
     setSaveError("");
     try {
@@ -699,7 +709,7 @@ export function ApplicationModal({
       setSaveError("Add a company, role, or job URL before leaving this record. Your edits are still here.");
       return;
     }
-    if (timelineFullFor(form.status)) return;
+    if (stageChangeRefused(form.status)) return;
     setIsSaving(true);
     setSaveError("");
     try {
@@ -753,7 +763,7 @@ export function ApplicationModal({
       setSaveError("Add a company, role, or job URL before changing related records. Your edits are still here.");
       return;
     }
-    if (formHasUnsavedChanges && timelineFullFor(form.status)) return;
+    if (formHasUnsavedChanges && stageChangeRefused(form.status)) return;
     setIsSaving(true);
     setSaveError("");
     try {

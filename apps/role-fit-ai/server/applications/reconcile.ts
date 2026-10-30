@@ -7,6 +7,7 @@ import {
   sanitizeApplications
 } from "./schema.ts";
 import { applicationStatusTransitionAllowed } from "../../src/lib/applicationStatusTransitions.ts";
+import { SKIP_DROPS_DOCUMENTS_MESSAGE, skipDropsDocuments } from "../../src/lib/applicationStageHistory.ts";
 import { answerReceiptIsCurrent } from "../../shared/applicationAnswerStorage.ts";
 
 export type ApplicationMutation = {
@@ -115,6 +116,15 @@ export function reconcileApplicationMutations(
         "That stage change would rewrite application history. No tracker changes were saved.",
         400
       );
+    }
+    if (
+      mutation.operation === "upsert" &&
+      current &&
+      requested &&
+      !current.appliedAt &&
+      skipDropsDocuments({ ...current, appliedAt: requested.appliedAt }, requested.status)
+    ) {
+      throw new ApplicationsStorageError(`${SKIP_DROPS_DOCUMENTS_MESSAGE} No tracker changes were saved.`, 400);
     }
     // A submission date is a fact: it can be corrected, never dropped, which
     // would also disarm the history guard below.

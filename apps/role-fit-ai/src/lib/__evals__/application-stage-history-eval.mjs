@@ -262,20 +262,21 @@ assert.match(hook, /a\.id === id \? withStatusChange\(a, status, now\) : a/, "ro
 assert.match(hook, /mergeStageHistories\(canonical\.stageHistory, others\.map/, "duplicate merge unions history");
 assert.match(hook, /if \(stageHistory === null\) \{[\s\S]*?return false;/, "an over-limit merge is refused");
 assert.match(hook, /if \(!stageHistoryFits\(existing, status\)\) \{\s*setError\(STAGE_HISTORY_FULL_MESSAGE\);/, "a row-menu move on a full timeline is refused with a clear message");
+assert.match(hook, /if \(skipDropsDocuments\(existing, status\)\) \{\s*setError\(SKIP_DROPS_DOCUMENTS_MESSAGE\);\s*return;/, "a row-menu Skip that would drop documents is refused with a clear message");
 {
   const detail = source("../../sections/ApplicationModal.tsx");
   assert.match(
     detail,
-    /function timelineFullFor\(status: ApplicationStatus\): boolean \{\s*if \(!activeApplication \|\| stageHistoryFits\(activeApplication, status\)\) return false;\s*setSaveError\(STAGE_HISTORY_FULL_MESSAGE\);\s*return true;/,
-    "Detail refuses a stage move that would overflow the timeline"
+    /function stageChangeRefused\(status: ApplicationStatus\): boolean \{\s*if \(!activeApplication\) return false;\s*if \(!stageHistoryFits\(activeApplication, status\)\) \{\s*setSaveError\(STAGE_HISTORY_FULL_MESSAGE\);\s*return true;\s*\}\s*if \(skipDropsDocuments\([\s\S]*?, status\)\) \{\s*setSaveError\(SKIP_DROPS_DOCUMENTS_MESSAGE\);/,
+    "Detail refuses a stage move that would overflow the timeline or drop documents"
   );
-  assert.match(detail, /if \(timelineFullFor\(statusOverride\)\) return;\s*setIsSaving\(true\);/, "Save refuses a full timeline up front");
+  assert.match(detail, /if \(stageChangeRefused\(statusOverride\)\) return;\s*setIsSaving\(true\);/, "Save refuses a full timeline up front");
   // Opening the preparation or a related record, and unlinking or merging, all
   // persist the form's pending stage first, so each refuses the same way.
   const persistPaths = detail.split(/\n  (?=async function |function )/).filter((body) => body.includes("buildApplication(form.status)"));
   assert.equal(persistPaths.length, 3, "three paths persist the form's stage before leaving it");
   for (const body of persistPaths) {
-    const guard = body.indexOf("timelineFullFor(form.status)) return;");
+    const guard = body.indexOf("stageChangeRefused(form.status)) return;");
     assert.ok(guard >= 0 && guard < body.indexOf("buildApplication(form.status)"), `${body.slice(0, 60)} refuses a full timeline before persisting`);
   }
 }

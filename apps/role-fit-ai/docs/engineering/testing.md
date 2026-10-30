@@ -1061,8 +1061,10 @@ Good frontend verification covers:
   history contract: every entry type round-trips through `applications.json`,
   each malformed, oversized, or misplaced (Draft, job-only Skipped) history
   refuses the whole record, invalid stored history fails closed without a
-  rewrite, and a stage change on a submitted record needs a new matching stage
-  entry. `src/lib/__evals__/application-stage-history-eval.mjs` runs the
+  rewrite, a stage change on a submitted record needs a new matching stage
+  entry, and an undated record with documents is refused a move to Skipped
+  unless the write adds its application date.
+  `src/lib/__evals__/application-stage-history-eval.mjs` runs the
   client's history helpers (per-entry save and removal, the interview stage
   move, the recovered Skip date of a pre-history record, the 60-entry limit
   including stage entries, merge limits, timeline order, rounds, scheduled

@@ -19,8 +19,10 @@ import {
 import type { NotApplyingReason } from "../lib/notApplying.ts";
 import type { StageHistoryEntry } from "../../shared/applicationStageHistoryContract.ts";
 import {
+  SKIP_DROPS_DOCUMENTS_MESSAGE,
   STAGE_HISTORY_FULL_MESSAGE,
   mergeStageHistories,
+  skipDropsDocuments,
   stageHistoryFits,
   withStatusChange
 } from "../lib/applicationStageHistory.ts";
@@ -650,6 +652,10 @@ export function useApplications() {
       }
       if (!stageHistoryFits(existing, status)) {
         setError(STAGE_HISTORY_FULL_MESSAGE);
+        return;
+      }
+      if (skipDropsDocuments(existing, status)) {
+        setError(SKIP_DROPS_DOCUMENTS_MESSAGE);
         return;
       }
       const now = nextApplicationRevision(existing.updatedAt);

@@ -801,7 +801,10 @@ disappears into the task. Quiet competence, not salesmanship.
     Applied or Interviewing. Moving an applied record to Skipped preserves its
     application date and saved materials. A Skipped record without an
     application date remains job-only and gains one only when moved to an
-    active stage; stage changes never invent documents.
+    active stage; stage changes never invent documents. A record that holds
+    documents but no application date (a migrated submission) is refused a
+    move to Skipped until its application date is added, so the move never
+    drops them.
 11. Preserve safe extension intake: a claimed extension posting requests
     AI-backed Job analysis on Prepare like any other preparation; automatic
     Polish then follows only the Settings switches and thresholds, and the
