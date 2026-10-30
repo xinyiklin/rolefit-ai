@@ -88,6 +88,10 @@ for (const [label, userFacts] of [
 assert.equal(parseSavedApplicationAnswers([legacy, saved, { ...factSaved, userFacts: { provenance: "user-declared", facts: [] } }], draft.id), null, "one malformed fact list invalidates the record");
 const factEdit = editedSavedApplicationAnswer(factSaved, factSaved.question, "A manual answer in my own words.", "manual-facts", later);
 assert.deepEqual(factEdit.userFacts, factSaved.userFacts, "a manual edit keeps the question's facts");
+// An edit that leaves an unfilled placeholder stays a draft, as in the Answers tab.
+const placeholderEdit = editedSavedApplicationAnswer(factSaved, factSaved.question, "I admire [Company]'s mission and its team.", "manual-placeholder", later);
+assert.equal(placeholderEdit.compliant, true);
+assert.equal(placeholderEdit.status, "draft", "an unresolved placeholder never reads ready");
 assert.equal(factEdit.generation, undefined);
 const factQuestionEdit = editedSavedApplicationAnswer(factSaved, "Why this team? Maximum 150 words.", "A manual answer in my own words.", "manual-facts-2", later);
 assert.equal(factQuestionEdit.questionRevision, 2);

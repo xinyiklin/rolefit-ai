@@ -3,6 +3,7 @@ import {
   ANSWER_REFINEMENT_MAX_CHARS,
   ANSWER_TEXT_MAX_CHARS,
   answerFactsWithinLimits,
+  answerReadiness,
   extractAnswerConstraints,
   normalizeAnswerText,
   validateAnswerConstraints,
@@ -143,7 +144,7 @@ export function editedSavedApplicationAnswer(
     constraints,
     counts: validation.counts,
     compliant: validation.compliant,
-    status: validation.compliant ? "ready" : "draft",
+    status: answerReadiness(normalized, validation.compliant),
     ...(previous.userFacts ? { userFacts: previous.userFacts } : {})
   };
 }

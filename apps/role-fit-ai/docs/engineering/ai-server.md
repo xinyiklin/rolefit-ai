@@ -252,7 +252,11 @@ owns:
   prompt version and SHA-256 source fingerprints, without duplicating source text.
   Necessary missing facts return a separate clarification; a repair that asks
   one instead keeps the draft text. Bracketed or doubled-brace placeholders keep
-  an answer a draft. The explicit Save operation appends the exact revision
+  an answer a draft: generation, manual edits and reopening all share
+  `answerReadiness`. A labelled range ("Word count: 250-300") caps at its second
+  number and sets no minimum, but only when nothing but a minimum waiver or the
+  next question follows it; anything unclear keeps the first-number cap, and other
+  limits are demoted exactly as before. The explicit Save operation appends the exact revision
   through the normal application mutation queue; initial saves create one Draft
   without a submission date. Stored revisions are shape-checked on load, so a
   later count or limit rule never invalidates a tracker; reconcile verifies a

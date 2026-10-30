@@ -97,6 +97,12 @@ export function hasUnresolvedAnswerPlaceholder(text: string): boolean {
   return /(?<![\w\]])\[(?!(?:[\d.,%\s\-–—]+|sic|redacted|citation needed)\])[^\]\r\n]{1,240}\]|\{\{[^}\r\n]{1,240}\}\}/i.test(text);
 }
 
+// One readiness rule for every edit path: an answer is ready only when it has
+// text, meets its hard limits, and holds no unfilled placeholder.
+export function answerReadiness(text: string, compliant: boolean): "ready" | "draft" {
+  return text.trim() && compliant && !hasUnresolvedAnswerPlaceholder(text) ? "ready" : "draft";
+}
+
 const SMALL_NUMBERS: Record<string, number> = {
   one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
   thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19
@@ -111,6 +117,61 @@ const COMPOUND_NUMBER = `(?:(?:${WORD_NUMBER}\\s+)?thousand(?:\\s+(?:and\\s+)?(?
 // or "3.5" from yielding a trailing "000" or "5".
 const NUMBER = `(?<![\\d.,])(?:\\d{1,3}(?:[.,]\\d{3})+|\\d+|${COMPOUND_NUMBER})`;
 const UNIT = "(words?|characters?|chars?|sentences?)";
+// Count nouns that are not answer units: "2 to 3 paragraphs" limits paragraphs.
+const OTHER_COUNT_NOUN = "(?:paragraphs?|bullets?|bullet points?|items?|lines?|pages?|examples?|questions?|minutes?|hours?|days?|weeks?|months?|years?)";
+// A range separator: a hyphen, minus or dash, or "to" between spaces ("250to300" is no range).
+const RANGE_SEP = "(?:[^\\S\\n\\r\\u2028\\u2029]*[-\\u2010\\u2011\\u2212–—][^\\S\\n\\r\\u2028\\u2029]*|[^\\S\\n\\r\\u2028\\u2029]+to[^\\S\\n\\r\\u2028\\u2029]+)";
+// "Word limit: 2 to 3 paragraphs": a labelled number starting a range of another count noun.
+const OTHER_NOUN_RANGE_TAIL = new RegExp(`^${RANGE_SEP}(${NUMBER})[^\\S\\n]*${OTHER_COUNT_NOUN}(?=[^\\S\\n]*(?:$|[.;:,)!(\\n\\r]|(?:max(?:imum)?|each|total|per|long)\\b))`, "i");
+const RANGE_END = new RegExp(`^(${RANGE_SEP})(${NUMBER})\\b(?![^\\S\\n]*${OTHER_COUNT_NOUN}\\b)`, "i");
+// A labelled range's sentence tail must be plain (its unit, a scope, "max", "or
+// fewer") plus at most one known waiver or suggestion, or the first-number cap stays.
+const RANGE_UNIT_WORDS = { words: "words?", characters: "characters?|chars?", sentences: "sentences?" } as const;
+const RANGE_WAIVER = "(?:no\\s+minimum(?:\\s+(?:length|word\\s+count|count))?|(?:but\\s+)?(?:shorter|less|fewer)(?:\\s+(?:answers|responses))?\\s+(?:is|are)\\s+(?:fine|ok(?:ay)?|welcome)|anything\\s+(?:under|less|shorter)\\s+is\\s+(?:fine|ok(?:ay)?)|fine\\s+to\\s+go\\s+shorter)";
+const RANGE_ADVICE = "(?:or\\s+so|ideally|preferably|recommended|suggested|if\\s+(?:possible|you\\s+can)|target|approx(?:\\.|imately)?|about|roughly|(?:is|are)\\s+(?:usually\\s+|typically\\s+)?(?:fine|typical|ideal|enough|plenty|sufficient)|works\\s+(?:well|best))";
+const rangeTail = (unit: keyof AnswerCounts) => new RegExp(`^(?:[^\\S\\n]*(?:[,;()]|(?:${RANGE_UNIT_WORDS[unit]}|max(?:imum|\\.)?|each(?:\\s+(?:answer|response|question|field))?|(?:per|for\\s+each)\\s+(?:answer|response|question|field|prompt)|or\\s+(?:fewer|less|under)${unit === "characters" ? "|(?:including|incl\\.?|with)\\s+spaces|spaces\\s+included" : ""})(?![A-Za-z])))*(?:[^\\S\\n]*[,;(—–\\u2010\\u2011\\u2212-][^\\S\\n]*${RANGE_WAIVER}|[^\\S\\n]*[,;(—–\\u2010\\u2011\\u2212-]?[^\\S\\n]*(${RANGE_ADVICE}))?[^\\S\\n]*\\)?[^\\S\\n]*$`, "i");
+const RANGE_TAILS = { words: rangeTail("words"), characters: rangeTail("characters"), sentences: rangeTail("sentences") };
+const YEAR_END = /^(?:19|20)\d\d$/;
+// The tail runs to the sentence end; a period in "2.5", "max. for" or "incl. spaces" does not end it.
+const SENTENCE_REST = new RegExp("^(?:[^.!?\\n\\r\\u2028\\u2029]|\\.(?=\\d)|(?<=\\b(?:[Mm][Aa][Xx]|[Aa][Pp][Pp][Rr][Oo][Xx]|[Ii][Nn][Cc][Ll]|[Mm][Ii][Nn]))\\.(?=\\s+[\\p{Ll}\\d]))*", "u");
+// After that sentence the rest of the question part may hold only blank space, minimum
+// waivers ("No minimum."), or a new line whose first sentence opens the next question with no
+// number or limit word; the rest of that line belongs to the next question and is not read.
+const LATER_SENTENCE = new RegExp("[^.!?\\n\\r\\u2028\\u2029]*[.!?\\n\\r\\u2028\\u2029]*", "y");
+const LINE_BREAK = new RegExp("[\\n\\r\\u2028\\u2029]");
+const WAIVER_SENTENCE = new RegExp(`^(?:but\\s+)?${RANGE_WAIVER}[.!]?$`, "i");
+const FIELD_START = /^(?:\d+[.)](?!\d)|(?:question|field)\s*\d+[:.)])\s*/i;
+const LIMIT_TALK = /\d|\b(?:words?|characters?|chars?|sentences?|spaces|letters|paragraphs?|pages?|limit|count|cap|max(?:imum)?|min(?:imum)?)\b/i;
+function opensNextQuestion(line: string): boolean {
+  const field = FIELD_START.exec(line);
+  const rest = field ? line.slice(field[0].length) : line;
+  if (!field && !rest.includes("?")) return false;
+  return /^\p{Lu}/u.test(rest) && !LIMIT_TALK.test(rest.split(/[.!?]/)[0]);
+}
+function onlyWaiversFollow(text: string): boolean {
+  let newLine = false;
+  for (let index = 0; index < text.length;) {
+    LATER_SENTENCE.lastIndex = index;
+    const sentence = LATER_SENTENCE.exec(text)![0];
+    const line = text.slice(index).split(LINE_BREAK)[0].trim();
+    index += sentence.length;
+    const body = sentence.trim();
+    const startsLine = newLine;
+    newLine = LINE_BREAK.test(sentence);
+    if (!body || /^[.!?)\]"'”’]+$/.test(body)) continue;
+    if (startsLine && opensNextQuestion(line)) return true;
+    if (!WAIVER_SENTENCE.test(body)) return false;
+  }
+  return true;
+}
+// A question part runs from the previous "?" or numbered field to the next one.
+const PART_BREAK = /\?|\n[^\S\n]*(?:\d+[.)]|(?:question|field)[^\S\n]*\d+[:.)])/i;
+const partBefore = (question: string, index: number) => question.slice(Math.max(0, index - 2_000), index).split(PART_BREAK).pop()!;
+// Minimum wording earlier in the part keeps a labelled number's first-number reading.
+const MINIMUM_WORDING = /(?<!\bno\s)\b(?:min(?:imum|imal)?|at\s+least|no\s+(?:less|fewer)\s+than)\b/i;
+const minimumBefore = (question: string, index: number) => MINIMUM_WORDING.test(partBefore(question, index));
+// Another unit, or a spaces or letters hint, earlier in the part leaves the range unclear.
+const UNIT_HINTS = /\b(?:words?|characters?|chars?|sentences?|spaces|letters)\b/gi;
 function numberValue(value: string): number {
   if (/^\d/.test(value)) return Number(value.replace(/[.,]/g, ""));
   let total = 0;
@@ -258,12 +319,25 @@ export function extractAnswerConstraints(question: string): AnswerConstraint[] {
       : { max: /^(?:under|below|fewer|less)/.test(qualifier) ? Math.max(0, n - 1) : n };
     return { unit: unitValue(match[3]), ...bounds, hard: !approximate };
   });
+  // A labelled cap that starts a plain range ("Word count: 250-300") is raised to its
+  // second number after demotion, so it sets no minimum and leaves other limits as they are.
+  const rangeCapStarts = new Set<number>();
+  const demotionOnlyStarts = new Set<number>();
   // "Character limit: 1,500", "Word count: 250 max", "Minimum word count: 100".
   addMatches(new RegExp(`\\b(?:(maximum|max\\.?|minimum|min\\.?|at most|at least|up to)\\s+)?${UNIT}\\s*(limit|count|maximum|max\\.?|minimum|min\\.?|cap)?\\s*(?:is|of|:|=|[-–—])?\\s*(${NUMBER})\\b(?:\\s*(max\\.?|maximum|min\\.?|minimum|or more|or fewer|or less))?`, "gi"), (match) => {
     if (!match[1] && !match[3]) return null;
     const n = numberValue(match[4]);
     const wording = `${match[1] ?? ""} ${match[3] ?? ""} ${match[5] ?? ""}`.toLowerCase();
-    return { unit: unitValue(match[2]), ...(/\b(?:min\.?|minimum|at least|or more)\b/.test(wording) ? { min: n } : { max: n }), hard: true };
+    const floor = /\b(?:min\.?|minimum|at least|or more)\b/.test(wording);
+    if (!floor && !match[5] && !minimumBefore(question, match.index!)) {
+      // A range of another count noun ("Word limit: 2 to 3 paragraphs") sets no cap but still
+      // demotes other limits; otherwise a plain range may raise the cap after demotion.
+      const tail = OTHER_NOUN_RANGE_TAIL.exec(question.slice(match.index! + match[0].length));
+      const end = tail ? numberValue(tail[1]) : 0;
+      if (tail && end > n && end <= n * 5 && !YEAR_END.test(tail[1]) && !YEAR_END.test(match[4])) demotionOnlyStarts.add(match.index!);
+      else rangeCapStarts.add(match.index!);
+    }
+    return { unit: unitValue(match[2]), ...(floor ? { min: n } : { max: n }), hard: true };
   });
   addMatches(new RegExp(`\\b(${NUMBER})\\s*[-‐‑]?\\s*${UNIT}(?:\\s+(?:maximum|max|limit|or (?:less|fewer|more)|at most|minimum|min|exactly))?\\b`, "gi"), (match) => ({
     unit: unitValue(match[2]),
@@ -290,8 +364,38 @@ export function extractAnswerConstraints(question: string): AnswerConstraint[] {
     const range = constraints[index];
     if (worded.some((other) => other.unit === range.unit && (other.max ?? other.exact ?? 0) > (range.max ?? 0))) range.hard = false;
   }
-  return constraints.filter((constraint) => [constraint.min, constraint.max, constraint.exact].every((n) => n === undefined || (Number.isSafeInteger(n) && n <= 1_000_000))
+  constraints.forEach((constraint, index) => {
+    if (!rangeCapStarts.has(starts[index])) return;
+    const end = labelledRangeEnd(question, starts[index] + constraint.source.length, constraint);
+    if (!end) return;
+    constraint.max = end.max;
+    constraint.source = question.slice(starts[index], end.sourceEnd);
+    if (end.advised) constraint.hard = false;
+  });
+  return constraints.filter((constraint, index) => !demotionOnlyStarts.has(starts[index])
+    && [constraint.min, constraint.max, constraint.exact].every((n) => n === undefined || (Number.isSafeInteger(n) && n <= 1_000_000))
     && (constraint.min === undefined || constraint.max === undefined || constraint.min <= constraint.max));
+}
+
+// The second number of a plain labelled range, or null when anything leaves it unclear:
+// a year, an end over five times the start, a later remark, or another unit earlier in the part.
+function labelledRangeEnd(question: string, start: number, constraint: AnswerConstraint): { max: number; advised: boolean; sourceEnd: number } | null {
+  const range = RANGE_END.exec(question.slice(start));
+  if (!range || constraint.max === undefined) return null;
+  // An unspaced hyphen beside a number word is no range ("fifty-seventy").
+  if ((!/\d$/.test(constraint.source) || !/^\d/.test(range[2])) && !/\s/.test(range[1])) return null;
+  const first = constraint.max;
+  const max = numberValue(range[2]);
+  if (first <= 0 || max <= first || max > first * 5 || max > 1_000_000) return null;
+  if ((YEAR_END.test(range[2]) && max % 100 !== 0) || YEAR_END.test(/\d+$/.exec(constraint.source)?.[0] ?? "")) return null;
+  const rest = question.slice(start + range[0].length, start + range[0].length + 2_000);
+  const sentence = SENTENCE_REST.exec(rest)![0];
+  if (!onlyWaiversFollow(rest.slice(sentence.length))) return null;
+  for (const hint of partBefore(question, start - constraint.source.length).match(UNIT_HINTS) ?? []) {
+    if (/^(?:spaces|letters)$/i.test(hint) ? constraint.unit !== "characters" : unitValue(hint) !== constraint.unit) return null;
+  }
+  const tail = RANGE_TAILS[constraint.unit].exec(sentence.replace(/\s+/g, " "));
+  return tail ? { max, advised: Boolean(tail[1]), sourceEnd: start + range[0].length } : null;
 }
 
 export function validateAnswerConstraints(text: string, constraints: readonly AnswerConstraint[]): {

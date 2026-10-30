@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { splitProfileEvidence } from "../../src/lib/coverLetterEvidence.ts";
 import {
   ANSWER_FACTS_MAX, ANSWER_FACTS_MAX_CHARS, ANSWER_INVALID_CONTROL, ANSWER_QUESTION_MAX_CHARS, ANSWER_TEXT_MAX_CHARS, ANSWER_REFINEMENT_MAX_CHARS,
-  extractAnswerConstraints, hasUnresolvedAnswerPlaceholder, normalizeAnswerText, validateAnswerConstraints,
+  answerReadiness, extractAnswerConstraints, hasUnresolvedAnswerPlaceholder, normalizeAnswerText, validateAnswerConstraints,
   type ApplicationAnswerRevision
 } from "../../shared/applicationAnswersContract.ts";
 import { candidateContextLimitError } from "../../shared/candidateProfileContract.ts";
@@ -174,7 +174,7 @@ export async function generateApplicationAnswer(
     id: input.answerRevisionId, applicationId: input.applicationId,
     questionId: input.question.id, questionRevision: input.question.revision, question: input.question.text,
     answer: draft.answer, ...(draft.clarification ? { clarification: draft.clarification } : {}),
-    status: draft.clarification && !draft.answer ? "needs-input" : draft.clarification || !validation.compliant || incomplete ? "draft" : "ready",
+    status: draft.clarification && !draft.answer ? "needs-input" : draft.clarification ? "draft" : answerReadiness(draft.answer, validation.compliant),
     constraints, counts: validation.counts, compliant: validation.compliant,
     ...(warnings?.length ? { warnings } : {}),
     ...(input.previousAnswer ? { previousAnswerId: input.previousAnswer.id } : {}),
