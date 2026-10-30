@@ -8,6 +8,7 @@ import {
   answerReceiptIsCurrent,
   parseSavedApplicationAnswers
 } from "../../shared/applicationAnswerStorage.ts";
+import { hasUnresolvedAnswerPlaceholder } from "../../shared/applicationAnswersContract.ts";
 import { reconcileApplicationMutations } from "./reconcile.ts";
 import { nextApplicationRevision } from "./routeSupport.ts";
 import { ApplicationsStorageError, isCanonicalApplicationTimestamp, sanitizeApplications } from "./schema.ts";
@@ -43,6 +44,9 @@ export function answerIssues(answers: readonly unknown[], applicationId: string,
     const parsed = parseSavedApplicationAnswers([answer], applicationId)?.[0];
     if (!parsed) return [`${at}: not a valid answer`];
     if (!isCanonicalApplicationTimestamp(parsed.savedAt)) return [`${at}.savedAt: must be a canonical ISO timestamp`];
+    if (parsed.status === "ready" && hasUnresolvedAnswerPlaceholder(parsed.answer)) {
+      return [`${at}.status: an answer holding a placeholder is a draft; replace the placeholder or send status "draft"`];
+    }
     return parsed.id && parsed.constraints && parsed.counts && parsed.compliant !== undefined
       && !answerReceiptIsCurrent(parsed as Parameters<typeof answerReceiptIsCurrent>[0])
       ? [`${at}: its counts or limits do not match its text; send a plain {question, answer} pair instead`]

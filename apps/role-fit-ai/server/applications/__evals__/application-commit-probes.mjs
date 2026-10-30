@@ -406,6 +406,11 @@ try {
     const mismatched = await addAnswers(applied.id, { answers: [revision] });
     assert.equal(mismatched.status, 400, mismatched.chunk);
     assert.match(mismatched.json.issues[0], /^answers\[0\]: its counts or limits do not match its text/);
+    const unfinished = "I admire [Company].";
+    const unfinishedReceipt = validateAnswerConstraints(unfinished, constraints);
+    const placeholder = await addAnswers(applied.id, { answers: [{ ...revision, answer: unfinished, counts: unfinishedReceipt.counts, compliant: unfinishedReceipt.compliant }] });
+    assert.equal(placeholder.status, 400, placeholder.chunk);
+    assert.match(placeholder.json.issues[0], /^answers\[0\]\.status: an answer holding a placeholder is a draft/, "an outside writer cannot store a placeholder answer as ready");
     assert.match((await addAnswers(applied.id, { answers: [], note: 1 })).json.issues[0], /^note: not an answers field/);
     assert.match((await addAnswers(applied.id, { answers: [] })).json.issues[0], /^answers: send 1 to 40/);
     assert.deepEqual((await addAnswers(applied.id, { answers: [{ question: "Q", answer: "A", savedAt: "yesterday" }] })).json.issues, ["answers[0].savedAt: must be a canonical ISO timestamp"]);

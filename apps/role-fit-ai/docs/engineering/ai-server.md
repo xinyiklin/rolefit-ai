@@ -253,14 +253,16 @@ owns:
   Necessary missing facts return a separate clarification; a repair that asks
   one instead keeps the draft text. Bracketed or doubled-brace placeholders keep
   an answer a draft: generation, manual edits and reopening all share
-  `answerReadiness`. A labelled range ("Word count: 250-300") caps at its second
-  number and sets no minimum, but only when nothing but a minimum waiver or the
-  next question follows it; anything unclear keeps the first-number cap, and other
-  limits are demoted exactly as before. The explicit Save operation appends the exact revision
-  through the normal application mutation queue; initial saves create one Draft
-  without a submission date. Stored revisions are shape-checked on load, so a
-  later count or limit rule never invalidates a tracker; reconcile verifies a
-  new revision's limits and counts against the current rules.
+  `answerReadiness`, and the answer append and commit routes refuse an outside
+  writer's "ready" answer that holds one. A labelled range ("Word count:
+  250-300") caps at its second number and sets no minimum, but only when nothing
+  but a minimum waiver or the next question follows it; anything unclear keeps
+  the first-number cap, and other limits are demoted exactly as before. The
+  explicit Save operation appends the exact revision through the normal
+  application mutation queue; initial saves create one Draft without a
+  submission date. Stored revisions are shape-checked on load, so a later count
+  or limit rule never invalidates a tracker; reconcile verifies a new revision's
+  limits and counts against the current rules.
 - resume input into the structured editor: pasted resume text is parsed once into
   `ResumeData`, the source of truth thereafter; a previously saved `.resume` file
   loads its `ResumeData` directly. The file picker accepts only `.resume` (no DOCX,
