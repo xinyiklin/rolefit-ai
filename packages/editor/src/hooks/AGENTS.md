@@ -34,6 +34,8 @@ style state; app lifecycle and persistence policy remain in the apps.
   a new transaction after Undo invalidates Redo in both reducers. Sequence
   allocation must be idempotent for the same state/action pair because React
   Strict Mode may invoke a reducer twice before committing either result.
+  Both hooks read the redo branch through `useSyncExternalStore` on the clock:
+  either reducer can advance it after the other hook has already rendered.
 - The existing history-clock generation also identifies document replacement
   for input replay. `actions.getDocumentGeneration()` exposes that read-only
   boundary; the editor discards queued input and pending caret restoration from

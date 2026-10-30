@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
 
 import {
   DOC_STYLE_DEFAULTS,
@@ -360,7 +360,10 @@ export function useDocStyle(historyClock?: HistoryClock) {
   );
 
   const dirty = documentStyleIsDirty(style, cleanDocumentStyle);
-  const historyBranch = documentHistoryClock.currentBranch();
+  const historyBranch = useSyncExternalStore(
+    documentHistoryClock.subscribe,
+    documentHistoryClock.currentBranch
+  );
   const historyGeneration = documentHistoryClock.currentGeneration();
   let undoIndex = state.past.length - 1;
   while (

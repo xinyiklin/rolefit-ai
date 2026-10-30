@@ -119,6 +119,7 @@ import {
   suppressedAutoLinkValue,
   clearFormatting,
   hasClearableFormatting,
+  normalizeFieldInsert,
   setEmptyFieldTypingFormat,
   toggleMark,
   typingFormatForDeletedRange,
@@ -1371,9 +1372,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       insert: string,
       historyIntent?: TextHistoryIntent
     ) => {
-      const singleLine = sel.src.kind !== "bullet";
-      const normalized = insert.replace(/\r/g, "");
-      const text = singleLine ? normalized.replace(/\s*\n+\s*/g, " ") : normalized;
+      const text = normalizeFieldInsert(sel.src, insert);
       const typingFormat = dStart === dEnd ? typingFormatRef.current ?? undefined : undefined;
       const deletedTypingFormat = text.length === 0 ? typingFormatForDeletedRange(sel.map, dStart, dEnd) : null;
       // Emptying the name keeps its format for the next character. A format
@@ -1797,7 +1796,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
           : fragment;
       const head =
         inlineFragment === undefined
-          ? remainderOf(first, insert)
+          ? remainderOf(first, normalizeFieldInsert(first.src, insert))
           : applyInlineFragment(
               first.map,
               first.dStart,

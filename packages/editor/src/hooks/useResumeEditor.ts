@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useReducer, useRef } from "react";
+import { useCallback, useMemo, useReducer, useRef, useSyncExternalStore } from "react";
 
 import {
   newBullet,
@@ -959,6 +959,8 @@ export function useResumeEditor(
     [documentHistoryClock]
   );
 
+  // The style reducer can move the shared redo branch after this hook has read it.
+  useSyncExternalStore(documentHistoryClock.subscribe, documentHistoryClock.currentBranch);
   let undoIndex = state.past.length - 1;
   while (
     undoIndex >= 0 &&

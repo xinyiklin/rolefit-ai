@@ -425,6 +425,13 @@ export function setEmptyFieldTypingFormat(
   return { value, caretValueIndex: value.length };
 }
 
+// Only a bullet (list row or prose paragraph) holds hard breaks; every other
+// field is one line, so inserted line breaks become a single space.
+export function normalizeFieldInsert(src: Pick<FieldSrc, "kind">, text: string): string {
+  const normalized = text.replace(/\r/g, "");
+  return src.kind === "bullet" ? normalized : normalized.replace(/\s*\n+\s*/g, " ");
+}
+
 // Replace display range [dStart, dEnd) with plain text; returns the new value
 // and the caret's VALUE index (convert back to display with a fresh map, so
 // newly-formed ligatures — e.g. typing the second "-" of "--" — land right).

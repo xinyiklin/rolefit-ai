@@ -7,6 +7,7 @@ export type HistoryClock = Readonly<{
   currentGeneration(): number;
   isCurrentRedoBranch(branch: number): boolean;
   isCurrentGeneration(generation: number): boolean;
+  subscribe(listener: () => void): () => void;
 }>;
 
 // Each document owns a clock so content and style share order without coupling editors.
@@ -16,13 +17,26 @@ export function createHistoryClock(): HistoryClock {
   let generation = 0;
   const undoneSequences = new Set<number>();
   let sequenceByState = new WeakMap<object, WeakMap<object, number>>();
+  const listeners = new Set<() => void>();
+  let notifyQueued = false;
+  // Reducers advance the branch mid-render, so the sibling reducer's hook
+  // learns of it after that render instead of inside it.
+  const advanceBranch = () => {
+    branch += 1;
+    if (notifyQueued) return;
+    notifyQueued = true;
+    queueMicrotask(() => {
+      notifyQueued = false;
+      for (const listener of [...listeners]) listener();
+    });
+  };
   return Object.freeze({
     sequenceFor(state, action) {
       let sequenceByAction = sequenceByState.get(state);
       const allocated = sequenceByAction?.get(action);
       if (allocated !== undefined) return allocated;
       if (undoneSequences.size > 0) {
-        branch += 1;
+        advanceBranch();
         undoneSequences.clear();
       }
       sequence += 1;
@@ -41,7 +55,7 @@ export function createHistoryClock(): HistoryClock {
       undoneSequences.delete(value);
     },
     reset() {
-      branch += 1;
+      advanceBranch();
       generation += 1;
       undoneSequences.clear();
       sequenceByState = new WeakMap<object, WeakMap<object, number>>();
@@ -57,6 +71,12 @@ export function createHistoryClock(): HistoryClock {
     },
     isCurrentGeneration(value) {
       return value === generation;
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
     }
   });
 }

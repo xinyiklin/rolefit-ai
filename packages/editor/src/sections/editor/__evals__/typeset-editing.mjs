@@ -1451,6 +1451,20 @@ for (const isALink of ["example.com", "sub.example.co.uk", "example.io/resume.pd
   assert.equal(selectionBandBottomOffset(structural, nextLine(106)), -6, "and still tiles");
 }
 
+// Single-field and cross-field inserts share one line-break normalization.
+{
+  const { normalizeFieldInsert } = await import("../inlineTextEditing.ts");
+  assert.equal(normalizeFieldInsert({ kind: "name" }, "A\r\nB"), "A B", "a single-line field turns a pasted break into a space");
+  assert.equal(normalizeFieldInsert({ kind: "entry" }, "A \n\n B"), "A B");
+  assert.equal(normalizeFieldInsert({ kind: "bullet" }, "A\r\nB"), "A\nB", "a bullet keeps its hard break");
+  const editor = readFileSync(new URL("../TypesetEditor.tsx", import.meta.url), "utf8");
+  assert.match(
+    editor,
+    /remainderOf\(first, normalizeFieldInsert\(first\.src, insert\)\)/,
+    "a cross-field insert normalizes against its first field like a single-field insert"
+  );
+}
+
 // A caret past the final display character restores at the value's end.
 {
   const { valueIndexForDisplayIndex } = await import("../inlineTextEditing.ts");
@@ -1690,7 +1704,61 @@ for (const isALink of ["example.com", "sub.example.co.uk", "example.io/resume.pd
 
 // Keyboard intents keep their meaning on the live and queued-replay paths.
 {
-  const { drainReplayQueue, indentReplacesSelection } = await import("../intentControl.ts");
+  const { drainReplayQueue, edgeNavigation, indentReplacesSelection } = await import("../intentControl.ts");
+  const keyEvent = (key, modifiers = {}) => ({
+    key,
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    shiftKey: false,
+    ...modifiers
+  });
+  assert.deepEqual(
+    edgeNavigation(keyEvent("Home", { ctrlKey: true })),
+    { scope: "document", edge: "start", extend: false },
+    "Ctrl+Home moves to the document start"
+  );
+  assert.deepEqual(
+    edgeNavigation(keyEvent("End", { ctrlKey: true, shiftKey: true })),
+    { scope: "document", edge: "end", extend: true },
+    "Ctrl+Shift+End extends to the document end"
+  );
+  assert.deepEqual(
+    edgeNavigation(keyEvent("Home")),
+    { scope: "line", edge: "start", extend: false },
+    "Home moves to the line start"
+  );
+  assert.deepEqual(
+    edgeNavigation(keyEvent("ArrowLeft", { metaKey: true })),
+    { scope: "line", edge: "start", extend: false },
+    "Cmd+ArrowLeft stays a line-start move"
+  );
+  assert.deepEqual(
+    edgeNavigation(keyEvent("ArrowRight", { metaKey: true })),
+    { scope: "line", edge: "end", extend: false },
+    "Cmd+ArrowRight stays a line-end move"
+  );
+  assert.deepEqual(
+    edgeNavigation(keyEvent("Home", { metaKey: true })),
+    { scope: "document", edge: "start", extend: false },
+    "Cmd+Home moves to the document start"
+  );
+  assert.deepEqual(
+    edgeNavigation(keyEvent("End", { metaKey: true })),
+    { scope: "document", edge: "end", extend: false },
+    "Cmd+End moves to the document end"
+  );
+  assert.deepEqual(
+    edgeNavigation(keyEvent("Home", { ctrlKey: true, altKey: true })),
+    { scope: "line", edge: "start", extend: false },
+    "Ctrl+Alt+Home (AltGr) never jumps to the document start"
+  );
+  assert.deepEqual(
+    edgeNavigation(keyEvent("End", { shiftKey: true })),
+    { scope: "line", edge: "end", extend: true },
+    "Shift+End extends to the line end"
+  );
+  assert.equal(edgeNavigation(keyEvent("ArrowLeft", { ctrlKey: true })), null, "Ctrl+ArrowLeft stays a native word move");
   const INDENTED = "        A paragraph.";
   assert.equal(indentReplacesSelection(INDENTED, 12, "in"), true, "mid-paragraph Tab inserts a tab stop");
   assert.equal(

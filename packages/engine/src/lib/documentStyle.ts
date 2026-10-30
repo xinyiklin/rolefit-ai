@@ -355,10 +355,11 @@ export function coerceDocStyle(raw: unknown): DocStyle {
   // Local preference patches may carry the current derived preset without all
   // four physical values. Use that current UI state only as their fallback;
   // portable files are parsed by the strict codec instead.
+  // An absent preset means the defaults, not the widest preset.
   const requestedPageMargins: PageMargins =
-    r.pageMargins === "narrow" || r.pageMargins === "custom"
+    r.pageMargins === "narrow" || r.pageMargins === "custom" || r.pageMargins === "normal"
       ? r.pageMargins
-      : "normal";
+      : DOC_STYLE_DEFAULTS.pageMargins;
   const fallbackMargins = pageMarginValuesFor(requestedPageMargins);
   const physicalMargins = {
     top: clampStyleNumber("pageMarginTopPt", r.pageMarginTopPt, fallbackMargins.top),
