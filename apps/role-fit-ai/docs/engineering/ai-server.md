@@ -521,9 +521,15 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   current normalization/matching rules as implementation detail and keep their
   behavior locked by grounding/sanitizer probes rather than documenting one
   prefix heuristic as a stable contract.
-- `json.ts` — `parseAiJson` (fenced / prose-wrapped / outermost-brace
-  + trailing-comma repair). `errors.ts` — `UserSafeAiError` and the
-  config-error → 400 mapping.
+- `json.ts` — `parseAiJson` (fenced / prose-wrapped / outermost-brace +
+  trailing-comma repair). `errors.ts` — `UserSafeAiError` and the config-error
+  → 400 mapping. CLI failures are classified in `ai-cli/index.ts` into fixed,
+  user-safe messages: sign-in (401), rate or usage limit (429), Claude overload
+  (503) and an unavailable Codex model (400). Claude is read from its JSON
+  envelope status and text plus stderr; Codex only from error-marked lines after
+  its echoed prompt is removed, so posting text cannot decide the class.
+  Provider text never reaches the client. Resume import and
+  Final review report a provider timeout as a timeout, not a settings problem.
 
 ## API Design
 
