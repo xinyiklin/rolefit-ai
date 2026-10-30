@@ -57,3 +57,41 @@ export function appliedApplicationForSession({
     }
   };
 }
+
+// A create refused because its id already exists is an earlier attempt of the
+// same Apply or Skip whose reply was lost. The retry is a complete create, so it
+// wins, including what it clears; the saved row keeps its stage and dates and
+// what no create writes (later tracker edits, saved documents, posting links).
+const EARLIER_ATTEMPT_FIELDS = [
+  "appliedAt",
+  "notApplyingAt",
+  "stageHistory",
+  "followupAt",
+  "deadline",
+  "notes",
+  "interviewTips",
+  "contacts",
+  "resumeArtifacts",
+  "coverLetterArtifacts",
+  "attachments",
+  "applicationAnswers",
+  "duplicateDismissedIds",
+  "jobPostingGroupId"
+] as const satisfies readonly (keyof Application)[];
+
+export function retriedCreateOverEarlier(
+  earlier: Application,
+  retried: Application
+): Application {
+  const merged: Application = {
+    ...retried,
+    id: earlier.id,
+    status: earlier.status,
+    createdAt: earlier.createdAt
+  };
+  for (const key of EARLIER_ATTEMPT_FIELDS) {
+    if (earlier[key] === undefined) delete merged[key];
+    else (merged as unknown as Record<string, unknown>)[key] = earlier[key];
+  }
+  return merged;
+}

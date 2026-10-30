@@ -42,10 +42,10 @@ type UseSkipFlowArgs = {
   getCurrentPreparationId: () => string;
   getPreparationGeneration: () => number;
   getApplication: (id: string) => Application | undefined;
-  confirmCreated: (id: string) => boolean;
+  confirmCreated: (application: Application) => Promise<boolean>;
   refreshApplications: () => Promise<boolean>;
   currentJobTracking: () => ExtractedJobTracking;
-  resolvePreparationDuplicate: (isCurrent: () => boolean) => Promise<DuplicateResolution>;
+  resolvePreparationDuplicate: (isCurrent: () => boolean, ownApplicationId: string) => Promise<DuplicateResolution>;
   createApplication: (application: Application) => Promise<boolean>;
   updateApplicationById: (application: Application) => Promise<boolean>;
   linkPostingRecords: (applicationIds: string[], groupId?: string) => Promise<string | null>;
@@ -157,6 +157,10 @@ export function useSkipFlow({
       skipPreparationIdRef.current = currentPreparationId;
       skipPreparationGenerationRef.current = getPreparationGeneration();
       const isCurrent = () => capturedPreparationIsCurrent();
+      if (skipAttemptRef.current?.preparationId !== currentPreparationId) {
+        skipAttemptRef.current = { preparationId: currentPreparationId, id: newApplicationId() };
+      }
+      const attemptId = skipAttemptRef.current.id;
       let resolution: DuplicateResolution = { action: "continue", relationship: null };
       if (session.mode === "new") {
         if (!(await refreshApplications())) {
@@ -171,7 +175,7 @@ export function useSkipFlow({
           return;
         }
         try {
-          resolution = await resolvePreparationDuplicate(isCurrent);
+          resolution = await resolvePreparationDuplicate(isCurrent, attemptId);
         } catch {
           const message = "Duplicate checking failed. Retry Skip & save job.";
           setSkipError(message);
@@ -188,10 +192,7 @@ export function useSkipFlow({
         ? { ...session, pendingRelationship: resolution.relationship }
         : session;
       skipSessionRef.current = capturedSession;
-      if (skipAttemptRef.current?.preparationId !== currentPreparationId) {
-        skipAttemptRef.current = { preparationId: currentPreparationId, id: newApplicationId() };
-      }
-      skipAttemptIdRef.current = capturedSession.mode === "new" ? skipAttemptRef.current.id : null;
+      skipAttemptIdRef.current = capturedSession.mode === "new" ? attemptId : null;
       unrelatedApplicationIdRef.current = resolution.unrelatedApplicationId ?? null;
       const relationship = capturedSession.pendingRelationship;
       setSkipPrompt(suggestSkipReasons({
@@ -268,8 +269,8 @@ export function useSkipFlow({
         ? await createApplication(commit.application).catch(() => false)
         : await updateApplicationById(commit.application).catch(() => false);
       // A create refused because the id already exists is this decision's
-      // earlier attempt whose reply was lost: the record is saved.
-      if (!saved && commit.operation === "create" && confirmCreated(commit.application.id)) saved = true;
+      // earlier attempt whose reply was lost: update that record instead.
+      if (!saved && commit.operation === "create") saved = await confirmCreated(commit.application).catch(() => false);
       if (!saved) {
         const message = "This decision could not be saved. The prepared job and your reasons are still here; retry Save as skipped.";
         setSkipError(message);

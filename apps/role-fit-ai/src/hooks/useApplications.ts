@@ -31,6 +31,7 @@ import {
 } from "../lib/applicationStatusTransitions.ts";
 import { ghostedTimelineFullMessage, planGhostedMarks, type GhostedMark } from "../lib/ghostedMarks.ts";
 import { WORKSPACE_NEWER_CODE } from "../lib/workspaceBackupContract.ts";
+import { retriedCreateOverEarlier } from "../lib/preparationApplication.ts";
 
 export type { NotApplyingReason } from "../lib/notApplying.ts";
 
@@ -700,14 +701,15 @@ export function useApplications() {
   );
 
   // A create refused because its id already exists is an earlier attempt of
-  // the same Apply or Skip whose reply was lost: the record is saved, and the
-  // refusal's banner must not outlive that answer.
-  const confirmCreated = useCallback((id: string) => {
-    if (!applicationsRef.current.some((application) => application.id === id)) return false;
+  // the same Apply or Skip whose reply was lost: the refusal's banner must not
+  // outlive that answer, and this attempt's content is written over that row.
+  const confirmCreated = useCallback((retried: Application) => {
+    const earlier = applicationsRef.current.find((application) => application.id === retried.id);
+    if (!earlier) return Promise.resolve(false);
     conflictMessage.current = "";
     setError("");
-    return true;
-  }, []);
+    return updateApplicationById(retriedCreateOverEarlier(earlier, retried));
+  }, [updateApplicationById]);
 
   // Layered duplicate scan (same-posting/repost/same-company-role, tiered
   // confidence) against every stored application — see src/lib/jobIdentity.ts.

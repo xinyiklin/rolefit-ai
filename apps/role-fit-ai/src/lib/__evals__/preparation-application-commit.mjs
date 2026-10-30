@@ -6,7 +6,8 @@ import {
   preparationSessionForApplication,
   newPreparationSession
 } from "../preparationSession.ts";
-import { appliedApplicationForSession } from "../preparationApplication.ts";
+import { appliedApplicationForSession, retriedCreateOverEarlier } from "../preparationApplication.ts";
+import { skipApplicationForSession } from "../notApplyingApplication.ts";
 
 const createdAt = "2026-01-10T00:00:00.000Z";
 const appliedAt = "2026-01-11T00:00:00.000Z";
@@ -140,4 +141,49 @@ assert.match(
   "the confirmation dialog uses the captured busy action copy"
 );
 
+// A retried create whose earlier attempt was saved but unanswered: the retry
+// is authoritative, including what it clears, while the saved row keeps its
+// stage, dates, history, and what no create writes.
+{
+  const later = "2026-08-10T12:05:00.000Z";
+  const fresh = (overrides = {}) => application({ id: "attempt-1", createdAt: now, appliedAt: undefined, updatedAt: now, notes: undefined, ...overrides });
+  const firstApply = appliedApplicationForSession({
+    session: newPreparationSession(),
+    prepared: fresh({ title: "Engineer at Acme", resumeUsed: "tailored", salaryPeriod: "year" }),
+    existing: null,
+    now
+  }).application;
+  const earlierApply = { ...firstApply, notes: "Added in the tracker", stageHistory: [{ status: "applied", at: now }] };
+  const retryApply = appliedApplicationForSession({
+    session: newPreparationSession(),
+    prepared: fresh({ title: "Senior Engineer at Acme", createdAt: later, updatedAt: later }),
+    existing: null,
+    now: later
+  }).application;
+  const mergedApply = retriedCreateOverEarlier(earlierApply, retryApply);
+  assert.equal(mergedApply.title, "Senior Engineer at Acme", "the retry's edits are written");
+  assert.equal("resumeUsed" in mergedApply, false, "a resume the retry excludes is not claimed as sent");
+  assert.equal("salaryPeriod" in mergedApply, false, "a field the retry clears stays cleared");
+  assert.equal(mergedApply.notes, "Added in the tracker", "a later tracker edit is kept");
+  assert.equal(mergedApply.createdAt, now, "the saved creation date is kept");
+  assert.equal(mergedApply.appliedAt, now, "the saved submission date is kept");
+  assert.deepEqual(mergedApply.stageHistory, earlierApply.stageHistory, "the saved stage history is kept");
+
+  const skip = (at, reasons, note) => skipApplicationForSession({
+    session: newPreparationSession(),
+    prepared: fresh({ id: "skip-1", createdAt: at, updatedAt: at }),
+    matchedNotApplying: null,
+    now: at,
+    reasons,
+    note
+  }).application;
+  const earlierSkip = skip(now, ["location"], "too far");
+  const mergedSkip = retriedCreateOverEarlier(earlierSkip, skip(later, [], ""));
+  assert.equal("notApplyingReasons" in mergedSkip, false, "reasons the retry clears stay cleared");
+  assert.equal("notApplyingNote" in mergedSkip, false, "a note the retry clears stays cleared");
+  assert.equal("appliedAt" in mergedSkip, false, "a job-only decision never gains a submission date");
+  assert.equal(mergedSkip.notApplyingAt, earlierSkip.notApplyingAt, "the saved decision date is kept");
+}
+
 console.log("Preparation application commit paths passed");
+

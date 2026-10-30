@@ -97,7 +97,7 @@ const captureMaterials = compactHandleApply.indexOf(
 );
 const captureSession = compactHandleApply.indexOf("applySessionRef.current = session;", captureMaterials);
 const newSessionGuard = compactHandleApply.indexOf('if (session.mode === "new")', captureSession);
-const awaitResolution = compactHandleApply.indexOf("await resolveApplyDuplicate(isCurrent)", showResolutionBusy);
+const awaitResolution = compactHandleApply.indexOf("await resolveApplyDuplicate(isCurrent, applyAttemptRef.current.id)", showResolutionBusy);
 assert.ok(resolutionGuard >= 0, "Apply rejects reentry during any active lifecycle phase");
 assert.ok(
   claimResolution > resolutionGuard &&

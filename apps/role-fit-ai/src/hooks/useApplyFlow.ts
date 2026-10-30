@@ -51,7 +51,7 @@ type UseApplyFlowArgs = {
   getCurrentPreparationId: () => string;
   getPreparationGeneration: () => number;
   getApplication: (id: string) => Application | undefined;
-  confirmCreated: (id: string) => boolean;
+  confirmCreated: (application: Application) => Promise<boolean>;
   refreshApplications: () => Promise<boolean>;
   createApplication: (app: Application) => Promise<boolean>;
   updateApplicationById: (app: Application) => Promise<boolean>;
@@ -67,7 +67,7 @@ type UseApplyFlowArgs = {
   // a second record.
   linkApplication: (id: string | null) => void;
   currentJobTracking: () => ExtractedJobTracking;
-  resolveApplyDuplicate: (isCurrent: () => boolean) => Promise<DuplicateResolution>;
+  resolveApplyDuplicate: (isCurrent: () => boolean, ownApplicationId: string) => Promise<DuplicateResolution>;
   // Whether each PDF can actually be TYPESET, which is stricter than the export
   // rail's enabled-state: the engine needs the structured model, so a text-only
   // polish result must not put a resume checkbox in the download prompt.
@@ -462,13 +462,14 @@ export function useApplyFlow({
       saved = commit.operation === "create"
         ? await createApplication(app)
         : await updateApplicationById(app);
+      // A create refused because the id already exists is the earlier attempt
+      // of this same Apply whose reply was lost: update that record instead.
+      if (!saved && commit.operation === "create") saved = await confirmCreated(app);
     } catch {
       // The store normally converts request failures to `false`; keep this
       // boundary fail-closed if a future adapter rejects unexpectedly.
+      saved = false;
     }
-    // A create refused because the id already exists is the earlier attempt
-    // of this same Apply whose reply was lost: the record is saved.
-    if (!saved && commit.operation === "create" && confirmCreated(app.id)) saved = true;
     if (!saved) {
       const message = `${action.label} could not be saved. Your recovery draft is still available; retry ${action.label}.`;
       setApplySaveError(message);
@@ -612,7 +613,7 @@ export function useApplyFlow({
           return;
         }
         try {
-          resolution = await resolveApplyDuplicate(isCurrent);
+          resolution = await resolveApplyDuplicate(isCurrent, applyAttemptRef.current.id);
         } catch {
           clearCapturedApply();
           setApplicationActionStatus({

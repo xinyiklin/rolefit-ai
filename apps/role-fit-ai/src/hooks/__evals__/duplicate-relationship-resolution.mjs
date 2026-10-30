@@ -344,4 +344,16 @@ assert.match(
   "unlinking an established posting group revision-checks every affected record in one mutation"
 );
 
+{
+  // A create whose reply was lost is already in the tracker under the
+  // attempt's id; the retry must not offer to link the record to itself.
+  const harness = createHarness(duplicate());
+  assert.deepEqual(
+    await harness.render().resolveApplyDuplicate(harness.isCurrent, "application-1"),
+    { action: "continue", relationship: null },
+    "an Apply or Skip retry never matches its own earlier attempt"
+  );
+  assert.equal(harness.render().duplicatePrompt, null, "and asks nothing");
+}
+
 console.log("Duplicate relationship resolution passed");
