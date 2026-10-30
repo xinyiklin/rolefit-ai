@@ -16,6 +16,7 @@ import {
   coverLetterParagraphs,
   coverLetterPlainText,
   coverLetterResumeData,
+  CoverLetterFileError,
   coverLetterStyleToDocumentStyle,
   documentStyleToCoverLetterStyle,
   type CoverLetterStyle,
@@ -25,7 +26,7 @@ import {
   serializeCoverLetterFile
 } from "@typeset/engine/lib/coverLetter.ts";
 import { downloadBlob } from "@typeset/engine/lib/download.ts";
-import { DOC_STYLE_DEFAULTS, type DocStyle, type DocumentStyle } from "@typeset/engine/lib/documentStyle.ts";
+import { DOC_STYLE_DEFAULTS, toDocumentStyle, type DocStyle, type DocumentStyle } from "@typeset/engine/lib/documentStyle.ts";
 import {
   newDocumentHeader,
   starterDocumentHeader,
@@ -139,6 +140,12 @@ type WorkspaceCoverLetterOpenOptions = {
   confirmReplace?: () => Promise<boolean>;
 };
 
+const COVER_LIMIT_STATUS_PREFIX = "This letter is past what a .cover file holds: ";
+
+function coverLimitStatus(problem: string): string {
+  return `${COVER_LIMIT_STATUS_PREFIX}${problem} Shorten it to save it or update an application; the recovery draft keeps its last version within the limits.`;
+}
+
 export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) {
   const [style, setStyle] = useState<DocStyle>(loadStyle);
   const [initialData] = useState(blankCoverLetterData);
@@ -176,13 +183,25 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     () => (editor.editedResume ? coverLetterPlainText(editor.editedResume) : ""),
     [editor.editedResume]
   );
-  const currentFingerprint = useMemo(
-    () =>
-      editor.editedResume
-        ? serializeCoverLetterFile(editor.editedResume, documentStyleToCoverLetterStyle(style))
-        : null,
-    [editor.editedResume, style]
-  );
+  // The strict .cover codec bounds a letter (paragraphs, header lengths, size),
+  // and a long paste can pass them. Render must not throw. While the letter is
+  // over a limit, it compares as changed with a key no saved copy can equal (so
+  // dirty, replace prompts and Update application still see the edit), the
+  // recovery draft keeps the last valid letter, and the codec's message shows.
+  const serialized = useMemo((): { fingerprint: string | null; limitProblem: string } => {
+    if (!editor.editedResume) return { fingerprint: null, limitProblem: "" };
+    try {
+      return { fingerprint: serializeCoverLetterFile(editor.editedResume, documentStyleToCoverLetterStyle(style)), limitProblem: "" };
+    } catch (error) {
+      if (!(error instanceof CoverLetterFileError)) throw error;
+      return { fingerprint: `over-limit:${JSON.stringify([editor.editedResume, toDocumentStyle(style)])}`, limitProblem: error.message };
+    }
+  }, [editor.editedResume, style]);
+  const limitProblem = serialized.limitProblem;
+  const currentFingerprint = serialized.fingerprint;
+  const lastValidFingerprintRef = useRef<string | null>(null);
+  if (!limitProblem) lastValidFingerprintRef.current = currentFingerprint;
+  const recoveryPayload = limitProblem ? lastValidFingerprintRef.current : currentFingerprint;
   const currentFingerprintRef = useRef(currentFingerprint);
   currentFingerprintRef.current = currentFingerprint;
   const {
@@ -234,6 +253,11 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     [dropPreTailorSnapshot, editor.seedData]
   );
   const [status, setStatus] = useState("");
+  useEffect(() => {
+    if (limitProblem) setStatus(coverLimitStatus(limitProblem));
+    // Back within the limits: retire the message, never a newer status.
+    else setStatus((current) => (current.startsWith(COVER_LIMIT_STATUS_PREFIX) ? "" : current));
+  }, [limitProblem]);
   const [isRenderingPdf, setIsRenderingPdf] = useState(false);
   // Workspace-resident cover letters. Cover letters gained the same named
   // variants and version history base resumes have. They live under the
@@ -364,18 +388,14 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     (tailored: string) => {
       cancelStartupOpenRef.current = true;
       const data = tailoredCoverLetterData(editor.editedResume, tailored);
-      capturePreTailorSnapshot(
-        editor.editedResume
-          ? serializeCoverLetterFile(
-              editor.editedResume,
-              documentStyleToCoverLetterStyle(styleRef.current)
-            )
-          : null
-      );
+      // A letter over the .cover limits cannot be snapshotted; Polish still applies.
+      capturePreTailorSnapshot(editor.editedResume && !limitProblem
+        ? serializeCoverLetterFile(editor.editedResume, documentStyleToCoverLetterStyle(styleRef.current))
+        : null);
       editor.seedData(data);
       setStatus("Polished letter loaded. Read it once before sending.");
     },
-    [capturePreTailorSnapshot, editor.editedResume, editor.seedData]
+    [capturePreTailorSnapshot, editor.editedResume, editor.seedData, limitProblem]
   );
 
   const restorePreTailor = useCallback(() => {
@@ -590,6 +610,10 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         setStatus("Wait for the workspace cover letter to finish loading.");
         return false;
       }
+      if (limitProblem) {
+        setStatus(coverLimitStatus(limitProblem));
+        return false;
+      }
       const payload = serializeCoverLetterFile(
         editor.editedResume,
         documentStyleToCoverLetterStyle(styleRef.current)
@@ -715,6 +739,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
       editor.editedResume,
       editor.markClean,
       isWorkspaceBootstrapping,
+      limitProblem,
       refreshCoverWorkspace,
       setActiveCoverFileName
     ]
@@ -899,6 +924,10 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
       setStatus("Open or start a cover letter before saving.");
       return;
     }
+    if (limitProblem) {
+      setStatus(coverLimitStatus(limitProblem));
+      return;
+    }
     const fileName = coverLetterFileName(documentTitle);
     const payload = serializeCoverLetterFile(
       editor.editedResume,
@@ -909,7 +938,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     commitPersistenceBaseline(payload);
     clearCoverLetterAutosaveDraft();
     setStatus(`Saved ${fileName}.`);
-  }, [commitPersistenceBaseline, documentTitle, editor.editedResume, editor.markClean]);
+  }, [commitPersistenceBaseline, documentTitle, editor.editedResume, editor.markClean, limitProblem]);
 
   const saveTextFile = useCallback(() => {
     const source = text.trim();
@@ -1035,9 +1064,13 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     openApplicationSource,
     getArtifacts,
     markApplicationSaved,
-    // The serialized `.cover` payload behind `dirty`, reused as the recovery
-    // draft so one definition of "the current document" feeds both.
-    draftPayload: currentFingerprint
+    // The serialized `.cover` recovery draft: the current letter, or its last
+    // valid version while it is over the .cover limits.
+    draftPayload: recoveryPayload,
+    // The letter as a saved copy would hold it; null while it cannot be saved.
+    sourcePayload: limitProblem ? null : currentFingerprint,
+    // Over the .cover limits, a saved recovery draft holds an older letter.
+    overLimit: Boolean(limitProblem)
   };
 }
 

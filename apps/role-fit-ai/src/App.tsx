@@ -1942,7 +1942,7 @@ function App() {
     options: coverLetterEditor.coverLetterOptions,
     applicationOwned: applicationOfRecordId !== null,
     documentDirty: coverLetterEditor.dirty,
-    documentFingerprint: coverLetterEditor.draftPayload ?? "",
+    documentFingerprint: coverLetterEditor.sourcePayload ?? "",
     workspaceSaving: coverLetterEditor.isWorkspaceSaving,
     candidateRevision: coverLetterEditor.coverLetterCandidatesRevision,
     excludedVariants: excludedCoverLetterVariants
@@ -2280,7 +2280,7 @@ function App() {
     currentResumeSource,
     resumeDocumentVersion: resumeReplacementStateRef.current.version,
     coverLetterText: coverLetterEditor.text,
-    currentCoverLetterSource: coverLetterEditor.draftPayload ?? "",
+    currentCoverLetterSource: coverLetterEditor.sourcePayload ?? "",
     coverLetterDocumentVersion: coverReplacementStateRef.current.version,
     saveApplicationDocument: applicationFiles.saveDocument,
     getResumeArtifacts,
@@ -2495,7 +2495,7 @@ function App() {
     kind: "coverLetter",
     dirty: coverLetterEditor.recoveryDirty,
     currentVersion: coverReplacementStateRef.current.version,
-    recoveryDraftSaved: coverDraftAutosaveState === "saved",
+    recoveryDraftSaved: coverDraftAutosaveState === "saved" && !coverLetterEditor.overLimit,
     applicationId: preparationSession.applicationId,
     jobOnlyRecord: coverLetterApplicationSync.state === "job-only",
     receipt: applicationPersistenceReceipt
