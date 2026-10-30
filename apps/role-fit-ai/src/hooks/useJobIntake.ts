@@ -1143,7 +1143,6 @@ export function useJobIntake({
           errorHeadline: "Missing input",
           error: "Too little job text was found on that page. Paste the description instead."
         });
-        setImportedJob(null);
         return;
       }
       if (outcome.status === "duplicate-after") {
@@ -1161,8 +1160,9 @@ export function useJobIntake({
     } catch (error) {
       if (!request.isCurrent()) return;
       settlePreparationFit({ status: "failed" });
+      // A URL edit already released the prepared job, so a failed fetch of the
+      // same link keeps it and its brief edits, like a failed paste does.
       const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
-      setImportedJob(null);
       setLinkStatus(`Couldn't extract from the link: ${message}. Paste the description instead.`);
       const f = classifyFailure(error);
       setJobAnalysisProgress({

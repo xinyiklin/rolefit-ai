@@ -1034,4 +1034,34 @@ for (const fitProvider of ["codex-cli", "anthropic"]) {
   assert.equal(stoppedBefore.state[7], null, "a duplicate stop commits no preparation");
   assert.equal(committedRelationship(stoppedBefore), undefined, "the retained raw posting carries no relationship");
 }
+// A failed re-fetch of the already prepared link (Replace with the URL unchanged)
+// keeps the prepared job and its brief edits, as a failed paste does. A URL edit
+// is what releases it, through handleJobUrlChange.
+{
+  const importFailures = [
+    ["a blocked import", async () => ({ ok: false, status: 400, json: async () => ({ error: "This site blocked direct import." }) })],
+    ["a network error", async () => { throw new TypeError("fetch failed"); }],
+    ["a page with no job text", async () => ({ ok: true, status: 200, json: async () => ({ text: "" }) })]
+  ];
+  for (const [label, importResponse] of importFailures) {
+    const harness = createHarness({ jobRawText: POSTING, readiness: { ready: false, message: "No provider configured." } });
+    const analysisFetch = globalThis.fetch;
+    globalThis.fetch = (url, init) => url === "/api/import-job" ? importResponse() : analysisFetch(url, init);
+    await runUrl(harness);
+    assert.equal(harness.render().jobAnalysisProgress.status, "failed", `${label} settles the card as failed`);
+    assert.equal(
+      harness.log.some(({ event }) => event === "setImportedJob"),
+      false,
+      `${label} on a re-fetch keeps the prepared job`
+    );
+  }
+  const edited = createHarness();
+  edited.render().handleJobUrlChange(`${JOB_URL}?edited=1`);
+  assert.deepEqual(
+    edited.log.filter(({ event }) => event === "setImportedJob").map(({ value }) => value),
+    [null],
+    "editing the URL still releases the prepared job"
+  );
+}
+
 console.log("Job intake entry-point characterization: passed");

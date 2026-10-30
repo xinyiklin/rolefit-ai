@@ -233,10 +233,12 @@ export function useCoverLetter({
     setIsGeneratingCover(false);
   }, []);
 
+  // Brief edits rewrite jobText on every keystroke, so only a new source letter
+  // (here) or a new job (resetCoverWorkflow) clears the user's typed facts.
   useEffect(() => {
     setDetailValues({});
     setSlotAnswers({});
-  }, [jobText, sourceRevision]);
+  }, [sourceRevision]);
 
   // Editing does not certify the accepted wording. Clear its receipt only when
   // another source document replaces this one.
@@ -278,6 +280,7 @@ export function useCoverLetter({
 
   const resetCoverWorkflow = useCallback(() => {
     invalidateCoverRequest();
+    setDetailValues({});
     setSlotAnswers({});
     setPendingProposal(null);
     setFailure(null);
