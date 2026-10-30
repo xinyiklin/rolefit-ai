@@ -18,9 +18,9 @@ export type NoResponseCandidate = {
   application: Application;
   lastActivityAt: string;
   silentDays: number;
-  // The local day the threshold passed, stored as that day's noon (day-granular
-  // like every tracker date). An automatic mark records this, not the day the
-  // app happened to be opened.
+  // The local day the threshold passed, or the day after a follow-up that held
+  // the record if later, stored as that day's noon (day-granular like every
+  // tracker date). An automatic mark records this, not the day the app opened.
   dueAt: string;
 };
 
@@ -55,7 +55,11 @@ export function noResponseCandidate(
   const start = localMidnight(lastDate);
   const silentDays = Math.round((localMidnight(today).getTime() - start.getTime()) / DAY_MS);
   if (silentDays < afterDays) return null;
-  const due = new Date(start.getFullYear(), start.getMonth(), start.getDate() + afterDays);
+  const silentDue = new Date(start.getFullYear(), start.getMonth(), start.getDate() + afterDays);
+  // A planned follow-up held the record through its day, so the silence is
+  // never dated before the day after it (already past: today at the latest).
+  const holdEnd = followup ? new Date(followup.getFullYear(), followup.getMonth(), followup.getDate() + 1) : null;
+  const due = holdEnd && holdEnd > silentDue ? holdEnd : silentDue;
   return { application, lastActivityAt: last, silentDays, dueAt: toIso(dayInput(due)) };
 }
 

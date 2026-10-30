@@ -387,7 +387,8 @@ move any Applied or Interviewing application there from the row menu (flagged
 rows also offer a direct Mark as Ghosted) or the stage control, mark flagged ones with
 Analytics' one-write bulk action (dated today), or opt in to **Mark as Ghosted
 automatically** (off by default, in Settings > Automation and Analytics), which
-dates each mark the day the threshold passed, never moves the application open
+dates each mark the day the threshold passed (or the day after a planned
+follow-up that held the record, if later), never moves the application open
 in Application Detail in the same tab (another tab's open record can be marked;
 saving there then reports the change instead of overwriting it), and never
 retries a record in the same session. The day
