@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   appFitVerdict,
   applicationActivityDate,
+  compareNextAction,
   isJobOnlySkippedApplication,
   applicationSearchRank,
   fitAssessmentRank,
@@ -274,6 +275,27 @@ process.stdout.write(JSON.stringify([m.formatMonthLabel(iso), m.formatCompactDat
   const table = (await import("node:fs")).readFileSync(new URL("../../sections/tracker/TrackerTableView.tsx", import.meta.url), "utf8");
   assert.match(table, /const label = formatMonthLabel\(applicationActivityDate\(app\)\);/, "the table's dividers use the local-day month label");
   assert.doesNotMatch(table, /iso\.slice\(0, 10\)/, "and never slice a UTC date");
+}
+
+// Next action sorts follow-ups by date, not by their yearless month-name label.
+{
+  const followup = (id, followupAt) => application({ id, followupAt });
+  const dates = ["2026-10-28", "2026-11-02T12:00:00.000Z", "2026-12-01", "2027-01-05", "2026-08-03"];
+  const order = dates.map((at, i) => followup(`f${i}`, at)).sort((a, b) => compareNextAction(a, b)).map((app) => app.followupAt);
+  assert.deepEqual(order, ["2026-08-03", "2026-10-28", "2026-11-02T12:00:00.000Z", "2026-12-01", "2027-01-05"], "follow-ups sort by date across months and years");
+  const others = [
+    [application({ id: "draft", status: "draft" }), null],
+    [application({ id: "quiet100" }), { silentDays: 100 }],
+    [followup("due", "2026-12-01"), null],
+    [application({ id: "waiting" }), null],
+    [application({ id: "quiet34" }), { silentDays: 34 }],
+    [followup("soon", "2026-11-02"), null]
+  ];
+  const ids = others.slice().sort(([a, na], [b, nb]) => compareNextAction(a, b, na, nb)).map(([app]) => app.id);
+  assert.deepEqual(ids, ["waiting", "draft", "soon", "due", "quiet34", "quiet100"], "other labels keep their label order and no-response days stay numeric");
+  assert.ok(compareNextAction(followup("bad", "someday"), followup("ok", "2026-11-02")) !== 0, "an unparseable follow-up still compares by its label");
+  const tracker = (await import("node:fs")).readFileSync(new URL("../../sections/tabs/TrackerTab.tsx", import.meta.url), "utf8");
+  assert.match(tracker, /case "nextAction":\s*return compareNextAction\(a, b, noResponse\.get\(a\.id\), noResponse\.get\(b\.id\)\);/, "the tracker's Next action sort uses the date-aware comparator");
 }
 
 console.log("application display probes: passed");

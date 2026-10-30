@@ -204,6 +204,23 @@ export function nextAction(
   return "Review job details";
 }
 
+// Ascending Next action order. Follow-up labels carry no year and lead with a
+// month name, so two follow-ups compare by date; other pairs compare by label.
+export function compareNextAction(
+  a: Application,
+  b: Application,
+  noResponseA: Pick<NoResponseCandidate, "silentDays"> | null = null,
+  noResponseB: Pick<NoResponseCandidate, "silentDays"> | null = null
+): number {
+  const labelA = nextAction(a, noResponseA);
+  const labelB = nextAction(b, noResponseB);
+  const dueA = labelA.startsWith("Follow up ") ? parseDate(a.followupAt)?.getTime() : undefined;
+  const dueB = labelB.startsWith("Follow up ") ? parseDate(b.followupAt)?.getTime() : undefined;
+  if (dueA !== undefined && dueB !== undefined) return dueA - dueB;
+  // Numeric, so "No response · 100d" sorts after "· 34d".
+  return labelA.localeCompare(labelB, undefined, { numeric: true });
+}
+
 export function formatCompactDate(iso: string) {
   if (!iso) return "";
   const date = parseDate(iso);
