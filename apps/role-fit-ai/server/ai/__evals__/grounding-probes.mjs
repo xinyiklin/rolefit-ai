@@ -15,11 +15,12 @@ import {
   findUngroundedCuratedClaimTerm,
   findUngroundedJdTerm,
   findUngroundedOutcomeClaim,
+  findUngroundedProseProperClaimTerm,
   hasUnsupportedOwnershipIncrease,
   isClaimTermGroundedInSource,
   ownershipStrength
 } from "../grounding.ts";
-import { findUngroundedNumericClaim } from "../sanitize.ts";
+import { findUngroundedNumericClaim, withoutPostingScaleFacts } from "../sanitize.ts";
 import { candidateClaimIssue } from "../claimEvidence.ts";
 
 const f = (proposed, job, grounding, opts) => findUngroundedJdTerm(proposed, job, grounding, opts);
@@ -322,12 +323,199 @@ const checks = [
     return cases.every((c, i) =>
       first[i] === c.want && second[i] === c.want && first[i] === second[i]
     );
+  })()],
+  // 2026-10-30: a number, scale, outcome verb, or workplace keeps what it was stated for.
+  ["a percent keeps its own metric: coverage to 85% never grounds deploy time or tickets by 85%",
+    findUngroundedNumericClaim("Cut deploy time by 85% for billing tools.", "Cut deploy time by 30% and raised test coverage to 85% for billing tools.") === "85%"
+      && findUngroundedNumericClaim("Cut support tickets by 85%.", "Raised test coverage to 85%.") === "85%"
+      && findUngroundedNumericClaim("Automated 40% of support tickets.", "Automated 40% of releases.") === "40%"
+      && findUngroundedNumericClaim("Grew revenue 30% year over year.", "Grew users 30% year over year.") === "30%"
+      && findUngroundedNumericClaim("Raised test coverage to 85% for billing tools.", "Cut deploy time by 30% and raised test coverage to 85% for billing tools.") === null],
+  ["a percent's honest restatements stay grounded: reorders, ranges, shared metrics, real-time and on time",
+    [["Reduced build time by 30%.", "Cut build time 30%."],
+      ["Raised test coverage to 85%.", "Test coverage rose from 60% to 85%."],
+      ["Reduced errors by 40%.", "Reduced latency and errors by 40%."],
+      ["Delivered 25% cost savings.", "Cut cloud costs by 25%."],
+      ["Built real-time dashboards with 99% uptime.", "Built real-time dashboards with 99% uptime."],
+      ["Shipped 95% of projects on time.", "Delivered 95% of projects on time."],
+      ["Achieved 99.9% uptime.", "Maintained 99.9% uptime across services."]]
+      .every(([claim, evidence]) => findUngroundedNumericClaim(claim, evidence) === null)],
+  ["a duration keeps its own tools: 6 years of Java never grounds 6 years of Python",
+    findUngroundedNumericClaim("I bring 6 years of Python experience to this role.", "Senior Developer at Acme. 6 years of Java development. Wrote Python scripts for 1 year.") === "6 years"
+      && findUngroundedNumericClaim("6 years of Python", "Wrote Java for 6 years and Python for 1 year.") === "6 years"
+      && findUngroundedNumericClaim("6 years of Java", "Python (6 years), Java (2 years)") === "6 years"
+      && [["I bring 6 years of Java experience.", "Senior Developer at Acme. 6 years of Java development."],
+        ["I have 6 years of experience.", "6 years of Java development."],
+        ["6 years of Python development", "Python developer at Acme for 6 years."],
+        ["6 years of Python and Java", "6 years of Java and Python"],
+        ["Six years building Django and Python services", "6 years of Python and Django development."],
+        ["2 years of Java", "Python (6 years), Java (2 years)"]]
+        .every(([claim, evidence]) => findUngroundedNumericClaim(claim, evidence) === null)],
+  ["a scale word claims at least that many of its own noun",
+    findUngroundedNumericClaim("Built internal billing tools used by millions of finance users.", "Built internal billing tools for finance users.") === "millions of finance users"
+      && findUngroundedNumericClaim("I helped Acme reach millions of shoppers.", "Built checkout services in Java.") !== null
+      && findUngroundedNumericClaim("Wrote thousands of tests.", "Wrote 40 tests.") !== null
+      && findUngroundedNumericClaim("Built tools used by millions.", "Served 2,000 monthly users.") !== null
+      && findUngroundedNumericClaim("Built tools used by a million users.", "Built tools for 40 users.") !== null
+      && findUngroundedNumericClaim("Processed hundreds of thousands of events daily.", "Processed 40k events daily.") !== null],
+  ["a scale word is grounded by a large enough count, duration, or currency amount",
+    [["Served millions of users.", "Served 3 million users."],
+      ["Served millions of users.", "Served 3M users."],
+      ["Saved hundreds of hours.", "Saved 300 hours of manual work."],
+      ["Generated millions in revenue.", "Generated $2 million in revenue."],
+      ["Saved thousands of dollars.", "Saved $40k a year in hosting."],
+      ["Processed hundreds of thousands of events daily.", "Processed 400k events daily."],
+      ["Handled dozens of incidents.", "Handled 30 incidents on call."],
+      ["Added a thousands separator to exports.", "Added a separator to exports."]]
+      .every(([claim, evidence]) => findUngroundedNumericClaim(claim, evidence) === null)],
+  ["a scale the posting states describes the employer unless the sentence reports past work", (() => {
+    const job = "Harbor's platform serves millions of users and processes billions of transactions.";
+    const evidence = "Built payment APIs in Java.";
+    const check = (text) => findUngroundedNumericClaim(withoutPostingScaleFacts(text, job), evidence);
+    return check("The platform serves millions of users.") === null
+      && check("I'm excited to build tools used by millions of users.") === null
+      && check("I built tools that serve millions of users.") !== null
+      && check("At Beta, my services processed billions of transactions.") !== null
+      && check("I built payment APIs for millions of merchants.") !== null;
+  })()],
+  ["multiplier and minimizing verbs are outcome claims in every form",
+    ["Built internal billing tools that doubled revenue for finance users.", "Built internal billing tools that halved invoice errors.",
+      "Built internal billing tools that slashed costs.", "Built internal billing tools that tripled throughput.",
+      "Built internal billing tools for finance users, minimizing downtime.", "Tuned queries, maximizing throughput.",
+      "Helped double revenue for finance users.", "Quadrupled signups."]
+      .every((claim) => findUngroundedOutcomeClaim(claim, "Built internal billing tools for finance users.") !== null)
+      && findUngroundedOutcomeClaim("At Acme I halved checkout errors.", "Built checkout services in Java at Acme.", { candidateProse: true }) === "halve"
+      && findUngroundedOutcomeClaim("I helped double revenue.", "Built tools.", { candidateProse: true }) === "double"],
+  ["raise, lift, drop, shrink, and trim are outcomes only before a measure or outcome noun",
+    ["Raised test coverage to 85%.", "Lifted conversion by 12%.", "Trimmed costs by 20%.", "Shrank build times from 20 to 8 minutes.", "Dropped p95 latency by 40%."]
+      .every((claim) => findUngroundedOutcomeClaim(claim, "Built internal billing tools for finance users.") !== null)
+      && ["Raised concerns about the rollout with the team.", "Dropped Python 2 support from the CLI.", "Trimmed the README."]
+        .every((claim) => findUngroundedOutcomeClaim(claim, "Built internal billing tools for finance users.") === null)],
+  ["a multiplier idiom is no outcome, and 2x, 3x, or a 50% cut grounds doubled, tripled, or halved",
+    [["Doubled as the on-call lead for billing tools.", "Built billing tools."],
+      ["Double-checked invoice totals.", "Built billing tools."],
+      ["Built a double-entry ledger.", "Built a ledger."],
+      ["Added slash commands to the bot.", "Built the bot."],
+      ["Lifted and shifted 40 services to AWS.", "Migrated 40 services to AWS."],
+      ["Doubled throughput of the ingest pipeline.", "Achieved 2x throughput on the ingest pipeline."],
+      ["Halved build times.", "Cut build times by 50%."],
+      ["Tripled signups.", "Grew signups 3x."]]
+      .every(([claim, evidence]) => findUngroundedOutcomeClaim(claim, evidence) === null)
+      && findUngroundedOutcomeClaim("I want to double Harbor's revenue.", "Built tools.", { candidateProse: true }) === null],
+  ["a posting's competitor or school never grounds a past workplace or school in Answers", (() => {
+    const evidence = "Software Engineer at Beta Corp, 2020 - 2024. Built payment APIs in Java. B.S. Computer Science, State University.";
+    const job = "Harbor is hiring a Payments Engineer. Experience at fintechs such as Stripe, Adyen, or Plaid is a plus. Bachelor's degree from Stanford or equivalent. At Harbor, we move money for marinas.";
+    const claims = ["Before Beta Corp, I built payment APIs at Stripe.", "At Plaid I built payment APIs.", "At Plaid, I built payment APIs.",
+      "I studied at Stanford and built payment APIs in Java.", "While at Adyen, I built payment APIs.", "As a payments engineer at Stripe, I built merchant onboarding.",
+      "I built payment APIs for Stripe.", "Back at Stripe, I built payment APIs.", "I hold a degree in CS from Stanford.", "As a Stanford graduate, I built payment APIs.",
+      "As a Stripe engineer, I built payment APIs.", "I worked on Stripe's payments team."];
+    const honest = ["At Harbor, I would build payment APIs.", "I'm excited to grow at Harbor.", "I built payment APIs at Beta Corp and want to do the same at Harbor.",
+      "I want to cut costs at Harbor.", "I admire how Stripe and Plaid shaped payments, and Harbor's focus is why I applied.",
+      "I applied for the Payments Engineer role at Harbor.", "I graduated from State University with a B.S. in Computer Science.",
+      "As a Payments Engineer at Harbor, I would focus on merchant onboarding.", "I built payment APIs in Java, the kind of work Stripe does well."];
+    return claims.every((claim) => findUngroundedProseProperClaimTerm(claim, evidence, job) !== null)
+      && honest.every((answer) => findUngroundedProseProperClaimTerm(answer, evidence, job) === null);
+  })()],
+  ["a generic measure takes its metric from the word before it, and other quantities never take a duration's tools",
+    [["Reduced deploy time by 30%.", "Made deploys 30% faster."],
+      ["Reduced page load time by 40%.", "Cut page load 40%."],
+      ["Improved query speed by 60%.", "Queries ran 60% faster."],
+      ["6 years of Python.", "For 6 years at Acme, I maintained 40 internal services, mostly in Python."],
+      ["6 years of Python.", "6 years at Acme building data pipelines; primary language Python."],
+      ["Over 6 years building Java services.", "Built Java services across 3 teams over 6 years."]]
+      .every(([claim, evidence]) => findUngroundedNumericClaim(claim, evidence) === null)
+      && findUngroundedNumericClaim("Cut build time by 30%.", "Cut deploy time by 30%.") === "30%"],
+  ["a duration keeps a skill the term lists do not know when it is named beside it",
+    ["Go", "Rust", "Swift", "React"].every((skill) =>
+      findUngroundedNumericClaim(`6 years of ${skill}.`, `6 years of Java development. Side projects in ${skill} for 1 year.`) === "6 years")
+      && findUngroundedNumericClaim("Spent 6 years writing Go.", "Spent 6 years writing Java.") === "6 years"
+      && findUngroundedNumericClaim("Rust for 6 years.", "6 years of Rust.") === null],
+  ["sizing words and a trailing scale are claims; a unit is not",
+    findUngroundedNumericClaim("Owned a multimillion-dollar budget.", "Owned a budget.") !== null
+      && findUngroundedNumericClaim("Saved the company millions.", "Saved hosting costs.") !== null
+      && findUngroundedNumericClaim("Owned a multimillion-dollar budget.", "Owned a $3M budget.") === null
+      && findUngroundedNumericClaim("Formatted numbers in thousands.", "Formatted numbers.") === null],
+  ["a reaction, a reason, or an intention ends the clause of a posting's scale", (() => {
+    const job = "Harbor serves millions of merchants and processes billions of transactions.";
+    const check = (text) => findUngroundedNumericClaim(withoutPostingScaleFacts(text, job), "Built payment APIs in Java.");
+    return ["I was drawn to Harbor because it serves millions of merchants.", "I learned that Harbor serves millions of merchants, and I built payment APIs in Java.",
+      "I noticed Harbor serves millions of merchants, which is why I applied.", "It excites me that Harbor serves millions of merchants.",
+      "Your platform serves millions of merchants, which I admire.", "My background maps well to a platform handling billions of transactions."]
+      .every((text) => check(text) === null)
+      && check("My Java APIs serve millions of merchants today.") !== null;
+  })()],
+  ["present halves and slashes are outcomes; 2×, a 100% rise, or a 50% drop grounds the multiplier; a purpose is no result",
+    findUngroundedOutcomeClaim("Built a cache that halves p95 latency.", "Built a cache.") === "halve"
+      && findUngroundedOutcomeClaim("The tool slashes costs.", "Built a tool.") === "slash"
+      && [["Doubled throughput.", "Achieved 2× throughput."], ["Doubled throughput.", "Throughput increased 100%."],
+        ["Tripled signups.", "Signups grew 200%."], ["Halved build times.", "Build times dropped 50%."],
+        ["Added retries to minimize dropped messages.", "Added retries for the queue consumer."],
+        ["Raised alerts when error rates exceeded 5%.", "Configured alerts when error rates exceeded 5%."],
+        ["Two halves of the team shared one queue.", "Built the queue."]]
+        .every(([claim, evidence]) => findUngroundedOutcomeClaim(claim, evidence) === null)
+      && findUngroundedOutcomeClaim("Built the billing service, minimizing downtime.", "Built the billing service.") === "minimize"],
+  ["Answers find the target employer in any posting style, and a listed name stays a claim", (() => {
+    const evidence = "Software Engineer at Beta Corp, 2018 - 2024. Built payment APIs in Java.";
+    const postings = ["Harbor builds marina payment software. Experience at Stripe or Plaid is a plus.", "Company: Harbor\nRole: Payments Engineer\nExperience at Stripe or Plaid is a plus.",
+      "Payments Engineer - Harbor\nExperience at Stripe or Plaid is a plus.", "We are Harbor, a marina payments company. Experience at Stripe or Plaid is a plus."];
+    return postings.every((job) => findUngroundedProseProperClaimTerm("I was impressed by the engineering culture at Harbor.", evidence, job) === null
+      && findUngroundedProseProperClaimTerm("I built payment APIs at Stripe.", evidence, job) === "Stripe"
+      && findUngroundedProseProperClaimTerm("I build payment APIs at Plaid.", evidence, job) === "Plaid");
+  })()],
+  ["word attribution stays fast on one long unpunctuated run of evidence", (() => {
+    const run = Array.from({ length: 200 }, (_, i) => `cut deploy time by ${i + 1}% for ${i + 3} services over ${(i % 9) + 1} years`).join(" and ");
+    const started = performance.now();
+    findUngroundedNumericClaim("Cut deploy time by 85% for billing tools.", `${run} once`);
+    return performance.now() - started < 3000;
+  })()],
+  ["a scale needs a counted quantity of its noun: never an id, a ZIP code, or another noun's count",
+    [["Built tools used by millions.", "linkedin.com/in/jdoe-12345678"], ["Built an app used by thousands.", "San Francisco, CA 94105"],
+      ["Generated millions in revenue.", "Processed 2M events per day."], ["Served millions of people.", "Managed a $1.5M budget."]]
+      .every(([claim, evidence]) => findUngroundedNumericClaim(claim, evidence) !== null)
+      && [["Served millions of users.", "Served 2 million+ users."], ["Served millions of users.", "Users: 3M"],
+        ["Supported thousands of customers.", "Supported 5K+ customers."], ["Served millions of people.", "Served 2 million users."],
+        ["I am a hundred percent committed.", "Fixed race conditions."], ["Refactored a thousand-line module.", "Refactored a module."]]
+        .every(([claim, evidence]) => findUngroundedNumericClaim(claim, evidence) === null)],
+  ["an adjective or a count of something else never grounds a multiplier, and raising or dropping a problem is no result",
+    [["Doubled checkout conversion.", "Double major in CS and Math; built checkout conversion dashboards."],
+      ["Doubled revenue.", "Double-checked invoices; built revenue reports."], ["Doubled revenue.", "2x AWS Certified; built revenue reports."],
+      ["Halved churn.", "Increased signups by 50%; built churn dashboards."], ["Helped the team double revenue.", "Built revenue reports."]]
+      .every(([claim, evidence]) => findUngroundedOutcomeClaim(claim, evidence) !== null)
+      && ["Raised performance risks during design reviews.", "Raised incidents in PagerDuty for the on-call team.", "Dropped usage of the legacy jQuery API.",
+        "Configured firewall rules that drop malicious traffic.", "Trimmed whitespace from 20 CSV columns.", "Migrated models to double precision."]
+        .every((claim) => findUngroundedOutcomeClaim(claim, "Built the billing service in Java.") === null)
+      && findUngroundedOutcomeClaim("I'm excited to help Harbor maximize merchant revenue.", "Built the billing service.", { candidateProse: true }) === null],
+  ["the posting's customers, founders' employers, and listed names are never the Answers target employer", (() => {
+    const evidence = "Software Engineer at Beta Corp, 2018 - 2024. Built payment APIs in Java.";
+    const job = "Harbor builds marina payment software. Harbor was founded by former Stripe and Google engineers. Our customers include Shopify, Notion, and DoorDash.";
+    return findUngroundedProseProperClaimTerm("As a backend engineer at Shopify, I built payment APIs.", evidence, job) === "Shopify"
+      && findUngroundedProseProperClaimTerm("I was a software engineer at Google.", evidence, job) === "Google"
+      && findUngroundedProseProperClaimTerm("I was impressed by the engineering culture at Harbor.", evidence, job) === null
+      && findUngroundedProseProperClaimTerm("As a former Harbor customer, I built payment APIs in Java.", evidence, job) === null;
+  })()],
+  ["a bullet keeps a skill with its own duration, and every reduction or growth form grounds the multiplier",
+    findUngroundedNumericClaim("6 years of Python", "Python • 6 years") === null
+      && findUngroundedNumericClaim("6 years of Go", "Skills: Python (6 years) • Go (2 years)") === "6 years"
+      && findUngroundedNumericClaim("6 years of Go", "6 years of Golang") === null
+      && findUngroundedNumericClaim("Closed a million-dollar deal.", "Closed a deal.") !== null
+      && findUngroundedNumericClaim("Closed a million-dollar deal.", "Closed a $1.2M deal.") === null
+      && findUngroundedOutcomeClaim("Halved build times.", "Cutting build times by 50%.") === null
+      && findUngroundedOutcomeClaim("Doubled throughput.", "Increased throughput by 100%.") === null
+      && findUngroundedOutcomeClaim("Built the billing service, which halves invoice errors.", "Built the billing service.") === "halve"],
+  ["a likeness, a comma, or an intention after a posting's scale is no claim about the candidate", (() => {
+    const job = "Harbor serves millions of merchants.";
+    const check = (text) => findUngroundedNumericClaim(withoutPostingScaleFacts(text, job), "Built payment APIs in Java at Beta Corp.");
+    return ["Because Harbor serves millions of merchants, I see a fit with my Java payment APIs.",
+      "Harbor's platform serves millions of merchants like the ones I supported at Beta Corp.",
+      "Serving millions of merchants is a challenge I'd love to take on.", "Having used Harbor, I know it serves millions of merchants."]
+      .every((text) => check(text) === null)
+      && check("Millions of merchants relied on the checkout service I built.") !== null;
   })()]
 ];
 
 // Floor: silently deleting a check must shrink the gate loudly, not quietly.
 // Raise this number whenever you ADD a check above.
-assert(checks.length >= 127, `grounding probe count dropped below the floor (127): found ${checks.length}`);
+assert(checks.length >= 150, `grounding probe count dropped below the floor (150): found ${checks.length}`);
 
 let failures = 0;
 for (const [name, ok] of checks) {

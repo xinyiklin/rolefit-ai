@@ -143,7 +143,9 @@ const honest = [
   ["RESTful for REST", skills, "Python, Google Cloud, AWS, RESTful APIs"],
   ["a plural of a grounded skill phrase", skillRow("practices"), "DevOps, Agile, AI-assisted code reviews"],
   ["continuous integration for CI", bullet("Ran pytest on every pull request with GitHub Actions CI."),
-    "Ran pytest on every pull request with GitHub Actions continuous integration."]
+    "Ran pytest on every pull request with GitHub Actions continuous integration."],
+  ["a reordered duration keeps its own tool", bullet("Cut the nightly warehouse load from 3 hours to 50 minutes by switching full refreshes to incremental dbt models."),
+    "Switched full refreshes to incremental dbt models, cutting the nightly warehouse load from 3 hours to 50 minutes."]
 ];
 // A solo project's own evidence line supports an authorship verb for that same thing.
 for (const [label, entryId, replacement] of [
@@ -249,14 +251,18 @@ const fabricated = [
   ["co-led stays a leadership claim", skills, "Python, Google Cloud, AWS, Co-led the platform migration"],
   ["text after a parenthetical", skills, "Python, Google Cloud, AWS, Docker (Compose) SDK"],
   ["a shared interface one name lacks", skills, "Python, Google Cloud, AWS, Mistral and Docker APIs"],
-  ["a name under an interface head that lacks it", skills, "Python, Google Cloud, AWS, REST APIs (Mistral, Docker)"]
+  ["a name under an interface head that lacks it", skills, "Python, Google Cloud, AWS, REST APIs (Mistral, Docker)"],
+  ["a scale word the entry never states", bullet("Maintained a Django admin used by operations staff to manage ferry schedules."),
+    "Maintained a Django admin used by thousands of operations staff to manage ferry schedules."],
+  ["a multiplier outcome the entry never states", bullet("Load-tested the payouts Celery workers on Redis before launch."),
+    "Load-tested the payouts Celery workers on Redis before launch, doubling throughput."]
 ];
 for (const [label, targetId, replacement] of fabricated) {
   assert.ok(evidenceWarning(warnings(targetId, replacement)), `${label} still raises the evidence warning`);
 }
 
 // Floor: deleting a case must shrink the probe loudly. Raise these when adding cases.
-assert.ok(honest.length >= 27 && fabricated.length >= 51, "warning precision probe count dropped below the floor");
+assert.ok(honest.length >= 28 && fabricated.length >= 53, "warning precision probe count dropped below the floor");
 console.log(`resume proposal warning precision probes: ${honest.length} clean, ${fabricated.length} warned`);
 
 // A warning names the first unsupported term, number, or skill it found.

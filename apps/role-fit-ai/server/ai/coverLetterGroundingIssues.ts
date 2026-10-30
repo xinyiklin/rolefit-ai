@@ -1,7 +1,7 @@
 import type { ResolvedCoverLetterContext } from "../../src/lib/coverLetterPreflight.ts";
 import { evidencePolarity, evidenceSegments } from "../../shared/evidencePolarity.ts";
 import { curatedClaimTerms, findUngroundedJdTerm, findUngroundedCuratedClaimTerm, findUngroundedOutcomeClaim } from "./grounding.ts";
-import { findUngroundedNumericClaim, numericClaims } from "./sanitize.ts";
+import { findUngroundedNumericClaim, numericClaims, withoutPostingScaleFacts } from "./sanitize.ts";
 import type { CoverLetterValidationIssue } from "./coverLetterIssues.ts";
 
 function escapeRegex(value: string): string {
@@ -219,9 +219,10 @@ export function coverLetterGroundingIssues({
       ...(sentenceIndex >= 0 ? { sentenceIndex } : {})
     });
   }
-  const ungroundedNumber = findUngroundedNumericClaim(claims, grounding);
+  const numberSurfaces = sentences.map((sentence) => claimSurface(withoutPostingScaleFacts(sentence, jobText), resolved));
+  const ungroundedNumber = findUngroundedNumericClaim(numberSurfaces.join(" "), grounding);
   if (ungroundedNumber) {
-    const sentenceIndex = surfaces.findIndex(
+    const sentenceIndex = numberSurfaces.findIndex(
       (surface) => findUngroundedNumericClaim(surface, grounding) === ungroundedNumber
     );
     issues.push({

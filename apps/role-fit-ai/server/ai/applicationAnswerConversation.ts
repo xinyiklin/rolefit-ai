@@ -14,7 +14,7 @@ import { findUngroundedCuratedClaimTerm, findUngroundedOutcomeClaim, findUngroun
 import { ANSWER_CONVERSATION_FENCE_NAMES, fenceUntrusted, inputFirewallRule } from "./prompts.ts";
 import { resolveProviderRequest } from "./providers.ts";
 import { recordProviderUsage, type UsageSink } from "./providerUsage.ts";
-import { hasUngroundedNumericClaim } from "./sanitize.ts";
+import { hasUngroundedNumericClaim, withoutPostingScaleFacts } from "./sanitize.ts";
 
 export const APPLICATION_ANSWER_PROMPT_VERSION = "application-answer-conversation-v4";
 type AnswerRequest = {
@@ -125,9 +125,10 @@ function evidenceWarnings(answer: string, input: AnswerRequest): string[] {
   if (!answer) return [];
   const evidence = [input.resumeText, ...[input.candidateContext, ...input.explicitFacts, input.clarification].flatMap(splitProfileEvidence)].join("\n");
   const job = `${input.jobText}\n${input.rawJobText}`;
-  const issue = candidateClaimIssue(answer, evidence, evidence);
+  const claims = withoutPostingScaleFacts(answer, job);
+  const issue = candidateClaimIssue(claims, evidence, evidence);
   const unsupported = issue || proseHasUngroundedTerm(answer, job.toLowerCase(), evidence.toLowerCase())
-    || hasUngroundedNumericClaim(answer, evidence) || findUngroundedCuratedClaimTerm(answer, evidence)
+    || hasUngroundedNumericClaim(claims, evidence) || findUngroundedCuratedClaimTerm(answer, evidence)
     || findUngroundedProseProperClaimTerm(answer, evidence, job) || findUngroundedOutcomeClaim(answer, evidence, { candidateProse: true });
   return unsupported ? [`Not supported by provided evidence. ${issue ?? "Check the claims, tools, numbers, and outcomes in this answer."}`] : [];
 }
