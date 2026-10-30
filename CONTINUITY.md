@@ -109,17 +109,32 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-29
 
+- [TOOL] **Bug-hunt round six** (round five's failing cover-letter probe fixed
+  first). Cover letters send slot answers only for slots the letter still has;
+  duplicate detection compares non-English descriptions (ASCII unchanged); an
+  Apply or Skip retry after a lost reply writes over its own record (the retry
+  wins, the row keeps its dates, stage, history and later tracker edits) and
+  is never offered as its own duplicate; a new shortcut import clears a stale
+  failure notice; MCP `draft_answer` saves its call's facts as `userFacts`,
+  and MCP calls go over node:http (no 5-minute header cutoff). Each reviewed.
+  Reverted after review: template-trim hardening (the editor already trims)
+  and an MCP latest-answer merge (the tracker modal edits answers in place, so
+  list order is not recency); a plain MCP correction still sits beside a
+  drafted revision. Open: a migrated undated record moved to Skipped sheds its
+  documents (refuse the move or change the schema: the user's call); the
+  Prepare and Polish duplicate gates can still match a lost-reply row; the
+  Providers panel ignores a reused server; variant listings list directories.
 - [TOOL] **Bug-hunt round five** (first scan of the intake/polish hooks and
   shared contracts): a failed resume-candidate read is no longer cached;
   accepting a warned Resume edit no longer dead-ends a pending cover-letter
   proposal (resume-derived warnings sit in the resume fingerprint); Undo
   restores the exact text an accept replaced. Each reviewed; refuted: the
   Prepare recommendation clear (silent by design) and last-bullet removal
-  after a manual edit. Not verified: unanswered template-slot answers are
-  still sent as evidence (`coverLetterEvidence.ts:219`, low).
+  after a manual edit. Its slot-answer residual was fixed in round six.
 - [TOOL] **Bug-hunt rounds three and four** (round three committed as
-  01ba3b9/4f58e8e). Round four, uncommitted: Fit (unlocated CLEAR quotes
-  dropped, empty-excerpt false conflict, model advice warnings dropped);
+  01ba3b9/4f58e8e). Round four, committed d12893a..bfb5ba4: Fit
+  (unlocated CLEAR quotes dropped, empty-excerpt false conflict, model advice
+  warnings dropped);
   event dates bounded in route and popover; engine margin default and
   divider; Detail stage select, persist-path timeline guard, Draft-to-Skipped
   select; companion (shared live region, Extension-tab polling that keeps
@@ -134,25 +149,3 @@ D-entries in `docs/decisions.md`.
   rounds regressed real postings: the bulleted-heading and perk-noun rules,
   so a short bullet that starts with a heading word ("- Requirements
   gathering sessions") still closes its section.
-
-## 2026-10-28
-
-- [TOOL] **Bug-hunt round two**, committed with round one (01ba3b9). Workspace saves
-  and restores stage the replacement before archiving the live file and put
-  it back if the install fails (`replaceWorkspaceFile`); tracker upserts
-  cannot drop `appliedAt`, stage moves never invent a date, same-stage status
-  requests still validate, disk failures answer 500; Apply and Skip keep one
-  record id per preparation until a save succeeds and read a create refused as
-  existing as that earlier success (`confirmCreated` clears the banner); the
-  timeline shows a new entry once and orders same-day rows by day then
-  recorded order; Detail carries no hidden date into a job-only Skip; the
-  companion shows the blocked-port reason, keeps typed keys and focus across
-  the provider poll, and labels Confirm only for a pending port; the engine's
-  `coerceDivider` never cuts a surrogate pair (two reviewers, shared
-  package); Typeset's root drop claims only file drops and its leave guard
-  covers the autosave delay. Verified: app, Typeset and engine checks,
-  server/app tsc, desktop probes, three independent reviews, all fixed.
-  Residual: `confirmCreated` keeps the first attempt's content; a migrated
-  undated record moved to Skipped sheds its documents. Unscanned: intake and
-  polish hooks, editor hooks, shared contracts. Not fixed: Providers panel
-  ignores a reused server.
