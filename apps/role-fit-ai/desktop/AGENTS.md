@@ -135,7 +135,9 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   sends bounded, versioned credential snapshots only to a server process the
   companion owns. A reused standalone listener never receives vault data and
   provider save/remove/enable mutations must fail until the user stops that
-  listener and reopens RoleFit through the companion.
+  listener and reopens RoleFit through the companion. While a reused service
+  (standalone, or another companion session's) is open, the Providers summary
+  says it does not use these providers instead of counting them "ready".
 - Main keeps the owned server's shape-only provider snapshot current while the
   companion window is hidden or closed. Snapshot refreshes and mutations are
   serialized so an older probe cannot overwrite a newer vault change; renderer

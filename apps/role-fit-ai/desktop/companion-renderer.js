@@ -907,23 +907,56 @@ function renderProviders() {
   }
   elements.providerList.dataset.rendered = "true";
   elements.providerList.setAttribute("aria-busy", "false");
+  renderProviderSummary(configuredCount, readyCount);
+  return false;
+}
+
+function renderProviderSummary(configuredCount, readyCount) {
   // No records yet means the first status check is still running (a
   // completed check holds every supported provider), not an empty setup.
   const checking = providerRecords.size === 0;
+  // Only a service this companion started receives these providers; a reused
+  // one keeps its own, so "ready for RoleFit" would not describe the open app.
+  const serverState = checking || configuredCount === 0 ? "" : liveConnectionStatus?.serverState;
+  const notUsed = serverState === "reused-standalone"
+    ? {
+        summary: "RoleFit is running as a development server, which does not use the providers added here. Stop it and reopen RoleFit through this companion to use them.",
+        overview: "Not used by the dev server"
+      }
+    : serverState === "reused-companion"
+      ? {
+          summary: "RoleFit is using a service another companion session started, which does not use the providers added here. Stop that service and reopen RoleFit through this companion to use them.",
+          overview: "Not used by this service"
+        }
+      : null;
   elements.providerSummary.textContent = checking
     ? "Checking providers…"
-    : configuredCount === 0
-      ? "No providers added yet. Add a CLI or API provider to begin."
-      : `${configuredCount} added · ${readyCount} ready for RoleFit.`;
+    : notUsed
+      ? notUsed.summary
+      : configuredCount === 0
+        ? "No providers added yet. Add a CLI or API provider to begin."
+        : `${configuredCount} added · ${readyCount} ready for RoleFit.`;
   elements.overviewProviderSummary.textContent = checking
     ? "Checking providers"
-    : configuredCount === 0
-      ? "No providers connected"
-      : `${readyCount} ready of ${configuredCount} connected`;
-  const providerAttention = configuredCount > 0 && readyCount === 0;
+    : notUsed
+      ? notUsed.overview
+      : configuredCount === 0
+        ? "No providers connected"
+        : `${readyCount} ready of ${configuredCount} connected`;
+  const providerAttention = Boolean(notUsed) || (configuredCount > 0 && readyCount === 0);
   elements.navProvidersAttention.hidden = !providerAttention;
   setCardTone(elements.overviewProvidersCard, providerAttention);
-  return false;
+}
+
+function countProviderRecords() {
+  let configuredCount = 0;
+  let readyCount = 0;
+  for (const provider of SUPPORTED_PROVIDERS) {
+    const record = providerRecords.get(provider.id);
+    if (record?.configured) configuredCount += 1;
+    if (record?.ready) readyCount += 1;
+  }
+  return { configuredCount, readyCount };
 }
 
 function renderCheckingProviders() {
@@ -1194,6 +1227,12 @@ function renderServiceIndicators(status) {
 function renderConnectionStatus() {
   const status = liveConnectionStatus;
   renderServiceIndicators(status);
+  // Which service is open decides whether the provider summary holds; a
+  // provider-status error keeps its own message until the next refresh.
+  if (elements.companionRoot.dataset.status !== "error") {
+    const { configuredCount, readyCount } = countProviderRecords();
+    renderProviderSummary(configuredCount, readyCount);
+  }
   if (!status) {
     renderActiveExtensionPort();
     elements.connectionState.dataset.state = connectionStatusLoaded ? "error" : "unknown";

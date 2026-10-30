@@ -1741,4 +1741,49 @@ assert.deepEqual(invocations, [
   { channel: channels.connectionStatus, args: [] }
 ]);
 
+// The provider summary tells the truth about the open service: a standalone
+// development server never receives the providers added in this companion.
+{
+  const summarySource = companionRendererSource.slice(
+    companionRendererSource.indexOf("function renderProviderSummary"),
+    companionRendererSource.indexOf("function renderCheckingProviders")
+  );
+  const text = () => ({ textContent: "" });
+  const elements = {
+    providerSummary: text(),
+    overviewProviderSummary: text(),
+    navProvidersAttention: { hidden: true },
+    overviewProvidersCard: {}
+  };
+  const providers = [{ id: "claude-cli" }, { id: "openai-api" }];
+  const context = {
+    elements,
+    SUPPORTED_PROVIDERS: providers,
+    providerRecords: new Map([["claude-cli", { configured: true, ready: true }], ["openai-api", { configured: false, ready: false }]]),
+    liveConnectionStatus: { serverState: "owned" },
+    setCardTone: () => {}
+  };
+  const summary = vm.runInNewContext(`${summarySource}; ({ renderProviderSummary, countProviderRecords });`, context);
+  const counts = summary.countProviderRecords();
+  assert.deepEqual({ ...counts }, { configuredCount: 1, readyCount: 1 });
+  summary.renderProviderSummary(counts.configuredCount, counts.readyCount);
+  assert.equal(elements.providerSummary.textContent, "1 added · 1 ready for RoleFit.", "an owned service uses the companion's providers");
+  context.liveConnectionStatus = { serverState: "reused-standalone" };
+  summary.renderProviderSummary(counts.configuredCount, counts.readyCount);
+  assert.match(elements.providerSummary.textContent, /development server, which does not use the providers added here/, "a dev server is never described as using them");
+  assert.equal(elements.overviewProviderSummary.textContent, "Not used by the dev server");
+  assert.equal(elements.navProvidersAttention.hidden, false, "and the Providers section asks for attention");
+  context.liveConnectionStatus = { serverState: "reused-companion" };
+  summary.renderProviderSummary(counts.configuredCount, counts.readyCount);
+  assert.match(elements.providerSummary.textContent, /another companion session started, which does not use the providers added here. Stop that service/, "another session's service is not described as using them either");
+  assert.equal(elements.overviewProviderSummary.textContent, "Not used by this service");
+  summary.renderProviderSummary(0, 0);
+  assert.equal(elements.providerSummary.textContent, "No providers added yet. Add a CLI or API provider to begin.", "with nothing added there is nothing to call unused");
+  assert.match(
+    companionRendererSource,
+    /function renderConnectionStatus\(\) \{[\s\S]{0,400}?if \(elements\.companionRoot\.dataset\.status !== "error"\) \{[\s\S]{0,160}?renderProviderSummary\(configuredCount, readyCount\);/,
+    "a change of service ownership re-renders the summary without hiding a provider-status error"
+  );
+}
+
 console.log("desktop provider-management and workspace IPC contract and preload probes: passed");
