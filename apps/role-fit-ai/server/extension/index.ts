@@ -30,6 +30,58 @@ export function findMatchingApplication(url: unknown, applications: unknown, pag
   return matches.length ? matches[0] : null;
 }
 
+// Role and employer from a job board's own page-title forms only:
+// Handshake "<Title> | <Company> | Handshake"; LinkedIn "<Title> at <Company> |
+// LinkedIn", "<Title> | <Company> | LinkedIn" and "<Company> hiring <Title> in
+// <Place> | LinkedIn" (after its "(3) " unread count); Indeed "<Title> - <Company>
+// - <Place> - Indeed.com" with exactly those three fields. Anything else yields nothing.
+export function jobBoardTitleMeta(pageTitle: unknown): { title?: string; company?: string } {
+  const title = typeof pageTitle === "string" ? pageTitle.trim().replace(/^\(\d+\)\s+/, "") : "";
+  if (!title) return {};
+  // One line each, so a title holding line breaks cannot add labelled lines.
+  const line = (value: string) => value.replace(/\s+/g, " ").trim();
+  const found = (role: string, company: string) => (line(role) && line(company) ? { title: line(role), company: line(company) } : {});
+  const segments = title.split("|");
+  const board = segments.length >= 2 ? segments.at(-1)!.trim().toLowerCase() : "";
+  // The pipe forms come first, so " at " inside a role ("Work at Home") never splits it.
+  if ((board === "handshake" && segments.length >= 3) || (board === "linkedin" && segments.length === 3)) {
+    return found(segments.slice(0, -2).join("|"), segments.at(-2)!);
+  }
+  const at = /\s+at\s+/i.exec(title);
+  const afterAt = at ? title.slice(at.index + at[0].length) : "";
+  // A spaced hyphen separates fields, so "Coca-Cola" stays one employer.
+  const separator = afterAt.search(/[|–]|\s-\s/);
+  if (at && at.index > 0 && separator > 0 && /linkedin/i.test(afterAt.slice(separator))) {
+    // A second " at " ("Work at Home at Acme") leaves the split unclear.
+    return /\s+at\s+/i.test(afterAt.slice(0, separator)) ? {} : found(title.slice(0, at.index), afterAt.slice(0, separator));
+  }
+  if (board === "linkedin") {
+    // "<Company> hiring <Title> in <Place>", with the same lowercase markers as og:title.
+    const hiring = /^(.+?) hiring (.+) in .+$/.exec(segments[0].trim());
+    return hiring ? found(hiring[2], hiring[1]) : {};
+  }
+  // Exactly role, employer and place, so a role holding " - " is never split.
+  const indeed = /\s[-|–]\s*Indeed(?:\.[a-z.]+)?\s*$/i.exec(title);
+  const fields = indeed ? title.slice(0, indeed.index).split(/\s-\s/) : [];
+  return fields.length === 3 ? found(fields[0], fields[1]) : {};
+}
+
+const JOB_BOARD_HOST = /(?:^|\.)(?:linkedin\.com|indeed\.(?:com|co\.[a-z]{2}|com\.[a-z]{2}|[a-z]{2})|joinhandshake\.com)$/i;
+
+// Labelled lines the app's posting parser reads, taken from a job board's own page
+// title: LinkedIn and Indeed captures keep only the description element.
+export function jobBoardHeader(url: string, pageTitle: unknown): string {
+  let host = "";
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    return "";
+  }
+  if (!JOB_BOARD_HOST.test(host)) return "";
+  const { title, company } = jobBoardTitleMeta(pageTitle);
+  return title && company ? `Job title: ${title}\nCompany: ${company}\n\n` : "";
+}
+
 // Best-effort title/company extraction from a job page title and body text.
 // Conservative: returns only what it can read; never guesses an employer.
 // Any site supplies both inputs and the analyze route runs this synchronously
@@ -37,32 +89,11 @@ export function findMatchingApplication(url: unknown, applications: unknown, pag
 // matched, and the whitespace before an anchored body label cannot cross a
 // line, so no anchor rescans later lines; backtracking stays bounded.
 export function extractJobMeta(text: unknown, pageTitle: unknown): { title?: string; company?: string } {
-  const meta: { title?: string; company?: string } = {};
+  const meta: { title?: string; company?: string } = { ...jobBoardTitleMeta(pageTitle) };
   const title = typeof pageTitle === "string" ? pageTitle.trim() : "";
   const body = typeof text === "string" ? text : "";
 
-  // 1. Handshake: "<Title> | <Company> | Handshake" (a title may contain "|").
-  // LinkedIn: "<Title> at <Company> | ... LinkedIn".
-  if (title) {
-    const segments = title.split("|");
-    const at = /\s+at\s+/i.exec(title);
-    const afterAt = at ? title.slice(at.index + at[0].length) : "";
-    // A spaced hyphen separates fields, so "Coca-Cola" stays one employer.
-    const separator = afterAt.search(/[|–]|\s-\s/);
-    if (segments.length >= 3 && segments.at(-1)?.trim().toLowerCase() === "handshake") {
-      const role = segments.slice(0, -2).join("|").trim();
-      const company = segments.at(-2)?.trim() ?? "";
-      if (role && company) {
-        meta.title = role;
-        meta.company = company;
-      }
-    } else if (at && at.index > 0 && separator > 0 && /linkedin/i.test(afterAt.slice(separator))) {
-      meta.title = title.slice(0, at.index).trim();
-      meta.company = afterAt.slice(0, separator).trim();
-    }
-  }
-
-  // 2. Indeed: "<Title> - <Company> - <Location> | ..."
+  // Any site: "<Title> - <Company> - <Location> | ..."
   if ((!meta.title || !meta.company) && title) {
     // Only a spaced hyphen separates fields, so "Front-End Developer" stays whole.
     const dashed = title.slice(0, Math.max(0, title.lastIndexOf("|"))).split(/\s-\s/);
@@ -76,7 +107,7 @@ export function extractJobMeta(text: unknown, pageTitle: unknown): { title?: str
 
   // 3. Imported ATS text may include explicit header lines even when the page
   // title is just wrapper chrome — but only fill what the trusted LinkedIn/Indeed
-  // title parse (steps 1-2) didn't, so a stray "Company:" line in a JD body can't
+  // title parses above didn't, so a stray "Company:" line in a JD body can't
   // clobber a correctly-parsed employer. These still win over the generic
   // page-title fallback (step 4) because that step is guarded on an empty field.
   if (body) {

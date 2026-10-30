@@ -328,8 +328,8 @@ export async function analyzePosting(apiBase, pageData) {
 
 /**
  * Queue the posting for one fresh app tab. The body carries only the captured
- * text, its URL, the page's frame addresses, and the claim token that routes
- * it to that tab; the app owns AI-backed job analysis on Prepare.
+ * text, its URL and page title, the page's frame addresses, and the claim token
+ * that routes it to that tab; the app owns AI-backed job analysis on Prepare.
  */
 export async function importPosting(apiBase, pageData, claimToken) {
   let response;
@@ -337,7 +337,7 @@ export async function importPosting(apiBase, pageData, claimToken) {
     response = await fetch(`${apiBase}/api/extension/import`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: pageData.text, url: pageData.url, frameUrls: pageData.frameUrls, claimToken }),
+      body: JSON.stringify({ text: pageData.text, url: pageData.url, pageTitle: pageData.title, frameUrls: pageData.frameUrls, claimToken }),
       signal: timeoutSignal(IMPORT_TIMEOUT_MS)
     });
   } catch (error) {

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { extractJobMeta } from "../index.ts";
+import { extractJobMeta, jobBoardHeader, jobBoardTitleMeta } from "../index.ts";
+import { extractJobPosting } from "../../../src/lib/jobExtract.ts";
 
 // extractJobMeta reads the page title and text the extension captured from any
 // site, synchronously inside the analyze route, so its parses must stay linear
@@ -35,8 +36,8 @@ probe("Indeed page titles name the role and employer", () => {
   );
   assert.deepEqual(
     extractJobMeta("", "Software Engineer - Acme Corp - New York, NY - Indeed.com"),
-    { title: "Software Engineer" },
-    "without a trailing | segment only the generic title applies"
+    { title: "Software Engineer", company: "Acme Corp" },
+    "a trailing - Indeed.com marks the same Indeed form"
   );
 });
 
@@ -49,9 +50,9 @@ probe("hyphenated titles stay whole and do not become the employer", () => {
     extractJobMeta("", "Co-op Student, Data - Acme - Toronto, ON | Indeed.com"),
     { title: "Co-op Student, Data", company: "Acme" }
   );
-  assert.deepEqual(extractJobMeta("", "Front-End Developer - Acme Corp - Austin, TX - Indeed.com"), { title: "Front-End Developer" });
+  assert.deepEqual(extractJobMeta("", "Front-End Developer - Acme Corp - Austin, TX - Indeed.com"), { title: "Front-End Developer", company: "Acme Corp" });
   assert.deepEqual(extractJobMeta("", "Full-Stack Engineer | Acme Careers"), { title: "Full-Stack Engineer" });
-  assert.deepEqual(extractJobMeta("", "Full-Stack Engineer | Acme | LinkedIn"), { title: "Full-Stack Engineer" });
+  assert.deepEqual(extractJobMeta("", "Full-Stack Engineer | Acme | LinkedIn"), { title: "Full-Stack Engineer", company: "Acme" });
 });
 
 probe("Handshake page titles name the role and employer ahead of LinkedIn", () => {
@@ -100,6 +101,49 @@ probe("hostile titles and page text parse without stalling the analyze route", (
     const elapsed = performance.now() - started;
     assert.ok(elapsed < 500, `parsed in ${elapsed.toFixed(0)} ms`);
   }
+});
+
+probe("job-board page titles name the role and employer in every current form", () => {
+  const expect = { title: "Senior Backend Engineer", company: "Acme Payments" };
+  for (const title of [
+    "Senior Backend Engineer at Acme Payments | LinkedIn",
+    "(3) Senior Backend Engineer | Acme Payments | LinkedIn",
+    "Acme Payments hiring Senior Backend Engineer in New York, NY | LinkedIn",
+    "Senior Backend Engineer - Acme Payments - New York, NY - Indeed.com",
+    "Senior Backend Engineer - Acme Payments - New York, NY | Indeed.com",
+    "Senior Backend Engineer | Acme Payments | Handshake"
+  ]) assert.deepEqual(jobBoardTitleMeta(title), expect, title);
+  assert.deepEqual(jobBoardTitleMeta("Acme hiring Software Engineer in Test in Austin, TX | LinkedIn"), { title: "Software Engineer in Test", company: "Acme" });
+  assert.deepEqual(jobBoardTitleMeta("Careers | Acme | Jobs"), {}, "an unknown site gives nothing");
+  // Ambiguous shapes give nothing rather than a wrong employer.
+  for (const title of [
+    "Software Engineer - Backend - Acme - Austin, TX - Indeed.com",
+    "Software Engineer - New York, NY - Indeed.com",
+    "Senior Hiring Manager jobs | LinkedIn",
+    "Acme Payments hiring Senior Backend Engineer | LinkedIn",
+    "Customer Service Rep - Work at Home at Acme | LinkedIn",
+    "Senior Engineer | Acme | Remote | LinkedIn"
+  ]) assert.deepEqual(jobBoardTitleMeta(title), {}, title);
+  assert.deepEqual(jobBoardTitleMeta("Customer Service Representative - Work at Home | Acme | LinkedIn"), { title: "Customer Service Representative - Work at Home", company: "Acme" });
+  assert.equal(jobBoardHeader("https://www.indeed.com.evil.test/viewjob", "Engineer - Acme - Austin - Indeed.com"), "", "a look-alike Indeed host adds nothing");
+  assert.equal(jobBoardHeader("https://indeed.evil.test/viewjob", "Engineer - Acme - Austin - Indeed.com"), "");
+  assert.ok(jobBoardHeader("https://www.indeed.co.uk/viewjob", "Engineer - Acme - London - Indeed.com"), "a real Indeed country domain adds lines");
+  assert.deepEqual(jobBoardTitleMeta("LinkedIn"), {});
+  const NL = String.fromCharCode(10);
+  assert.deepEqual(jobBoardTitleMeta(`Engineer${NL}Company: Evil | Acme | LinkedIn`), { title: "Engineer Company: Evil", company: "Acme" }, "a line break in a title stays on one line");
+});
+
+probe("a job board import gets labelled role and employer lines the app parses", () => {
+  const description = ["About the job", "We are looking for an engineer to join our payments platform team.", "Responsibilities", "- Build backend services in Go"].join(String.fromCharCode(10));
+  const url = "https://www.linkedin.com/jobs/view/4012345678/";
+  const header = jobBoardHeader(url, "(2) Senior Backend Engineer | Acme Payments | LinkedIn");
+  assert.equal(header, "Job title: Senior Backend Engineer" + String.fromCharCode(10) + "Company: Acme Payments" + String.fromCharCode(10, 10));
+  const { tracking } = extractJobPosting(header + description, { url });
+  assert.equal(tracking.role, "Senior Backend Engineer");
+  assert.equal(tracking.company, "Acme Payments");
+  assert.equal(jobBoardHeader("https://uk.indeed.com/viewjob?jk=abc", "Engineer - Acme - London - Indeed.com"), "Job title: Engineer" + String.fromCharCode(10) + "Company: Acme" + String.fromCharCode(10, 10));
+  assert.equal(jobBoardHeader("https://example.com/jobs/1", "Senior Backend Engineer | Acme Payments | LinkedIn"), "", "only a job board's own host adds lines");
+  assert.equal(jobBoardHeader("not a url", "Engineer | Acme | LinkedIn"), "");
 });
 
 if (failures) {

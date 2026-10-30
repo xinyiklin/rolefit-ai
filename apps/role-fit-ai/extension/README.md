@@ -145,11 +145,13 @@ the keyboard command is an ES module. Chrome and Edge need 123+
    requires substantial descriptions with aligned metadata plus strong lexical
    and ordered-phrase overlap; small amounts of shared boilerplate do not
    produce a warning.
-3. **Prepare in RoleFit** sends exactly `{text, url, frameUrls, claimToken}` to
-   `POST /api/extension/import` and opens a fresh app tab with that short claim
-   token. The server resolves the raw posting text in the background (for
-   example, fetching the full description for a Greenhouse link), so it
-   survives popup focus loss. The app polls
+3. **Prepare in RoleFit** sends exactly `{text, url, pageTitle, frameUrls,
+   claimToken}` to `POST /api/extension/import` and opens a fresh app tab with
+   that short claim token. The server resolves the raw posting text in the
+   background (for example, fetching the full description for a Greenhouse
+   link), so it survives popup focus loss. On LinkedIn, Indeed, and Handshake it
+   adds the role and employer as labelled lines when the page title matches a
+   known job-board title form unambiguously. The app polls
    `GET /api/extension/inbox?tabId=...&claimToken=...`; progress is reported
    while that resolve runs, and the delivered inbox payload contains only
    `{text, url}`. The receiving tab always runs provider-backed job analysis and

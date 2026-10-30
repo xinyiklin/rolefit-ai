@@ -359,8 +359,11 @@ dispatch attempts but never an API key.
   existing `previousApp` shape (built from the best match) and adds
   `match: { level, confidence, evidence }` (evidence capped at 3 strings), or
   `previousApp`/`match` null when nothing matches. `import` (POST) accepts only
-  the posting `text`, `url`, the bounded `frameUrls`, and the bounded
-  `claimToken`, stores the page text,
+  the posting `text`, `url`, the bounded `pageTitle` and `frameUrls`, and the
+  bounded `claimToken`, stores the page text (on LinkedIn, Indeed, and
+  Handshake hosts led by "Job title:"/"Company:" lines when the page title
+  matches a known job-board form unambiguously, since those captures keep only
+  the description),
   and returns immediately; a background server pass only
   RESOLVES the raw job text (e.g. fetching the full Workday, Ashby, or Greenhouse posting body) —
   it makes no AI call, because the server cannot read the receiving tab's

@@ -130,8 +130,12 @@ V3 client of the local RoleFit server.
   `location.origin`; do not add a repo-authored Chrome manifest key or a static
   bearer value as a substitute for server-side identity validation.
 - The popup has no AI/deterministic or automatic-proposal toggles. Extension
-  intake sends only `text`, `url`, `frameUrls`, and `claimToken` to import; the same-origin
-  inbox delivers only `text` and `url`. The app always owns provider-backed AI
+  intake sends only `text`, `url`, `pageTitle`, `frameUrls`, and `claimToken` to
+  import; the same-origin inbox delivers only `text` and `url`. On LinkedIn,
+  Indeed, and Handshake hosts the server puts "Job title:" and "Company:" lines
+  at the top of `text` when the page title matches one of their known title
+  forms unambiguously (`jobBoardTitleMeta`), because those captures keep only the
+  description element; an ambiguous title adds nothing. The app always owns provider-backed AI
   job analysis, duplicate gates, the deterministic brief used only for failed-run
   inspection, and the Prepare handoff, after which automatic Polish follows only
   the app's Settings switches. Claim-token routing and Firefox
