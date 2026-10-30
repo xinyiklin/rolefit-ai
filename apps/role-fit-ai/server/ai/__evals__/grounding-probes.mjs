@@ -20,7 +20,7 @@ import {
   ownershipStrength
 } from "../grounding.ts";
 import { findUngroundedNumericClaim } from "../sanitize.ts";
-import { candidateClaimIssue } from "../claimEvidence.ts";
+import { candidateClaimIssue, evidencePolarity } from "../claimEvidence.ts";
 
 const f = (proposed, job, grounding, opts) => findUngroundedJdTerm(proposed, job, grounding, opts);
 const assisted = "Assisted senior engineers in migrating the payouts service from a cron script to Celery workers backed by Redis.";
@@ -322,12 +322,22 @@ const checks = [
     return cases.every((c, i) =>
       first[i] === c.want && second[i] === c.want && first[i] === second[i]
     );
+  })()],
+  ["a hyphenated No- word or trailing no-prior-experience phrase denies only itself", (() => {
+    const kubernetes = "No-downtime migration of 40 services to Kubernetes.";
+    const kafka = "Built Kafka pipelines with no prior streaming experience, processing 2 million events daily.";
+    return evidencePolarity(kubernetes) === "affirmative"
+      && evidencePolarity("No Kafka experience.") === "denied"
+      && candidateClaimIssue("Delivered a no-downtime migration of 40 services to Kubernetes.", kubernetes) !== "Unsupported technology or skill: kubernetes"
+      && !/technology/i.test(candidateClaimIssue("Built Kafka pipelines processing 2 million events daily.", kafka) ?? "")
+      && candidateClaimIssue("Built Kafka pipelines.", "Joined Acme with no Kafka experience.") === "Unsupported technology or skill: kafka"
+      && candidateClaimIssue("Built Kafka pipelines.", "Joined with no experience in Kafka.") === "Unsupported technology or skill: kafka";
   })()]
 ];
 
 // Floor: silently deleting a check must shrink the gate loudly, not quietly.
 // Raise this number whenever you ADD a check above.
-assert(checks.length >= 127, `grounding probe count dropped below the floor (127): found ${checks.length}`);
+assert(checks.length >= 128, `grounding probe count dropped below the floor (128): found ${checks.length}`);
 
 let failures = 0;
 for (const [name, ok] of checks) {

@@ -391,7 +391,9 @@ application retain blocking technical guards.
     AWS/Azure/GCP→cloud, CI→continuous integration; CI evidence never
     grounds CI/CD and a statistical "95% CI" grounds nothing),
     never the reverse, never against a denial, and related practice never
-    entails a broader term (CI is not CI/CD). Written-out, undenied
+    entails a broader term (CI is not CI/CD). On the evidence side a
+    hyphenated "No-downtime" line is affirmative, and a trailing "with no
+    prior ... experience" denies only itself, up to the next comma. Written-out, undenied
     "object-oriented" evidence grounds the abbreviation OOP. Terminology names are
     case-sensitive; lowercase-only grounding leaves out ambiguous names
     (flask, pandas). Contrived collisions (Django Reinhardt) and tools named
