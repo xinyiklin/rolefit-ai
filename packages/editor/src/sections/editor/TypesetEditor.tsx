@@ -1308,11 +1308,13 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         direction === "undo" ? contentUndoSequenceRef.current : contentRedoSequenceRef.current;
       const styleSequence =
         direction === "undo" ? styleHistory.undoSequence : styleHistory.redoSequence;
-      if (historySourceFor(direction, contentSequence, styleSequence) === "style") {
+      const source = historySourceFor(direction, contentSequence, styleSequence);
+      // A grouped gesture moves both sources together.
+      if (source === "style" || source === "both") {
         if (direction === "undo") styleHistory.undo();
         else styleHistory.redo();
-        return;
       }
+      if (source === "style") return;
       const before = dataRef.current;
       pendingCaretRef.current = (after) => {
         if (direction === "undo") {

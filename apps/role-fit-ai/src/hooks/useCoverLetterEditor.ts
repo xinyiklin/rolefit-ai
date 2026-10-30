@@ -355,6 +355,8 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
       redoSequence: null,
       undo: () => undefined,
       redo: () => undefined,
+      // Letter style keeps no history, so there is no second source to group.
+      groupHistory: (gesture) => gesture(),
       isStyleDefault: (() => {
         const current = documentStyleToCoverLetterStyle(style);
         return (Object.keys(COVER_LETTER_STYLE_DEFAULTS) as (keyof CoverLetterStyle)[])

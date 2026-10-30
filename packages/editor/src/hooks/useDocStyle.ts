@@ -10,7 +10,7 @@ import {
   type DocStyleFields,
   type DocumentStyle
 } from "@typeset/engine/lib/documentStyle.ts";
-import { createHistoryClock, type HistoryClock } from "./historyClock.ts";
+import { createHistoryClock, historyGroupOf, type HistoryClock } from "./historyClock.ts";
 import {
   addSpacingPreset,
   loadSavedSpacingPresets,
@@ -156,7 +156,9 @@ export function styleReducer(
   const documentChange = changedKeys.some((key) => !VIEW_ONLY_KEYS.has(key));
   if (!documentChange) return { ...state, style: next };
 
-  const key = action.type === "set" ? `style:${action.key}` : null;
+  // A grouped gesture's step never merges with a neighbor.
+  const key =
+    action.type === "set" && historyGroupOf(action) === undefined ? `style:${action.key}` : null;
   const now = Date.now();
   // Advance the shared clock before coalescing so content edits still split
   // otherwise-adjacent style transactions.
@@ -239,7 +241,7 @@ export function useDocStyle(historyClock?: HistoryClock) {
       styleReducer(state, action, documentHistoryClock),
     [documentHistoryClock]
   );
-  const [state, dispatch] = useReducer(reducer, undefined, () => {
+  const [state, dispatchAction] = useReducer(reducer, undefined, () => {
     const style = loadStyle();
     return {
       style,
@@ -249,6 +251,11 @@ export function useDocStyle(historyClock?: HistoryClock) {
       coalesceAt: 0
     };
   });
+  // Stamped at dispatch: the reducer runs after a grouped gesture has returned.
+  const dispatch = useCallback(
+    (action: StyleAction) => dispatchAction(documentHistoryClock.stamp(action)),
+    [documentHistoryClock]
+  );
   const style = state.style;
   const [cleanDocumentStyle, setCleanDocumentStyle] = useState(() => toDocumentStyle(style));
   // Corrupt saved presets fall back to none.
@@ -275,23 +282,23 @@ export function useDocStyle(historyClock?: HistoryClock) {
 
   const set = useCallback(<K extends keyof DocStyle>(key: K, value: DocStyle[K]) => {
     dispatch({ type: "set", key, value });
-  }, []);
+  }, [dispatch]);
 
   const applyStyle = useCallback((partial: Partial<DocStyle>) => {
     dispatch({ type: "apply", partial });
-  }, []);
+  }, [dispatch]);
 
   const replaceDocumentStyle = useCallback((documentStyle: DocumentStyle) => {
     setCleanDocumentStyle(toDocumentStyle(coerceDocStyle(documentStyle)));
     dispatch({ type: "replace", style: documentStyle });
-  }, []);
+  }, [dispatch]);
 
   const markClean = useCallback(() => {
     setCleanDocumentStyle(toDocumentStyle(styleRef.current));
   }, []);
 
-  const undo = useCallback(() => dispatch({ type: "undo" }), []);
-  const redo = useCallback(() => dispatch({ type: "redo" }), []);
+  const undo = useCallback(() => dispatch({ type: "undo" }), [dispatch]);
+  const redo = useCallback(() => dispatch({ type: "redo" }), [dispatch]);
 
   // Another tab of the same app may edit the presets; adopt its list.
   useEffect(() => {
@@ -399,10 +406,14 @@ export function useDocStyle(historyClock?: HistoryClock) {
       undoSequence: (undoEntry?.sequence ?? null) as number | null,
       redoSequence: (redoEntry?.sequence ?? null) as number | null,
       undo,
-      redo
+      redo,
+      // Content and style dispatched inside one gesture on the shared clock
+      // become one undo step.
+      groupHistory: documentHistoryClock.group
     }),
     [
       applyStyle,
+      documentHistoryClock,
       deleteSpacingPreset,
       dirty,
       isStyleDefault,

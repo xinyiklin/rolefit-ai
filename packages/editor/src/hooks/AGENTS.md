@@ -36,6 +36,17 @@ style state; app lifecycle and persistence policy remain in the apps.
   Strict Mode may invoke a reducer twice before committing either result.
   Both hooks read the redo branch through `useSyncExternalStore` on the clock:
   either reducer can advance it after the other hook has already rendered.
+- One gesture that changes both content and style (a document alignment that
+  clears per-paragraph overrides, Reset text formatting) runs its dispatches
+  inside `docStyle.groupHistory`. Each hook stamps the open group's id on the
+  action at dispatch, because the reducers run after the gesture returns; the
+  first member to reduce allocates the sequence and the others reuse it. Equal
+  content and style sequences mean one step: `historySourceFor` returns
+  `"both"` and the editor undoes or redoes both sources on one press. A grouped
+  step never coalesces with a neighbor. Group only one synchronous gesture,
+  and keep it the only history dispatch in its batch (a style edit queued in
+  the same render could reduce between its members); whoever dispatches to both
+  sources owns the group, and nesting joins the outer group.
 - The existing history-clock generation also identifies document replacement
   for input replay. `actions.getDocumentGeneration()` exposes that read-only
   boundary; the editor discards queued input and pending caret restoration from

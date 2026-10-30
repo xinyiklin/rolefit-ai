@@ -619,13 +619,16 @@ export default function App() {
         docStyle={docStyle}
         globalAlignments={globalAlignments ?? undefined}
         onGlobalAlignmentChange={(scope, alignment) => {
-          editor.actions.clearAlignmentOverrides(scope);
+          // Clearing the overrides and setting the default are one undo step.
+          docStyle.groupHistory(() => {
+            editor.actions.clearAlignmentOverrides(scope);
+            if (scope === "body") docStyle.set("bodyAlign", alignment);
+            else if (scope === "header") docStyle.set("headerAlign", alignment === "justify" ? "left" : alignment);
+            else docStyle.set("headingAlign", alignment === "justify" ? "left" : alignment);
+          });
           setInlineFormat((current) =>
             current.alignmentScope === scope ? { ...current, alignment } : current
           );
-          if (scope === "body") docStyle.set("bodyAlign", alignment);
-          else if (scope === "header") docStyle.set("headerAlign", alignment === "justify" ? "left" : alignment);
-          else docStyle.set("headingAlign", alignment === "justify" ? "left" : alignment);
         }}
         styleMarkStates={styleMarkStates}
         onStyleFieldMarkChange={(field, mark, on) => {
