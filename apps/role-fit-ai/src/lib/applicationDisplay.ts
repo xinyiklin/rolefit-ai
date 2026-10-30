@@ -212,6 +212,15 @@ export function formatCompactDate(iso: string) {
     : iso;
 }
 
+// "June 2026" on the same local calendar day formatCompactDate shows.
+export function formatMonthLabel(iso: string) {
+  if (!iso) return "";
+  const date = parseDate(iso);
+  return date
+    ? new Date(date.getFullYear(), date.getMonth(), 1).toLocaleDateString([], { month: "long", year: "numeric" })
+    : iso.slice(0, 7);
+}
+
 export function dateKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }

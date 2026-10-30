@@ -256,4 +256,24 @@ assert.deepEqual(
   "insufficient job information shows no findings, so every warning stays general"
 );
 
+// Month dividers group by the same local calendar day each row shows.
+{
+  const { execFileSync } = await import("node:child_process");
+  const moduleUrl = new URL("../applicationDisplay.ts", import.meta.url).href;
+  const script = `const m = await import(${JSON.stringify(moduleUrl)});
+const iso = "2026-07-01T03:00:00.000Z";
+process.stdout.write(JSON.stringify([m.formatMonthLabel(iso), m.formatCompactDate(iso), m.formatMonthLabel("2026-07-01"), m.formatMonthLabel("not a date")]));`;
+  const [month, day, dateOnly, invalid] = JSON.parse(execFileSync(process.execPath, ["--input-type=module", "-e", script], {
+    env: { ...process.env, TZ: "America/Los_Angeles", LANG: "en_US.UTF-8", LC_ALL: "en_US.UTF-8" },
+    encoding: "utf8"
+  }));
+  assert.equal(day, "Jun 30", "the row shows the local day");
+  assert.equal(month, "June 2026", "its divider is that local day's month, not the UTC one");
+  assert.equal(dateOnly, "July 2026", "a date-only value stays on its calendar day");
+  assert.equal(invalid, "not a d", "an unparseable value shows its raw year-month text");
+  const table = (await import("node:fs")).readFileSync(new URL("../../sections/tracker/TrackerTableView.tsx", import.meta.url), "utf8");
+  assert.match(table, /const label = formatMonthLabel\(applicationActivityDate\(app\)\);/, "the table's dividers use the local-day month label");
+  assert.doesNotMatch(table, /iso\.slice\(0, 10\)/, "and never slice a UTC date");
+}
+
 console.log("application display probes: passed");
