@@ -752,7 +752,9 @@ read as the candidate's own evidence, so it should be a saved resume or
 - `polish_cover_letter` — a whole-letter proposal and the `.cover` with it
   applied, or the details RoleFit needs first.
 - `draft_answer` — an answer revision for a saved record, to save with
-  `add_application_answers`.
+  `add_application_answers`. It carries the call's `explicitFacts` and
+  `clarification` as its saved facts, as the app's Save does, so each call
+  for a question passes every fact the user has given for it.
 - `review_application` — the Final application review of a record's saved
   documents.
 

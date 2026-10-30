@@ -50,7 +50,8 @@ export type ApplicationAnswerRevision = {
     rawJobFingerprint: string;
     factsFingerprint: string;
   };
-  // The user's own statements for this question; only Save attaches them.
+  // The user's own statements for this question: the app's Save or MCP
+  // draft_answer attaches them, never a generated revision.
   userFacts?: AnswerUserFacts;
 };
 

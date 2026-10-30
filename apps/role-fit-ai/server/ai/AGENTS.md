@@ -116,9 +116,10 @@ application retain blocking technical guards.
   distinguish explicit user facts from generated drafts, and reject oversized
   inputs instead of silently clipping them. Explicit-fact limits live in
   `applicationAnswersContract.ts` because saved revisions reuse them; a
-  generated revision never carries `userFacts` (the client attaches the user's
-  facts at Save and restores them on Reopen). Unknown usage from any dispatch
-  makes the aggregate unknown, including failed repairs.
+  generated revision never carries `userFacts` (the app attaches the user's
+  facts at Save and restores them on Reopen; the MCP `draft_answer` tool
+  attaches the explicitFacts and clarification of its call). Unknown usage
+  from any dispatch makes the aggregate unknown, including failed repairs.
   Refinements make the smallest useful edit and retain supported specifics and
   responsibility levels. A prior draft cannot supply new facts; resume, Profile
   and explicit user facts remain the evidence. Match the question's work/study/
