@@ -828,7 +828,10 @@ export function sanitizeResumeAdvice(raw: unknown, scope: NormalizedResumeScope,
       || findUngroundedProseProperClaimTerm(claim, evidence, ""))) warnings.push("Advice is not supported by provided evidence.");
     // An add-from-profile item is about the Profile, never a resume entry.
     const ids = item.kind === "add-from-profile" ? { sectionId: "", entryId: "" } : {};
-    return { ...item, ...ids, ...(warnings.length ? { warnings } : {}) };
+    // Warnings are RoleFit's own evidence checks; a model-authored list on
+    // the wire never stands in for them.
+    const { warnings: _modelAuthored, ...checked } = item;
+    return { ...checked, ...ids, ...(warnings.length ? { warnings } : {}) };
   });
 }
 
