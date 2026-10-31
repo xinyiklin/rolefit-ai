@@ -9,6 +9,8 @@ export const UNREADABLE_AUTOSAVE_KEY = "typeset-resume.autosave.v2.unreadable";
 
 export type AutosavedDraft =
   | { kind: "none" }
+  // Storage refused to be read (blocked site data), so no draft was read.
+  | { kind: "unavailable" }
   | { kind: "restored"; parsed: ParsedResumeFile; title: string | null }
   // `kept` is false when storage refused the copy, so the draft will be lost.
   | { kind: "unreadable"; kept: boolean };
@@ -16,18 +18,33 @@ export type AutosavedDraft =
 type DraftStorage = Pick<Storage, "getItem" | "setItem">;
 
 // Tabs share one draft slot. A `storage` event names another tab's write, so a
-// different draft (or a cleared store) means this tab's work is no longer kept.
+// different draft or title (or a cleared store) means this tab's work is no
+// longer kept. A title-only rename re-saves identical draft bytes, which fires
+// no event, so the title key must be checked on its own.
 export function draftReplacedElsewhere(
   event: Pick<StorageEvent, "key" | "newValue">,
-  lastWrittenDraft: string | null
+  lastWrittenDraft: string | null,
+  lastWrittenTitle: string | null
 ): boolean {
-  return event.key === null || (event.key === AUTOSAVE_KEY && event.newValue !== lastWrittenDraft);
+  if (event.key === null) return true;
+  if (event.key === AUTOSAVE_KEY) return event.newValue !== lastWrittenDraft;
+  return event.key === DOCUMENT_TITLE_KEY && event.newValue !== lastWrittenTitle;
 }
 
 // Browser drafts and disk files share one strict validation path so corrupt or
-// manually edited state never reaches the editor reducer.
-export function restoreAutosavedDraft(storage: DraftStorage): AutosavedDraft {
-  const autosave = storage.getItem(AUTOSAVE_KEY);
+// manually edited state never reaches the editor reducer. Storage is opened
+// here because blocked site data throws on the `localStorage` getter itself.
+export function restoreAutosavedDraft(openStorage: () => DraftStorage): AutosavedDraft {
+  let storage: DraftStorage;
+  let autosave: string | null;
+  let title: string | null;
+  try {
+    storage = openStorage();
+    autosave = storage.getItem(AUTOSAVE_KEY);
+    title = storage.getItem(DOCUMENT_TITLE_KEY);
+  } catch {
+    return { kind: "unavailable" };
+  }
   if (!autosave) return { kind: "none" };
   let parsed: ParsedResumeFile;
   try {
@@ -40,5 +57,5 @@ export function restoreAutosavedDraft(storage: DraftStorage): AutosavedDraft {
     }
     return { kind: "unreadable", kept: true };
   }
-  return { kind: "restored", parsed, title: storage.getItem(DOCUMENT_TITLE_KEY) };
+  return { kind: "restored", parsed, title };
 }

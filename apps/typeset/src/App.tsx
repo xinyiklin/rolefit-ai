@@ -112,6 +112,7 @@ export default function App() {
   const workspaceRef = useRef<HTMLElement>(null);
   const initializedRef = useRef(false);
   const lastWrittenDraftRef = useRef<string | null>(null);
+  const lastWrittenTitleRef = useRef<string | null>(null);
   // A restored draft is already stored; writing it back unchanged could
   // overwrite a newer draft another tab saved since this tab read it.
   const restoredDraftRef = useRef<{ draft: string; title: string } | null>(null);
@@ -188,32 +189,30 @@ export default function App() {
     let initialDocumentStyle: DocumentStyle = toDocumentStyle(DOC_STYLE_DEFAULTS);
     let initialTitle = UNTITLED_RESUME_TITLE;
 
-    try {
-      const draft = restoreAutosavedDraft(window.localStorage);
-      if (draft.kind === "restored") {
-        initialData = draft.parsed.data;
-        initialDocumentStyle = draft.parsed.documentStyle;
-        initialTitle = draft.title || UNTITLED_RESUME_TITLE;
-        try {
-          restoredDraftRef.current = {
-            draft: serializeResumeFile(initialData, { ...DOC_STYLE_DEFAULTS, ...initialDocumentStyle }),
-            title: initialTitle
-          };
-        } catch {
-          // Without the comparison, the first autosave simply writes the draft.
-        }
-      } else if (draft.kind === "unreadable") {
-        setNotice({
-          tone: "error",
-          message: draft.kept
-            ? "Your last local draft could not be read, so a fresh resume was opened instead. The draft was kept in this browser's storage."
-            : "Your last local draft could not be read or kept, so a fresh resume was opened instead."
-        });
+    const draft = restoreAutosavedDraft(() => window.localStorage);
+    if (draft.kind === "restored") {
+      initialData = draft.parsed.data;
+      initialDocumentStyle = draft.parsed.documentStyle;
+      initialTitle = draft.title || UNTITLED_RESUME_TITLE;
+      try {
+        restoredDraftRef.current = {
+          draft: serializeResumeFile(initialData, { ...DOC_STYLE_DEFAULTS, ...initialDocumentStyle }),
+          title: initialTitle
+        };
+      } catch {
+        // Without the comparison, the first autosave simply writes the draft.
       }
-    } catch {
+    } else if (draft.kind === "unreadable") {
       setNotice({
         tone: "error",
-        message: "Your last local draft could not be restored, so a fresh resume was opened instead."
+        message: draft.kept
+          ? "Your last local draft could not be read, so a fresh resume was opened instead. The draft was kept in this browser's storage."
+          : "Your last local draft could not be read or kept, so a fresh resume was opened instead."
+      });
+    } else if (draft.kind === "unavailable") {
+      setNotice({
+        tone: "info",
+        message: "Local saving is unavailable in this browser, so drafts will not be kept here. Download a .resume file to keep your work."
       });
     }
 
@@ -246,6 +245,7 @@ export default function App() {
         window.localStorage.setItem(AUTOSAVE_KEY, draft);
         lastWrittenDraftRef.current = draft;
         window.localStorage.setItem(DOCUMENT_TITLE_KEY, title);
+        lastWrittenTitleRef.current = title;
         commitDocumentSaveBaseline(editor.markClean, docStyle.markClean);
         setSaveStatus("saved");
       } catch {
@@ -286,7 +286,7 @@ export default function App() {
   // The next autosave here stores this tab's work again and clears the error.
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
-      if (draftReplacedElsewhere(event, lastWrittenDraftRef.current)) {
+      if (draftReplacedElsewhere(event, lastWrittenDraftRef.current, lastWrittenTitleRef.current)) {
         // The restored copy is no longer what is stored, so it must be written.
         restoredDraftRef.current = null;
         setSaveStatus({ state: "error", label: "Replaced by another tab" });
