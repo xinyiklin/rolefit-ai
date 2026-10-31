@@ -90,8 +90,15 @@ function borrowed(ch: string, own: FaceMetrics, fallback: FaceMetrics | null): b
   return own.adv[ch] === undefined && !own.unmeasured.includes(ch) && fallback?.adv[ch] !== undefined;
 }
 
+// Invisible format characters every renderer draws with no advance. A soft
+// hyphen never reaches the PDF shaper (pdfSafeText), so glyphs on either side
+// kern and ligate as if it were absent; fontkit kerns no pair across the rest.
+const SOFT_HYPHENS = /\u00ad/g;
+const ZERO_WIDTH = /^[\u200b-\u200f\u2060\ufeff]$/;
+
 // Advance width of an ALREADY-ligatured, composed string in font units (1000/em).
-function shapeUnits(text: string, style: FontStyle): { units: number; glyphs: number } {
+function shapeUnits(display: string, style: FontStyle): { units: number; glyphs: number } {
+  const text = display.replace(SOFT_HYPHENS, "");
   const own = fontFace(style.family, style.face).metrics;
   const fallback = fallbackMetrics(style);
   let units = 0;
@@ -127,6 +134,9 @@ function shapeUnits(text: string, style: FontStyle): { units: number; glyphs: nu
       if (prevFace === face) units += kern(face, prev, ch);
       prev = ch;
       prevFace = face;
+    } else if (ZERO_WIDTH.test(ch)) {
+      prev = "";
+      prevFace = null;
     } else {
       // Unknown glyph: fall back to the average of x-height-ish letters so a
       // stray character degrades measurement instead of crashing it.

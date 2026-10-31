@@ -135,8 +135,13 @@ it truthfully.
   makes "-" extract as it. So `pdfSafeText` drops U+00AD before shaping (it
   never paints mid-line), and `emitPdf` primes each embedded face with the
   printable ASCII it maps before any document text; `pdf-hyphens.mjs` fails
-  if either is removed. Layout still measures U+00AD as an unknown glyph
-  (0.5 em), a pre-existing gap that belongs in `measure.ts` if fixed.
+  if either is removed. Layout measures U+00AD as absent (no advance; the
+  glyphs either side kern and ligate across it, as the PDF shapes them), and
+  U+200B-U+200F, U+2060 and U+FEFF as zero-width with no kern across them, as
+  fontkit (the PDF) draws them, not as the 500-unit unknown glyph. Chromium
+  still kerns and ligates across all but ZWNJ, so the DOM can drift by one kern
+  there (`special-spaces.mjs`). Other default-ignorable characters (bidi
+  embeddings and isolates, variation selectors) still take that fallback.
 - `paintedText` (`measure.ts`) owns how a single-line field run is painted and
   measured: a tab or a no-break space paints as one ordinary space in layout,
   DOM and PDF alike (`special-spaces.mjs`). In paragraphs and wrapping fields a
@@ -152,6 +157,15 @@ it truthfully.
   face-derived depth. Never derive a rule from the text a renderer happens to
   hold: the DOM painter groups merged style spans and the PDF emitter walks
   single runs, so a text-dependent rule silently disagrees between them.
+- `setLine` merges adjacent same-style boxes (hyphen fragments, literal spaces,
+  a redundant mark boundary) into one run whose width is `measure()` of its
+  whole text, because the DOM and PDF shape the whole text: the kern across
+  `Non-|Technical` or the `ffi` across `of<font>fice` is in what they draw.
+  Glue setting and alignment use the merged widths; the breaker still chooses
+  lines from fragment widths, so a positive cross-boundary kern could overshoot
+  a glue-less line by that kern. Measure each merged run once when the line is
+  set, never per absorbed box: that is quadratic, and a valid bullet of
+  thousands of mark boundaries took seconds (`merged-runs.mjs` times it).
 - Alignment never changes where a line breaks (D082): every alignment breaks
   as a ragged paragraph does, and justify only stretches the spaces of lines
   already chosen. `tall-paragraphs.mjs` lays the same text out in all four.

@@ -69,12 +69,13 @@ const cases = [
   ["titleRight", { titleRight: `Jan${NARROW}2020 - Mar${FIGURE}2024` }]
 ];
 let checked = 0;
+const shapers = new Map();
+const fontFor = (family, face) => {
+  const key = `${family}:${face}`;
+  if (!shapers.has(key)) shapers.set(key, fontkit.create(readFileSync(new URL(`../../../fonts/${sfntAssetFile(family, face)}`, import.meta.url))));
+  return shapers.get(key);
+};
 for (const family of FONT_FAMILY_IDS) {
-  const faces = new Map();
-  const fontFor = (face) => {
-    if (!faces.has(face)) faces.set(face, fontkit.create(readFileSync(new URL(`../../../fonts/${sfntAssetFile(family, face)}`, import.meta.url))));
-    return faces.get(face);
-  };
   for (const [field, item, contact] of cases) {
     const doc = layoutResume(resume(item, contact), { ...DOC_STYLE_DEFAULTS, fontFamily: family });
     const rightEdge = 612 - doc.geometry.marginRight;
@@ -84,7 +85,7 @@ for (const family of FONT_FAMILY_IDS) {
     for (const run of runs) {
       assert.doesNotMatch(run.text, new RegExp(`[${TAB}${NBSP}${NARROW}${FIGURE}]`), `${family}/${field} paints a tab or no-break space as one space`);
       assert.equal(run.style.family, family, `${family}/${field} draws in its own family`);
-      const face = fontFor(run.style.face);
+      const face = fontFor(family, run.style.face);
       const shaped = (face.layout(run.text).advanceWidth / face.unitsPerEm) * run.style.size;
       // The 2048/em families carry a per-glyph rounding residue (pdf-font-parity).
       const budget = 0.05 + (0.5 / 1000) * run.style.size * run.text.length;
@@ -95,4 +96,43 @@ for (const family of FONT_FAMILY_IDS) {
   }
 }
 
-console.log(`special-space checks passed: a no-break paragraph space and ${checked} single-line runs across ${FONT_FAMILY_IDS.length} families`);
+// Invisible format characters (pasted from web pages and LinkedIn dates) have
+// no advance in the browser or the PDF, so they measure none: a 500-unit
+// unknown-glyph charge left a right-pinned date short of the margin in both.
+// The emitter drops a soft hyphen before shaping (pdf-hyphens), so glyphs
+// either side of it kern and ligate as if it were absent.
+const SOFT_HYPHEN = String.fromCharCode(0xad);
+const [ZWSP, ZWNJ, ZWJ, LRM, RLM] = [0x200b, 0x200c, 0x200d, 0x200e, 0x200f].map((code) => String.fromCharCode(code));
+const WORD_JOINER = String.fromCharCode(0x2060);
+const BOM = String.fromCharCode(0xfeff);
+const invisibleCases = [
+  ["titleRight", { titleRight: `Jun 2023${LRM} - Present${ZWSP}` }],
+  ["subtitleLeft", { subtitleLeft: `Acme${ZWJ}Corp${ZWNJ}${RLM} Group` }],
+  ["titleLeft", { titleLeft: `DATA${SOFT_HYPHEN}VAULT of${SOFT_HYPHEN}fice` }],
+  ["contact", {}, [`Lisbon${WORD_JOINER}PT`, `${BOM}City Region`]],
+  ["bullet", { bullets: [`Rolled out E${ZWSP}Verify, co${SOFT_HYPHEN}ordinated ${WORD_JOINER}teams and AV${SOFT_HYPHEN}AV${LRM} work`], bulletIds: ["b"] }]
+];
+let invisibleChecked = 0;
+for (const family of FONT_FAMILY_IDS) {
+  for (const [field, item, contact] of invisibleCases) {
+    const doc = layoutResume(resume(item, contact), { ...DOC_STYLE_DEFAULTS, fontFamily: family });
+    const rightEdge = 612 - doc.geometry.marginRight;
+    const runs = lines(doc).flatMap((line) => line.runs).filter((run) => run.text.trim() && (
+      (run.src?.kind === "entry" && run.src.field === field) ||
+      (field === "contact" && run.src?.kind === "contact") ||
+      (field === "bullet" && run.src?.kind === "bullet" && !run.marker)));
+    assert.ok(runs.length, `${family}/${field} lays out`);
+    for (const run of runs) {
+      assert.equal(run.style.family, family, `${family}/${field} draws in its own family`);
+      const face = fontFor(family, run.style.face);
+      const drawn = run.text.replaceAll(SOFT_HYPHEN, "");
+      const shaped = (face.layout(drawn).advanceWidth / face.unitsPerEm) * run.style.size;
+      const budget = 0.05 + (0.5 / 1000) * run.style.size * drawn.length;
+      assert.ok(Math.abs(shaped - run.width) <= budget, `${family}/${field} ${JSON.stringify(run.text)}: layout ${run.width.toFixed(3)} vs drawn ${shaped.toFixed(3)}`);
+      if (field === "titleRight") assert.ok(Math.abs(run.x + shaped - (rightEdge - doc.geometry.entryEndIndent)) <= budget, `${family}: the date with invisible characters still ends at the right margin`);
+      invisibleChecked += 1;
+    }
+  }
+}
+
+console.log(`special-space checks passed: a no-break paragraph space, ${checked} single-line runs and ${invisibleChecked} runs with invisible characters across ${FONT_FAMILY_IDS.length} families`);

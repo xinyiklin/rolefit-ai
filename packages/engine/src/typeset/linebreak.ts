@@ -14,7 +14,7 @@
 // The DP tries, for each break, only the previous breaks that can still start a
 // feasible line, so its cost is lines × words-per-line rather than words².
 
-import type { BoxItem, GlueItem, Line, ParaItem, ParagraphAlign } from "./types.ts";
+import type { BoxItem, GlueItem, GlyphRun, Line, ParaItem, ParagraphAlign } from "./types.ts";
 import { measure } from "./measure.ts";
 
 type SoftParaItem = Exclude<ParaItem, { kind: "forcedBreak" }>;
@@ -170,8 +170,10 @@ function breakSoftParagraph(items: SoftParaItem[], target: number, align: Paragr
   return lines;
 }
 
-// Materialize one line: distribute glue (justify) or offset (center/right),
-// append a hyphen-free trailing fragment's runs, merge same-style neighbors.
+// Materialize one line: merge same-style neighbors into runs, then distribute
+// glue (justify) or offset (center/right). A merged run is measured whole, so
+// its width carries the kern or ligature across a hyphen, space or mark
+// boundary that the DOM and PDF shape over its text.
 function setLine(
   items: SoftParaItem[],
   m: { natural: number; stretch: number; shrink: number; start: number; end: number },
@@ -179,32 +181,19 @@ function setLine(
   align: ParagraphAlign,
   isLast: boolean
 ): Line {
-  // Glue set ratio for this line. Each glue's set width is width ± r·(its own
-  // stretch/shrink); every bundled family uses the same proportional glue
-  // budget, so that reduces to a single scale factor on every space.
-  let glueScale = 1;
-  if (m.natural > target && m.shrink > 0) {
-    const r = Math.min(1, (m.natural - target) / m.shrink);
-    glueScale = 1 - r / 3; // width − r·(width/3)
-  } else if (align === "justify" && !isLast && m.stretch > 0 && m.natural < target) {
-    const r = (target - m.natural) / m.stretch;
-    glueScale = 1 + r / 2; // width + r·(width/2)
-  }
-
-  const runs: Line["runs"] = [];
-  let x = 0;
-  let setWidth = 0;
+  const parts: Array<GlyphRun | GlueItem> = [];
+  let natural = m.natural;
+  let last: GlyphRun | null = null;
+  const merged = new Set<GlyphRun>();
   for (let i = m.start; i < m.end; i += 1) {
     const it = items[i];
     if (it.kind === "penalty") continue;
     if (it.kind === "glue") {
-      const gw = it.width * glueScale;
-      x += gw;
-      setWidth += gw;
+      parts.push(it);
+      last = null;
       continue;
     }
     const box = it as BoxItem;
-    const last = runs[runs.length - 1];
     if (
       last &&
       last.style.family === box.style.family &&
@@ -214,34 +203,64 @@ function setLine(
       last.lineHeight === box.lineHeight &&
       last.href === box.href &&
       last.linkSuppressed === box.linkSuppressed &&
-      last.underline === box.underline &&
-      last.x + last.width === x
+      last.underline === box.underline
     ) {
       last.text += box.text;
       last.width += box.width;
-    } else {
-      runs.push({
-        text: box.text,
-        style: box.style,
-        x,
-        width: box.width,
-        lineHeight: box.lineHeight,
-        ...(box.linkSuppressed ? { linkSuppressed: true } : {}),
-        href: box.href,
-        underline: box.underline
-      });
+      merged.add(last);
+      continue;
     }
-    x += box.width;
-    setWidth += box.width;
+    last = {
+      text: box.text,
+      style: box.style,
+      x: 0,
+      width: box.width,
+      lineHeight: box.lineHeight,
+      ...(box.linkSuppressed ? { linkSuppressed: true } : {}),
+      href: box.href,
+      underline: box.underline
+    };
+    parts.push(last);
+  }
+  // Measured once per run when the line is set: re-measuring on every merge
+  // made a run of k boxes cost k² (a 5,000-mark bullet took seconds).
+  for (const run of merged) {
+    const width = measure(run.text, run.style);
+    natural += width - run.width;
+    run.width = width;
+  }
+
+  // Glue set ratio for this line. Each glue's set width is width ± r·(its own
+  // stretch/shrink); every bundled family uses the same proportional glue
+  // budget, so that reduces to a single scale factor on every space.
+  let glueScale = 1;
+  if (natural > target && m.shrink > 0) {
+    const r = Math.min(1, (natural - target) / m.shrink);
+    glueScale = 1 - r / 3; // width − r·(width/3)
+  } else if (align === "justify" && !isLast && m.stretch > 0 && natural < target) {
+    const r = (target - natural) / m.stretch;
+    glueScale = 1 + r / 2; // width + r·(width/2)
+  }
+
+  const runs: Line["runs"] = [];
+  let x = 0;
+  for (const part of parts) {
+    if ("kind" in part) {
+      x += part.width * glueScale;
+      continue;
+    }
+    part.x = x;
+    x += part.width;
+    runs.push(part);
   }
 
   // Horizontal placement for centered and right-aligned lines.
   let offset = 0;
-  if (align === "center") offset = Math.max(0, (target - setWidth) / 2);
-  else if (align === "right") offset = Math.max(0, target - setWidth);
+  if (align === "center") offset = Math.max(0, (target - x) / 2);
+  else if (align === "right") offset = Math.max(0, target - x);
   if (offset) for (const r of runs) r.x += offset;
 
-  return { runs, width: m.natural };
+  return { runs, width: natural };
 }
 
 // Keep combining marks, variation selectors, and ZWJ sequences with their base

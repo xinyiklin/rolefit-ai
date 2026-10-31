@@ -9,6 +9,7 @@ import "./header-baseline.mjs";
 import "./autolink.mjs";
 import "./head-row-alignment.mjs";
 import "./special-spaces.mjs";
+import "./merged-runs.mjs";
 import "./vertical-rows.mjs";
 import "./tall-paragraphs.mjs";
 
