@@ -877,7 +877,15 @@ Good server verification covers:
   a successful restore retains the previous saved workspace as a sibling
   safety copy and stages `source: "restore"` preferences, restore refuses with
   409 while live tab presence is reported, and a corrupt preference record
-  never blocks backing up resumes
+  never blocks backing up resumes. A pre-migration backup of
+  `tracker-v0-interested.json` with its bundled resume and attachment restores
+  the tracker alone, still integrity-checks those files, and refuses any other
+  untracked application file
+- workspace variant routes (`server/__evals__/workspace-route-errors-probes.mjs`)
+  answer a forced file-system failure on cover-letter save, select, and
+  candidates and resume select, candidates, and removal with a 500 and fixed
+  text, never Node's errno text or a workspace
+  path, log only the error code, and keep their 400 validation messages
 - workspace schema versions (D095): `tracker-version-probes.mjs` migrates every
   unversioned fixture in `server/applications/__evals__/fixtures/`, rewrites it
   once, survives a downgrade round trip, and refuses legacy shapes in a current
@@ -965,7 +973,9 @@ Good frontend verification covers:
   suggestion references. `src/lib/__evals__/settings-legacy-names-eval.mjs`
   converts every pre-2026-09-29 settings name through the cache, workspace
   file, and backup readers. `src/lib/__evals__/variant-candidate-reads-eval.mjs` pins ONE
-  request per candidate read at 1, 5, and 20 variants for both document kinds,
+  request per candidate read at 1, 5, 20, and 40 variants for both document
+  kinds, consecutive requests of at most 40 names in order past the route cap
+  (41 and 85), and a failed read when any one of them fails,
   and `server/__evals__/workspace-candidate-batch-probes.mjs` pins the batch
   routes' name guards, bounded size, skip-on-corrupt behavior, and that they
   return candidates and nothing else

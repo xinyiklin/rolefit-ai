@@ -38,6 +38,7 @@ async function load(relativePath) {
 
 const { fetchBaseResumeCandidates } = await load("../baseResumeWorkspaceRepository.ts");
 const { readCoverLetterVariantCandidates } = await load("../coverLetterWorkspaceRepository.ts");
+const { MAX_VARIANT_CANDIDATES_PER_REQUEST } = await load("../variantCandidateRequests.ts");
 
 let checks = 0;
 const check = (actual, expected, message) => {
@@ -55,14 +56,21 @@ const coverFile = serializeCoverLetterFile(
 // shape and answers with exactly the documents that were asked for.
 function recordingFetch({ path, file, missing = new Set(), broken = new Set(), ok = true }) {
   const calls = [];
+  const requests = [];
   return {
     calls,
+    requests,
     fetch: async (url, init) => {
       calls.push(url);
       assert.equal(url, path, "candidate reads use the dedicated batch route");
       assert.equal(init.method, "POST");
       const requested = JSON.parse(init.body).fileNames;
       assert.ok(Array.isArray(requested), "the batch request names the exact files to read");
+      requests.push(requested);
+      // The server's own cap: a larger batch is refused, not partly read.
+      if (requested.length > 40) {
+        return { ok: false, json: async () => ({ error: "Too many versions were requested at once." }) };
+      }
       return {
         ok,
         json: async () => ({
@@ -82,7 +90,7 @@ function recordingFetch({ path, file, missing = new Set(), broken = new Set(), o
 
 const originalFetch = globalThis.fetch;
 try {
-  // ── One request per read, whatever the variant count ──────────────────────
+  // ── One request per read, up to the route's per-request cap ───────────────
   for (const count of [1, 5, 20]) {
     const options = Array.from({ length: count }, (_, index) => ({
       fileName: index === 0 ? "default.resume" : `variant-${index}.resume`,
@@ -110,6 +118,50 @@ try {
     const candidates = await readCoverLetterVariantCandidates(options);
     check(recorder.calls.length, 1, `${count} cover-letter variants cost exactly one request`);
     check(candidates.length, count, `${count} cover-letter variants all come back from that one request`);
+  }
+
+  // ── A pool past the route's cap is read in consecutive capped requests ────
+  check(MAX_VARIANT_CANDIDATES_PER_REQUEST, 40, "the client splits at the server's per-request cap");
+  for (const count of [40, 41, 85]) {
+    const expectedRequests = Math.ceil(count / 40);
+    const resumeOptions = Array.from({ length: count }, (_, index) => ({ fileName: `role-${index}.resume`, label: `Role ${index}` }));
+    const resumes = recordingFetch({ path: "/api/workspace/base-resume/candidates", file: resumeFile });
+    globalThis.fetch = resumes.fetch;
+    const resumeCandidates = await fetchBaseResumeCandidates(resumeOptions);
+    check(resumes.requests.length, expectedRequests, `${count} resume variants cost ${expectedRequests} request(s)`);
+    check(resumes.requests.every((names) => names.length <= 40), true, "no request exceeds the route cap");
+    check(
+      resumeCandidates?.map((candidate) => candidate.fileName),
+      resumeOptions.map((option) => option.fileName),
+      `all ${count} resume variants come back in the selector's order`
+    );
+
+    const coverOptions = Array.from({ length: count }, (_, index) => ({ fileName: `role-${index}.cover`, label: `Role ${index}` }));
+    const covers = recordingFetch({ path: "/api/workspace/cover-letter/candidates", file: coverFile });
+    globalThis.fetch = covers.fetch;
+    const coverCandidates = await readCoverLetterVariantCandidates(coverOptions);
+    check(covers.requests.length, expectedRequests, `${count} cover-letter variants cost ${expectedRequests} request(s)`);
+    check(
+      coverCandidates.map((candidate) => candidate.fileName),
+      coverOptions.map((option) => option.fileName),
+      `all ${count} cover-letter variants come back in the selector's order`
+    );
+  }
+  {
+    // One failed request fails the whole read: a partial pool never ranks.
+    let call = 0;
+    const recorder = recordingFetch({ path: "/api/workspace/base-resume/candidates", file: resumeFile });
+    globalThis.fetch = async (url, init) => (++call === 2 ? { ok: false, json: async () => ({}) } : recorder.fetch(url, init));
+    const options = Array.from({ length: 45 }, (_, index) => ({ fileName: `role-${index}.resume`, label: `Role ${index}` }));
+    check(await fetchBaseResumeCandidates(options), null, "a failed later request is a failed read, not a short pool");
+    call = 0;
+    const covers = recordingFetch({ path: "/api/workspace/cover-letter/candidates", file: coverFile });
+    globalThis.fetch = async (url, init) => (++call === 2 ? { ok: false, json: async () => ({}) } : covers.fetch(url, init));
+    check(
+      await readCoverLetterVariantCandidates(options.map((option) => ({ ...option, fileName: option.fileName.replace(".resume", ".cover") }))),
+      [],
+      "cover-letter ranking degrades the same way"
+    );
   }
 
   // ── Duplicates collapse before the request is made ────────────────────────

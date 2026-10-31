@@ -1,5 +1,6 @@
 import { coverLetterPlainText, parseCoverLetterFile } from "@typeset/engine/lib/coverLetter.ts";
 
+import { postVariantCandidateRequests } from "./variantCandidateRequests.ts";
 import type { VariantCandidate } from "./variantRecommendation.ts";
 
 export type CoverLetterOption = { fileName: string; label: string };
@@ -90,7 +91,7 @@ export function selectCoverLetterWorkspaceDocument(
 }
 
 // Ranking compares each saved letter by its real validated bytes rather than by
-// its filename. One batch request, not one select per letter: the select route
+// its filename. Capped batch requests, not one select per letter: the select route
 // takes the server's serialized workspace lock and returns a cover-letter
 // snapshot each time, so per-file reads serialized N round trips behind it.
 // A variant that fails to parse is skipped, not ranked as empty, so one bad
@@ -101,19 +102,8 @@ export async function readCoverLetterVariantCandidates(
   const fileNames = [...new Set(options.map((option) => option.fileName).filter(Boolean))];
   if (!fileNames.length) return [];
 
-  let read: { fileName?: unknown; label?: unknown; text?: unknown }[];
-  try {
-    const response = await fetch("/api/workspace/cover-letter/candidates", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fileNames })
-    });
-    const body = (await response.json()) as { candidates?: unknown };
-    if (!response.ok || !Array.isArray(body.candidates)) return [];
-    read = body.candidates as typeof read;
-  } catch {
-    return [];
-  }
+  const read = await postVariantCandidateRequests("/api/workspace/cover-letter/candidates", fileNames);
+  if (!read) return [];
 
   const labels = new Map(options.map((option) => [option.fileName, option.label]));
   const candidates: VariantCandidate[] = [];

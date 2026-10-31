@@ -6,6 +6,7 @@ import { mkdir, readFile, readdir, rename } from "node:fs/promises";
 import { join } from "node:path";
 
 import { parseCoverLetterFile } from "@typeset/engine/lib/coverLetter.ts";
+import { MAX_VARIANT_CANDIDATES_PER_REQUEST } from "../src/lib/variantCandidateRequests.ts";
 import { readBody, sendJson } from "./http.ts";
 import {
   WorkspaceStorageError,
@@ -16,6 +17,7 @@ import {
   listVariantFiles,
   nextTrashStamp,
   restoreConflictHandled,
+  sendWorkspaceRouteError,
   withWorkspaceLock,
   type WorkspaceLocations
 } from "./workspace.ts";
@@ -24,8 +26,6 @@ const DEFAULT_COVER_LETTER_FILE = "default.cover";
 const coverLetterVariantPattern = /^[A-Za-z0-9][A-Za-z0-9_-]*\.cover$/;
 // A cover letter is one page of prose; the resume's 200KB cap is generous here.
 const MAX_COVER_LETTER_BYTES = 200_000;
-// A batch read is a convenience over one lock, not an unbounded workspace dump.
-const MAX_COVER_LETTER_CANDIDATES = 40;
 
 export type CoverLetterOption = { fileName: string; label: string };
 type CoverLetterHistoryEntry = { key: string; originalName: string; date: string };
@@ -226,11 +226,7 @@ export async function handleWorkspaceCoverLetter(
     });
   } catch (error) {
     if (restoreConflictHandled(error, res)) return;
-    sendJson(res, error instanceof WorkspaceStorageError ? 500 : 400, {
-      error: error instanceof WorkspaceStorageError
-        ? error.message
-        : error instanceof Error ? error.message : "Cover letter save failed."
-    });
+    sendWorkspaceRouteError(res, error, "Cover letter save failed.");
   }
 }
 
@@ -265,11 +261,7 @@ export async function handleSelectCoverLetter(
     sendJson(res, 200, { fileName, label: coverLetterLabel(fileName), ...result });
   } catch (error) {
     if (restoreConflictHandled(error, res)) return;
-    sendJson(res, error instanceof WorkspaceStorageError ? 500 : 400, {
-      error: error instanceof WorkspaceStorageError
-        ? error.message
-        : error instanceof Error ? error.message : "Cover letter load failed."
-    });
+    sendWorkspaceRouteError(res, error, "Cover letter load failed.");
   }
 }
 
@@ -294,7 +286,7 @@ export async function handleCoverLetterCandidates(
       sendJson(res, 400, { error: "List the cover letter versions to read." });
       return;
     }
-    if (requested.length > MAX_COVER_LETTER_CANDIDATES) {
+    if (requested.length > MAX_VARIANT_CANDIDATES_PER_REQUEST) {
       sendJson(res, 400, { error: "Too many cover letter versions were requested at once." });
       return;
     }
@@ -323,11 +315,7 @@ export async function handleCoverLetterCandidates(
     sendJson(res, 200, { candidates });
   } catch (error) {
     if (restoreConflictHandled(error, res)) return;
-    sendJson(res, error instanceof WorkspaceStorageError ? 500 : 400, {
-      error: error instanceof WorkspaceStorageError
-        ? error.message
-        : error instanceof Error ? error.message : "Cover letter versions could not be read."
-    });
+    sendWorkspaceRouteError(res, error, "Cover letter versions could not be read.");
   }
 }
 

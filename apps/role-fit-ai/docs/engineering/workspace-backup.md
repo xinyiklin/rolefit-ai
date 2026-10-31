@@ -156,7 +156,11 @@ locks.
   Prepare's duplicate check asks for an update instead of a retry. MCP tools pass on the server's
   message; the extension shows its own update message for a `423`.
 - **Restore** refuses a newer envelope or a newer embedded tracker with the same
-  message and leaves the workspace untouched. Restoring an older backup over a
+  message and leaves the workspace untouched. A backup whose unversioned tracker
+  holds a retired `interested` record may bundle that record's saved documents
+  (builds before the migration exported them); restore checks their integrity
+  but does not install them, since the migrated record names none. Any other
+  bundled file the tracker does not name still refuses the backup. Restoring an older backup over a
   workspace that holds newer files is allowed: the newer workspace moves intact
   to the restore safety directory, which is the way back after a downgrade.
 - **Future format changes.** Bump the file's version and add its migration with

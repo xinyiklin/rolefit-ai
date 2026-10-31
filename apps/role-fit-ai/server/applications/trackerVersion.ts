@@ -59,6 +59,22 @@ function migrateUnversionedApplication(application: unknown): unknown {
   return raw;
 }
 
+/**
+ * Ids of the records in an unversioned tracker whose saved documents the
+ * version 0 → 1 migration retires: a retired `interested` record keeps none.
+ * A backup an older build exported still bundles those records' files.
+ */
+export function retiredDocumentApplicationIds(data: unknown): Set<string> {
+  const ids = new Set<string>();
+  if (!isRecord(data) || Object.hasOwn(data, "schemaVersion") || !Array.isArray(data.applications)) return ids;
+  for (const application of data.applications) {
+    if (isRecord(application) && application.status === "interested" && typeof application.id === "string") {
+      ids.add(application.id);
+    }
+  }
+  return ids;
+}
+
 // MIGRATIONS[n] upgrades the applications of a version-n file to version n + 1.
 const MIGRATIONS: ReadonlyArray<(applications: unknown[]) => unknown[]> = [
   (applications) => applications.map(migrateUnversionedApplication)

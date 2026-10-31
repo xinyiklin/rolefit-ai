@@ -8,6 +8,7 @@ import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import { readBody, sendJson } from "./http.ts";
 import { WorkspaceRestoreConflictError, assertWorkspaceAccessAllowed, captureWorkspaceAccess } from "./workspaceRestoreGate.ts";
 import { readCoverLetterWorkspace } from "./coverLetterWorkspace.ts";
+import { MAX_VARIANT_CANDIDATES_PER_REQUEST } from "../src/lib/variantCandidateRequests.ts";
 
 // A loaded base resume (or the "none found" sentinel). Optional fields carry the
 // file's text/metadata only when a resume was actually resolved.
@@ -43,8 +44,6 @@ const managedDefaultResumeFiles = [
 ];
 const baseResumeVariantPattern = /^[A-Za-z0-9][A-Za-z0-9_-]*\.resume$/;
 const MAX_BASE_RESUME_BYTES = 200_000;
-// A batch read is a convenience over one lock, not an unbounded workspace dump.
-const MAX_BASE_RESUME_CANDIDATES = 40;
 
 export class WorkspaceStorageError extends Error {
   // The workspace file that failed, when one did.
@@ -100,6 +99,30 @@ export function restoreConflictHandled(error: unknown, res: ServerResponse): boo
   if (!(error instanceof WorkspaceRestoreConflictError)) return false;
   sendJson(res, 409, { error: error.message });
   return true;
+}
+
+// What a workspace route answers when a file operation fails: Node's own text
+// names absolute paths, and the failure is the server's, never a bad request.
+export const WORKSPACE_FILE_ACCESS_ERROR =
+  "A workspace file is in use or could not be accessed. Close any program using it and try again.";
+
+function isFileSystemError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error
+    && typeof (error as NodeJS.ErrnoException).code === "string"
+    && typeof (error as NodeJS.ErrnoException).syscall === "string";
+}
+
+// A storage or file-system failure is a 500 (the latter with fixed text, logged
+// by code only); anything else is the route's own validation message, a 400.
+export function sendWorkspaceRouteError(res: ServerResponse, error: unknown, fallback: string): void {
+  if (error instanceof WorkspaceStorageError) {
+    sendJson(res, 500, { error: error.message });
+  } else if (isFileSystemError(error)) {
+    console.error(`[workspace] a file operation failed (${error.code})`);
+    sendJson(res, 500, { error: WORKSPACE_FILE_ACCESS_ERROR });
+  } else {
+    sendJson(res, 400, { error: error instanceof Error ? error.message : fallback });
+  }
 }
 
 let lastTrashStampMs = 0;
@@ -485,11 +508,7 @@ export async function handleSelectBaseResume(
     sendJson(res, 200, snapshot);
   } catch (error) {
     if (restoreConflictHandled(error, res)) return;
-    sendJson(res, error instanceof WorkspaceStorageError ? 500 : 400, {
-      error: error instanceof WorkspaceStorageError
-        ? error.message
-        : error instanceof Error ? error.message : "Base resume load failed."
-    });
+    sendWorkspaceRouteError(res, error, "Base resume load failed.");
   }
 }
 
@@ -516,7 +535,7 @@ export async function handleBaseResumeCandidates(
       sendJson(res, 400, { error: "List the base resume versions to read." });
       return;
     }
-    if (requested.length > MAX_BASE_RESUME_CANDIDATES) {
+    if (requested.length > MAX_VARIANT_CANDIDATES_PER_REQUEST) {
       sendJson(res, 400, { error: "Too many base resume versions were requested at once." });
       return;
     }
@@ -551,11 +570,7 @@ export async function handleBaseResumeCandidates(
     sendJson(res, 200, { candidates });
   } catch (error) {
     if (restoreConflictHandled(error, res)) return;
-    sendJson(res, error instanceof WorkspaceStorageError ? 500 : 400, {
-      error: error instanceof WorkspaceStorageError
-        ? error.message
-        : error instanceof Error ? error.message : "Base resume versions could not be read."
-    });
+    sendWorkspaceRouteError(res, error, "Base resume versions could not be read.");
   }
 }
 
@@ -590,11 +605,7 @@ export async function handleWorkspaceBaseResume(
       });
     } catch (error) {
       if (restoreConflictHandled(error, res)) return;
-      sendJson(res, error instanceof WorkspaceStorageError ? 500 : 400, {
-        error: error instanceof WorkspaceStorageError
-          ? error.message
-          : error instanceof Error ? error.message : "Base resume removal failed."
-      });
+      sendWorkspaceRouteError(res, error, "Base resume removal failed.");
     }
     return;
   }

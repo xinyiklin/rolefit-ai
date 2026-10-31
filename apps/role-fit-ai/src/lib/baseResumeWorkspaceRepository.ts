@@ -2,7 +2,7 @@
 // saved base-resume variants, kept out of the hook so the request shape is
 // directly testable.
 //
-// One batch request, not one per variant. The select route answers with a whole
+// Capped batch requests, not one per variant. The select route answers with a whole
 // workspace snapshot — cover-letter state, bundled starter, options, history,
 // file list — under the server's serialized workspace lock, so per-file reads
 // were N sequential full snapshots on the critical path to the first AI result.
@@ -10,6 +10,7 @@
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 
 import { serializeResumeData } from "./resumeText.ts";
+import { postVariantCandidateRequests } from "./variantCandidateRequests.ts";
 import type { VariantCandidate } from "./variantRecommendation.ts";
 
 type CandidateOption = { fileName: string; label: string };
@@ -22,21 +23,8 @@ export async function fetchBaseResumeCandidates(
   const fileNames = [...new Set(options.map((option) => option.fileName).filter(Boolean))];
   if (!fileNames.length) return [];
 
-  let read: { fileName?: unknown; label?: unknown; text?: unknown }[];
-  try {
-    const response = await fetch("/api/workspace/base-resume/candidates", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fileNames })
-    });
-    const body = (await response.json()) as { candidates?: unknown };
-    if (!response.ok || !Array.isArray(body.candidates)) return null;
-    read = body.candidates as typeof read;
-  } catch {
-    // Ranking is an affordance over the selector, never the document itself.
-    // An unreachable workspace produces no recommendation, not a broken Prepare.
-    return null;
-  }
+  const read = await postVariantCandidateRequests("/api/workspace/base-resume/candidates", fileNames);
+  if (!read) return null;
 
   const labels = new Map(options.map((option) => [option.fileName, option.label]));
   const candidates: VariantCandidate[] = [];

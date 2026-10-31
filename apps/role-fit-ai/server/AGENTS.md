@@ -40,6 +40,10 @@ for provider, prompt, sanitizer, and review work.
   same name guards, and SKIPS an unreadable or invalid document rather than
   failing — the client ranker treats a short candidate list as "no
   recommendation", while a 500 would leave Prepare with no selection at all.
+  The per-request cap (`MAX_VARIANT_CANDIDATES_PER_REQUEST` in
+  `src/lib/variantCandidateRequests.ts`) is shared with the client, which reads
+  a larger eligible pool in consecutive capped requests; one failed request
+  fails the whole read.
 - `applications/` owns tracker persistence and routes. `schema.ts` validates the
   current record shape, `storage.ts` owns the serialized write queue,
   `reconcile.ts` applies sparse revision-checked mutations, and
@@ -165,6 +169,11 @@ for provider, prompt, sanitizer, and review work.
   as browser pairing/authorization or as authority for privileged Electron
   IPC. Only the live private utility-process handle proves ownership.
 - Validate request boundaries, cap bodies, and return stable user-safe JSON.
+  A file-system error's own text names absolute paths. Base-resume select,
+  candidates, and removal (DELETE) and cover-letter save, select, and
+  candidates answer it through `sendWorkspaceRouteError` (500, fixed text,
+  code-only log) and keep their validation messages as 400s. Base-resume save
+  and both history-restore routes still answer with their own fixed-text 400.
 - Keep file operations inside the configured RoleFit workspace. Defend against
   traversal, unsafe names, malformed JSON, and oversized data.
 - Never log keys, prompts, raw resumes/jobs, provider bodies, or broad envs.
