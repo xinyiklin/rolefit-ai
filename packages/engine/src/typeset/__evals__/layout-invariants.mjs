@@ -7,6 +7,8 @@ import "./section-wrap.mjs";
 import "./editable-field-width.mjs";
 import "./header-baseline.mjs";
 import "./autolink.mjs";
+import "./head-row-alignment.mjs";
+import "./special-spaces.mjs";
 import "./vertical-rows.mjs";
 import "./tall-paragraphs.mjs";
 

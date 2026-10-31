@@ -21,9 +21,9 @@ import {
   faceForOverride,
   inkExtent,
   measure,
+  paintedText,
   paragraphItems,
   segmentsFromInlineMarks,
-  texLigatures,
   underlineRule,
   underlineSpans,
   type FaceOverride
@@ -250,9 +250,9 @@ function styledRun(
   src?: FieldSrc
 ): GlyphRun {
   const style: FontStyle = { family, face: faceFor(bold, italic), size, tracking };
-  // Same display-form contract as pushWord: punctuation transforms (– — ’) are
-  // already applied and consistent with measured width.
-  const display = texLigatures(text);
+  // Same painted-text contract as pushWord: punctuation transforms (– — ’) and
+  // one-space tabs and no-break spaces are applied and match the measured width.
+  const display = paintedText(text);
   return { text: display, style, x, width: measure(display, style), src };
 }
 
@@ -290,7 +290,7 @@ function styledFieldRuns(
       size: seg.fontSizePt ?? size,
       tracking
     };
-    const display = texLigatures(seg.text);
+    const display = paintedText(seg.text);
     const width = measure(display, style);
     runs.push({
       text: display,
@@ -446,6 +446,16 @@ function alignRuns(runs: GlyphRun[], width: number, mode: string, origin = 0): G
       ? origin + width - w - runs[0].x
       : origin - runs[0].x;
   return runs.map((run) => ({ ...run, x: run.x + dx }));
+}
+
+// A title/subtitle row aligns the fields that have text: an empty side is a
+// zero-width caret anchor pinned to its edge, which would otherwise span the row.
+function alignHeadRow(runs: GlyphRun[], width: number, mode: string, origin: number): GlyphRun[] {
+  const filled = runs.filter((run) => run.text);
+  if (!filled.length) return alignRuns(runs, width, mode, origin);
+  const aligned = alignRuns(filled, width, mode, origin);
+  let next = 0;
+  return runs.map((run) => run.text ? aligned[next++] : run);
 }
 
 /** The one shared name/contact stream used by resume and cover-letter pages. */
@@ -759,7 +769,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         const titleRows = wrapHeadRow(rawTitleRuns, f.titleLeft, f.titleRight, geo.entryIndent, geo.headRowWidth, sizes.titleLeft, sizes.titleRight, family, tracking);
         for (const [rowIndex, rawRuns] of titleRows.entries()) {
           const titleRuns = titleAlignment && titleAlignment !== "justify"
-            ? alignRuns(rawRuns, geo.headRowWidth, titleAlignment, geo.entryIndent)
+            ? alignHeadRow(rawRuns, geo.headRowWidth, titleAlignment, geo.entryIndent)
             : rawRuns;
           const inkT = inkOfRuns(titleRuns);
           const titleFootprint = rowFootprint(titleRuns, titleSize);
@@ -813,7 +823,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         const subRows = wrapHeadRow(rawSubRuns, f.subtitleLeft, f.subtitleRight, geo.entryIndent, geo.headRowWidth, sizes.subtitleLeft, sizes.subtitleRight, family, tracking);
         for (const [rowIndex, rawRuns] of subRows.entries()) {
           const subRuns = subAlignment && subAlignment !== "justify"
-            ? alignRuns(rawRuns, geo.headRowWidth, subAlignment, geo.entryIndent)
+            ? alignHeadRow(rawRuns, geo.headRowWidth, subAlignment, geo.entryIndent)
             : rawRuns;
           const inkS = inkOfRuns(subRuns);
           const subFootprint = rowFootprint(subRuns, subSize);

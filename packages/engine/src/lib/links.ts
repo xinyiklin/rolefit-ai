@@ -27,9 +27,13 @@ const FILE_LIKE_SUFFIXES = new Set([
 ]);
 
 // Unprefixed phone-like text auto-links unless its shape is a known non-phone:
-// a decimal, a year range, a numeric date, or a short bare count. Everything
-// else that PHONE_RE accepts (7–15 digits) keeps linking as before.
+// a decimal, a year range, a numeric date or date range, or a short bare count.
+// Everything else that PHONE_RE accepts (7–15 digits) keeps linking as before.
 const YEAR = /^(?:19|20)\d{2}$/;
+// A month-year or full numeric date ("06.2019", "2019-06", "1.6.2019") on each
+// side of a hyphen: a résumé date column, never a phone.
+const NUMERIC_DATE = String.raw`(?:\d{1,2}[./-]){1,2}(?:19|20)\d{2}|(?:19|20)\d{2}(?:[./-]\d{1,2}){1,2}`;
+const NUMERIC_DATE_RANGE = new RegExp(String.raw`^(?:${NUMERIC_DATE})\s*-+\s*(?:${NUMERIC_DATE})$`);
 function isPhoneShaped(number: string): boolean {
   const groups = number.match(/\d+/g) ?? [];
   if (/^\+?\d+\.\d+$/.test(number)) return false;
@@ -37,6 +41,7 @@ function isPhoneShaped(number: string): boolean {
   if (groups.length >= 2 && groups.every((group) => YEAR.test(group))) return false;
   if (/^\d{1,2}[./-]\d{1,2}[./-]\d{4}$/.test(number)) return false;
   if (/^(?:19|20)\d{2}[\s./-]+\d{1,2}[\s./-]+\d{1,2}$/.test(number)) return false;
+  if (NUMERIC_DATE_RANGE.test(number)) return false;
   return groups.length > 1 || number.length >= 10;
 }
 

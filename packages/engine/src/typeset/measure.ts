@@ -57,6 +57,13 @@ export function texLigatures(text: string): string {
   return text.replace(/---/g, "—").replace(/--/g, "–").replace(/'/g, "’");
 }
 
+// A single-line field run's painted text: a tab or no-break space is set as one
+// space, as paragraph glue sets them, so layout, DOM and PDF draw one width.
+// One character for one, so editor offsets are unchanged.
+export function paintedText(text: string): string {
+  return texLigatures(text).replace(/[\t\u00a0]/g, " ");
+}
+
 const F_LIGATURES = ["ffi", "ffl", "ff", "fi", "fl"] as const;
 
 // Decomposed input (e + U+0301, from some PDFs and pastes) is measured and
@@ -373,7 +380,7 @@ export function paragraphItems(
   // change. This mirrors buildDisplayMap's word-processor preserve mode:
   // authored leading, interior, trailing, and hard-break-adjacent spaces all
   // remain caret-bearing glyphs.
-  let pending: { style: FontStyle; count: number; lineHeight: number | null } | null = null;
+  let pending: { style: FontStyle; count: number; lineHeight: number | null; tied: boolean } | null = null;
   let hasPrecedingBox = false; // a real word already sits on the current line
   const spaceBox = (n: number, style: FontStyle, lineHeight: number | null) => {
     if (n <= 0) return;
@@ -415,8 +422,11 @@ export function paragraphItems(
       }
       if (/^\s+$/.test(part)) {
         // Accumulate consecutive whitespace, even across a tag boundary.
-        if (pending) pending.count += part.length;
-        else pending = { style, count: part.length, lineHeight: seg.lineHeight };
+        const tied = /^\u00a0+$/.test(part);
+        if (pending) {
+          pending.count += part.length;
+          pending.tied &&= tied;
+        } else pending = { style, count: part.length, lineHeight: seg.lineHeight, tied };
         continue;
       }
       if (pending) {
@@ -424,6 +434,9 @@ export function paragraphItems(
           // Interior run: N−1 literal spaces after the previous word, then one
           // break-opportunity glue that renders the Nth space.
           spaceBox(pending.count - 1, pending.style, pending.lineHeight);
+          // A run of only no-break spaces stays stretchable glue (the editor and
+          // PDF justify it alike), but a forbidding penalty before it is no break.
+          if (pending.tied) items.push({ kind: "penalty", penalty: 10000 } satisfies PenaltyItem);
           items.push(spaceGlue(pending.style));
         } else {
           // Authored line-leading spaces (including a Tab insertion represented

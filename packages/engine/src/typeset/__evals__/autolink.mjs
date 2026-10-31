@@ -44,7 +44,14 @@ for (const text of [
   "2026 07 29",
   "12.05.2024",
   "01-15-2024",
-  "1/15/2024"
+  "1/15/2024",
+  // Numeric month-year and full-date ranges, as typed in an entry's date column.
+  "06.2019 - 08.2024",
+  "06.2019-08.2024",
+  "09.2021 -- 05.2023",
+  "2019.06 - 2024.08",
+  "2019-06 - 2024-08",
+  "1.6.2019 - 3.8.2024"
 ]) {
   assert.equal(automaticLinkHref(text), null, `${text} must not auto-link`);
 }
@@ -82,13 +89,16 @@ assert.equal(normalizeLinkDestination("tel:9177688848"), "tel:9177688848");
 assert.equal(decodeLinkHref(encodeURIComponent("tel:+12125550100;ext=42")), "tel:+12125550100;ext=42");
 
 // Every layout surface that auto-links (entry head fields, body words, header
-// contacts) agrees, so no renderer paints a year range as a link.
+// contacts) agrees, so no renderer paints a year or date range as a link.
 const layout = layoutResume({
   header: { name: "Name", contact: ["(917) 768-8848", "2019-2024"] },
   sections: [{
     id: "s", type: "standard", heading: "Experience", items: [{
       id: "e", titleLeft: "Engineer", titleRight: "2019 - 2024", subtitleLeft: "Company (2020-2024)", subtitleRight: "<i>2022 - 2026</i>",
       bullets: ["Shipped 1234567 builds 2019-2024 at 3.14159265 scale; call 917-768-8848."], bulletIds: ["b"]
+    }, {
+      id: "f", titleLeft: "Analyst", titleRight: "06.2019 - 08.2024", subtitleLeft: "Company", subtitleRight: "2019.06 - 2024.08",
+      bullets: [], bulletIds: []
     }]
   }]
 }, DOC_STYLE_DEFAULTS);
