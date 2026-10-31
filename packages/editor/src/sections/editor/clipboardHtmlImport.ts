@@ -217,6 +217,12 @@ function fragmentsFromHtml(html: string): ParsedClipboardHtml {
   let atLineStart = true;
   let endsWithCollapsedSpace = false;
   let pendingSpace: string | null = null;
+  // The last piece is a <br>'s newline. A browser paints no extra line for a
+  // break that ends its block, so a block close drops that one newline.
+  let endsWithBreak = false;
+  let blocksClosed = 0;
+  // Output index where each open block began; the root stands for the body.
+  const blockStarts = [0];
 
   const endLine = () => {
     // The flag guarantees the last piece is the text that ended with the space.
@@ -238,8 +244,20 @@ function fragmentsFromHtml(html: string): ParsedClipboardHtml {
     }
     out.push((pendingSpace ?? "") + wrapText(text, style));
     pendingSpace = null;
+    endsWithBreak = false;
     atLineStart = text.endsWith("\n");
     endsWithCollapsedSpace = style.whiteSpace !== "pre" && text.endsWith(" ");
+  };
+
+  // Inline content beside a child block is its own paragraph, as a browser's
+  // anonymous block box is; without this it fused onto the block's text.
+  const closeAnonymousBlock = (start: number) => {
+    endLine();
+    if (out.length <= start || out[out.length - 1].endsWith(BLOCK_SEPARATOR)) return;
+    // A break-only run still paints one empty line, so it stays a paragraph.
+    if (endsWithBreak) out.pop();
+    endsWithBreak = false;
+    out.push(BLOCK_SEPARATOR);
   };
 
   const visit = (node: Node, inherited: RichStyle): void => {
@@ -251,23 +269,29 @@ function fragmentsFromHtml(html: string): ParsedClipboardHtml {
     if (node.tagName === "BR") {
       endLine();
       out.push("\n");
+      endsWithBreak = true;
       return;
     }
     const style = styleForElement(node, inherited);
     const block = BLOCK_TAGS.has(node.tagName);
-    if (block) endLine();
+    if (block) closeAnonymousBlock(blockStarts[blockStarts.length - 1]);
     const start = out.length;
+    const closedBefore = blocksClosed;
+    if (block) blockStarts.push(start);
     for (const child of Array.from(node.childNodes)) visit(child, style);
     if (!block) return;
-    endLine();
+    blockStarts.pop();
     sawBlockStructure = true;
-    let value = out.splice(start).join("");
     // Descendant blocks already own their separators and margins; wrapping a
     // container such as Google Docs' internal root would add a false block.
-    if (value.includes(BLOCK_SEPARATOR)) {
-      out.push(value);
+    if (blocksClosed !== closedBefore) {
+      closeAnonymousBlock(start);
       return;
     }
+    endLine();
+    if (endsWithBreak && out.length > start) out.pop();
+    endsWithBreak = false;
+    let value = out.splice(start).join("");
     const spaceBeforePt = clipboardParagraphSpacePt(
       node.style.marginTop || node.style.marginBlockStart
     );
@@ -284,10 +308,11 @@ function fragmentsFromHtml(html: string): ParsedClipboardHtml {
       value = `<line-height=${style.lineHeight}>${value}</line-height>`;
     }
     out.push(value + BLOCK_SEPARATOR);
+    blocksClosed += 1;
   };
 
   for (const node of Array.from(document.body.childNodes)) visit(node, PLAIN_STYLE);
-  endLine();
+  closeAnonymousBlock(0);
   const value = out.join("").replace(new RegExp(`${BLOCK_SEPARATOR}+$`), "");
   return parsedClipboardHtml(value || null, sawBlockStructure);
 }

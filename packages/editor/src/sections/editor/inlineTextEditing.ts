@@ -22,6 +22,7 @@ import {
   inlineFontSizePt,
   isInlineFontSizePt,
   isInlineLiteralLessThan,
+  joinInlineMarkText,
   paragraphIndentFromInlineMarks,
   paragraphIndentPt,
   paragraphLineHeight,
@@ -423,6 +424,41 @@ export function setEmptyFieldTypingFormat(
   };
   const value = serializeChars(map.prefix, [carrier], map.suffix, 0).value;
   return { value, caretValueIndex: value.length };
+}
+
+const PARAGRAPH_FORMAT_TAG = /<\/?(?:align|indent|space-before|space-after)\b/i;
+
+// Merging two paragraphs gives the result the UPPER paragraph's paragraph
+// format (alignment, before/after spacing, block indent), as a word processor
+// does. The engine reads those marks first-match, so the lower paragraph's
+// would otherwise govern an unmarked upper one. Line height is per visual line
+// and character formatting is per run, so the merged text keeps both. An upper
+// paragraph with no visible text defers to the lower one: a textless one is
+// simply removed, and a whitespace-only one keeps its characters.
+export function mergeParagraphValues(upper: string, lower: string): { value: string; index: number } {
+  const upperMap = buildDisplayMap(upper, { preserveWhitespace: true });
+  if (!upperMap.chars.length) return joinInlineMarkText("", lower);
+  const lowerMap = buildDisplayMap(lower, { preserveWhitespace: true });
+  // A textless lower paragraph contributes nothing, not even its carrier marks.
+  if (!lowerMap.chars.length) return joinInlineMarkText(upper, "");
+  const upperBlank = !upperMap.display.trim();
+  const source = (upperBlank ? lowerMap : upperMap).chars[0];
+  const owned = {
+    alignment: source.alignment,
+    spaceBeforePt: source.spaceBeforePt,
+    spaceAfterPt: source.spaceAfterPt,
+    indentPt: source.indentPt
+  };
+  // Rewriting drops empty paragraph-format carriers (older merges stored them
+  // mid-value), which would otherwise win the engine's first-match read.
+  const adopt = (map: DisplayMap, value: string): string =>
+    !PARAGRAPH_FORMAT_TAG.test(value) && owned.alignment === null && owned.spaceBeforePt === null &&
+    owned.spaceAfterPt === null && owned.indentPt === null
+      ? value
+      : serializeChars(map.prefix, map.chars.map((char) => ({ ...char, ...owned })), map.suffix, 0).value;
+  return upperBlank
+    ? joinInlineMarkText(adopt(upperMap, upper), lower)
+    : joinInlineMarkText(upper, adopt(lowerMap, lower));
 }
 
 // Only a bullet (list row or prose paragraph) holds hard breaks; every other
@@ -1029,6 +1065,33 @@ export function replaceWithLink(
   }));
   const chars = [...map.chars.slice(0, dStart), ...inserted, ...map.chars.slice(dEnd)];
   return withBoundary(serializeChars(map.prefix, chars, map.suffix, dStart + inserted.length));
+}
+
+// The range a link Apply can link IN PLACE, keeping per-character formatting:
+// the target when `text` is its display text, or the target narrowed past its
+// edge whitespace when `text` is that text trimmed — the link popover trims,
+// while a double-click selection keeps its trailing space. Null when the text
+// really changed and the range must be replaced.
+export function inPlaceLinkRange(
+  map: DisplayMap,
+  dStart: number,
+  dEnd: number,
+  text: string
+): { dStart: number; dEnd: number } | null {
+  if (dStart === dEnd || !text) return null;
+  const current = map.display.slice(dStart, dEnd);
+  if (text === current) return { dStart, dEnd };
+  if (text !== current.trim()) return null;
+  // An existing link run is re-pointed whole; narrowing it would leave its edge
+  // whitespace on the old URL.
+  const href = map.chars[dStart].linkHref;
+  if (href && map.chars.slice(dStart, dEnd).every((char) => char.linkHref === href)) {
+    return { dStart, dEnd };
+  }
+  return {
+    dStart: dStart + current.length - current.trimStart().length,
+    dEnd: dStart + current.trimEnd().length
+  };
 }
 
 // The contiguous run of an EXPLICIT link under a collapsed caret, if any. The

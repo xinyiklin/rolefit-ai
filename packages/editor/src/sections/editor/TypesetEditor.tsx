@@ -113,6 +113,8 @@ import {
   removeLink,
   replaceWithParagraphFragments,
   replaceWithLink,
+  inPlaceLinkRange,
+  mergeParagraphValues,
   explicitLinkRunAt,
   autoLinkWordAt,
   expandToLinkRun,
@@ -2969,11 +2971,11 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
           dStart = run.start;
           dEnd = run.end;
         }
-        const currentText = selection.map.display.slice(dStart, dEnd);
-        if (dStart !== dEnd && display === currentText) {
+        const inPlace = inPlaceLinkRange(selection.map, dStart, dEnd, display);
+        if (inPlace) {
           // Text unchanged over an existing range: just (re)apply the link and
           // keep the run's own per-character formatting.
-          commitLink(selection, dStart, dEnd, href);
+          commitLink(selection, inPlace.dStart, inPlace.dEnd, href);
         } else if (display) {
           commitReplaceWithLink(selection, dStart, dEnd, display, href);
         }
@@ -3212,7 +3214,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         if (!upper || !lower) return false;
         // A literal "<" ending the upper paragraph must not open a tag with
         // the lower one's text; the join escapes it and moves the caret.
-        const merged = joinInlineMarkText(upper.text, lower.text);
+        const merged = mergeParagraphValues(upper.text, lower.text);
         markPending();
         actions.mergeSummaryParagraphUp(sectionId, lowerEntry.id, merged.value);
         pendingCaretRef.current = () => ({
@@ -3228,7 +3230,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       if (!mergeId || !upperId) return false;
       const upper = entry.bullets.find((b) => b.id === upperId)!;
       const lower = entry.bullets.find((b) => b.id === mergeId)!;
-      const merged = joinInlineMarkText(upper.text, lower.text);
+      const merged = mergeParagraphValues(upper.text, lower.text);
       markPending();
       actions.mergeBulletUp(sectionId, entryId, mergeId, merged.value);
       const caretValue = merged.index;

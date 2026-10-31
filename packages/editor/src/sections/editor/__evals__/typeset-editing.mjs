@@ -13,10 +13,13 @@ import {
   buildDisplayMap,
   displayIndexForValueIndex,
   expandToLinkRun,
+  inPlaceLinkRange,
   inlineFragmentForRange,
+  mergeParagraphValues,
   replaceWithParagraphFragments,
   replaceWithLink,
   setAlignment,
+  setLink,
   setLineHeightRanges,
   setParagraphLineHeight,
   setParagraphSpaceAfter,
@@ -57,11 +60,13 @@ import {
 import { anchorsFromDoc } from "../typesetStructure.ts";
 import { FONT_FAMILY_OPTIONS } from "@typeset/engine/lib/documentStyle.ts";
 import {
+  alignmentFromInlineMarks,
   canonicalInlineMarkText,
   clearInlineOverride,
   effectiveFieldFont,
   inlineMarkTagStartsAt,
   joinInlineMarkText,
+  paragraphIndentFromInlineMarks,
   paragraphSpacingFromInlineMarks
 } from "@typeset/engine/lib/inlineMarksText.ts";
 import { automaticLinkHref } from "@typeset/engine/lib/links.ts";
@@ -346,9 +351,31 @@ assert.equal(clipboardLineHeight("normal", 11), null);
   ]);
   assert.equal(
     html,
-    '<p style="margin-top: 8pt; margin-right: 0; margin-bottom: 12pt; margin-left: 0; text-align: left; line-height: 1.5"><span style="font-family: Arial; font-size: 10pt; line-height: 1.5; font-weight: 700; white-space: pre-wrap">A paragraph that wraps wherever the destination needs.</span></p>'
+    '<p style="margin-top: 8pt; margin-right: 0; margin-bottom: 12pt; margin-left: 0; text-align: left; line-height: 1.5"><span style="font-family: \'Arial\'; font-size: 10pt; line-height: 1.5; font-weight: 700; white-space: pre-wrap">A paragraph that wraps wherever the destination needs.</span></p>'
   );
   assert.equal(html.includes("&nbsp;"), false, "paragraph spacing does not create a blank paragraph");
+  // A CSS family name written unquoted must be a run of identifiers; "4" and
+  // "3" are numbers, so a browser drops an unquoted Source Serif 4 declaration.
+  for (const family of ["source-serif", "source-sans"]) {
+    const label = FONT_FAMILY_OPTIONS.find((option) => option.value === family).label;
+    const run = buildDisplayMap(`<font=${family}>Serif run</font>`, { preserveWhitespace: true });
+    const runHtml = clipboardHtmlForRanges([
+      {
+        src: { kind: "bullet", sectionId: "summary", entryId: "font", bulletId: "font" },
+        map: run,
+        dStart: 0,
+        dEnd: run.chars.length,
+        defaultFontFamily: "tinos",
+        defaultFontSizePt: 10,
+        defaultAlignment: "left",
+        defaultLineHeight: 1.15
+      }
+    ]);
+    assert.ok(
+      runHtml.includes(`font-family: '${label}';`),
+      `external copy quotes the ${label} family name so it stays valid CSS`
+    );
+  }
   assert.equal(
     (html.match(/<p /g) ?? []).length,
     1,
@@ -1154,6 +1181,48 @@ const dm = (value) => buildDisplayMap(value, { preserveWhitespace: true });
   assert.equal(crossing.end <= 3, true, `a crossing selection must not reach into the neighbour (got end=${crossing.end})`);
 }
 
+// 4b. The link popover trims its Text field, while a double-click selection keeps
+//     its trailing space. Applying with that text unchanged links the trimmed
+//     run in place: the space and the run's own formatting survive.
+{
+  const map = dm("Built <b>Acme</b> Corp tooling");
+  const href = "https://acme.com/";
+  const typed = map.display.slice(6, 11).trim();
+  const range = inPlaceLinkRange(map, 6, 11, typed);
+  assert.deepEqual(range, { dStart: 6, dEnd: 10 }, "the trailing space is left out of the link");
+  const linked = dm(setLink(map, range.dStart, range.dEnd, href).value);
+  assert.equal(linked.display, "Built Acme Corp tooling", "the selected trailing space survives");
+  assert(
+    linked.chars.slice(6, 10).every((char) => char.bold && char.linkHref === href),
+    "the linked run keeps its bold"
+  );
+  assert.equal(linked.chars[10].linkHref, null, "the space stays outside the link");
+  assert.deepEqual(
+    inPlaceLinkRange(dm(" Acme"), 0, 5, "Acme"),
+    { dStart: 1, dEnd: 5 },
+    "leading selected whitespace is narrowed away too"
+  );
+  assert.deepEqual(inPlaceLinkRange(map, 6, 10, "Acme"), { dStart: 6, dEnd: 10 });
+  assert.equal(inPlaceLinkRange(map, 6, 11, "Acme Inc"), null, "changed text is a replacement");
+  assert.equal(inPlaceLinkRange(map, 6, 6, "Acme"), null, "a caret inserts a new link");
+
+  // Editing an EXISTING link re-points its whole run, edge spaces included, so
+  // no edge keeps the old URL as a second link.
+  const existing = dm("Built<link=https%3A%2F%2Fold.com> Acme </link>Corp");
+  const run = expandToLinkRun(existing, 7, 7);
+  const target = inPlaceLinkRange(existing, run.start, run.end, existing.display.slice(run.start, run.end).trim());
+  assert.deepEqual(target, { dStart: run.start, dEnd: run.end }, "the whole link run is the target");
+  const repointed = setLink(existing, target.dStart, target.dEnd, "https://new.com/").value;
+  const repointedMap = dm(repointed);
+  assert.equal(repointedMap.display, "Built Acme Corp");
+  assert.equal((repointed.match(/<link=/g) ?? []).length, 1, "the run stays one link");
+  assert(
+    repointedMap.chars.slice(5, 11).every((char) => char.linkHref === "https://new.com/"),
+    "both edge spaces move to the new URL"
+  );
+  assert(!repointed.includes("old.com"), "no character keeps the old URL");
+}
+
 // 5. A bare filename is not a domain. A resume says "resume.pdf" and "README.md"
 //    constantly; auto-linking them produced https://resume.pdf.
 for (const notALink of ["resume.pdf", "README.md", "notes.txt", "diagram.png", "archive.zip", "data.json", "app.exe"]) {
@@ -1913,12 +1982,102 @@ assert.match(
   const sentenceMap = buildDisplayMap(sentence);
   for (let at = 0; at <= sentenceMap.display.length; at += 1) {
     const { before, after } = splitValueAt(sentenceMap, at);
-    const merged = joinInlineMarkText(before, after);
+    const merged = mergeParagraphValues(before, after);
     assert.equal(buildDisplayMap(merged.value).display, sentenceMap.display, `split and merge at ${at}`);
     assert.ok(plainChars(buildDisplayMap(merged.value)), `split and merge at ${at} forms no mark`);
     assert.equal(displayIndexForValueIndex(buildDisplayMap(merged.value), merged.index), at, `the merge caret returns to ${at}`);
   }
   assert.equal(canonicalInlineMarkText(blocks[2]), "a < b", "stored header and document paste blocks use the canonical spelling");
+
+  // A merged paragraph takes the UPPER paragraph's paragraph format. The engine
+  // reads those marks first-match, so the lower one's used to govern an
+  // unmarked upper paragraph.
+  {
+    const centered = mergeParagraphValues("Led the migration.", "<align=center>Centered line</align>");
+    assert.equal(buildDisplayMap(centered.value).display, "Led the migration.Centered line");
+    assert.equal(alignmentFromInlineMarks(centered.value), null, "the lower alignment does not take over");
+    assert.equal(
+      displayIndexForValueIndex(buildDisplayMap(centered.value), centered.index),
+      "Led the migration.".length,
+      "the merge caret stays at the seam"
+    );
+    const indented = mergeParagraphValues("Plain.", "<indent=36>Ind</indent>");
+    assert.equal(paragraphIndentFromInlineMarks(indented.value), 0, "the lower block indent does not take over");
+    const spaced = mergeParagraphValues(
+      "Plain.",
+      "<space-before=8><space-after=12>Spaced</space-after></space-before>"
+    );
+    assert.deepEqual(
+      paragraphSpacingFromInlineMarks(spaced.value),
+      { lineHeight: null, spaceBeforePt: null, spaceAfterPt: null },
+      "the lower before/after spacing does not take over"
+    );
+    const marked = mergeParagraphValues(
+      "<align=right><indent=18>Upper </indent></align>",
+      "<align=center><line-height=1.5><b>Lower</b></line-height></align>"
+    );
+    const markedMap = buildDisplayMap(marked.value, { preserveWhitespace: true });
+    assert.equal(markedMap.display, "Upper Lower");
+    assert(
+      markedMap.chars.every((char) => char.alignment === "right" && char.indentPt === 18),
+      "the lower text adopts the upper paragraph's alignment and indent"
+    );
+    assert(
+      markedMap.chars.slice(6).every((char) => char.bold && char.lineHeight === 1.5),
+      "the lower text keeps its character format and its own line height"
+    );
+    assert.equal(
+      mergeParagraphValues("Plain.", "<align=center></align>").value,
+      "Plain.",
+      "an empty lower paragraph's carrier marks do not survive the merge"
+    );
+    // Older merges stored empty paragraph-format carriers mid-value; a lower
+    // paragraph's carrier must not win the engine's first-match read either.
+    const carried = mergeParagraphValues("Plain upper", "<align=center></align>Body");
+    assert.equal(buildDisplayMap(carried.value).display, "Plain upperBody");
+    assert.equal(alignmentFromInlineMarks(carried.value), null, "a lower empty alignment carrier is dropped");
+    assert.equal(
+      paragraphIndentFromInlineMarks(mergeParagraphValues("Plain", "Body<indent=36></indent>").value),
+      0,
+      "a lower empty indent carrier is dropped"
+    );
+
+    // A whitespace-only upper line is visually empty too: the lower paragraph's
+    // format governs, and the whitespace is kept.
+    for (const blank of [" ", "\n"]) {
+      const merged = mergeParagraphValues(blank, "<align=center><indent=18>Text</indent></align>");
+      const mergedMap = buildDisplayMap(merged.value, { preserveWhitespace: true });
+      assert.equal(mergedMap.display, `${blank}Text`, `the ${JSON.stringify(blank)} upper line is kept`);
+      assert(
+        mergedMap.chars.every((char) => char.alignment === "center" && char.indentPt === 18),
+        `a ${JSON.stringify(blank)} upper line takes the lower paragraph's format`
+      );
+      assert.equal(alignmentFromInlineMarks(merged.value), "center");
+      assert.equal(
+        displayIndexForValueIndex(mergedMap, merged.index),
+        1,
+        "the caret sits at the seam after the kept whitespace"
+      );
+    }
+
+    // Backspace below an empty line just deletes that line, as in Docs/Word.
+    const intoEmpty = mergeParagraphValues(
+      "<align=right><space-after=6></space-after></align>",
+      "<align=center><space-before=8><indent=18>Text</indent></space-before></align>"
+    );
+    assert.equal(alignmentFromInlineMarks(intoEmpty.value), "center", "an empty upper paragraph keeps the lower alignment");
+    assert.equal(paragraphIndentFromInlineMarks(intoEmpty.value), 18, "an empty upper paragraph keeps the lower indent");
+    assert.deepEqual(
+      paragraphSpacingFromInlineMarks(intoEmpty.value),
+      { lineHeight: null, spaceBeforePt: 8, spaceAfterPt: null },
+      "an empty upper paragraph keeps the lower spacing"
+    );
+    assert.equal(
+      displayIndexForValueIndex(buildDisplayMap(intoEmpty.value), intoEmpty.index),
+      0,
+      "the caret stays at the start of the kept paragraph"
+    );
+  }
 
   // Any text inserted anywhere into literal text stays literal, with only
   // needed escapes (seeded, so failures reproduce).
