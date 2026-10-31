@@ -109,6 +109,19 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-30
 
+- [TOOL] **Bug-hunt round twelve** (desktop, providers, Prepare/Polish, engine;
+  13 confirmed): Windows shows a missing CLI as not installed and offers another
+  port when the saved one is reserved; CLI rate-limit, overload, sign-in and
+  model errors get their own messages; typed cover-letter details survive brief
+  edits but never override the brief or resume; date ranges are not phone links,
+  one-sided head rows align, and no-break spaces and tabs hold (engine, two
+  reviewers). [USER] asked for and approved: extension imports send the page
+  title so LinkedIn/Indeed/Handshake records keep role and employer; one
+  alignment or reset gesture is one undo step (editor, two reviewers). Residual:
+  letter style has no undo history; narrow-window RoleFit fallback undo is
+  content-only; the emergency line breaker may break at a no-break space;
+  U+202F/U+2007 and some date-range shapes are unhandled; a vanished extension
+  import can leave Prepare on "Receiving".
 - [TOOL] **Bug-hunt round eleven** (five-area sweep, 16 confirmed): outside
   writers cannot store a "ready" answer with a placeholder or a blank pair; an
   MCP correction replaces the earlier answer; follow-ups sort by date; Indeed
@@ -117,9 +130,9 @@ D-entries in `docs/decisions.md`.
   margin survives an outside-click close (Escape still cancels). Each
   reviewed. Reverted after two failed reviews: five AI evidence-check gaps
   (percent/duration subject, multiplier verbs, scale words, employer/school
-  phrasings), proposed as their own task. Open for the user: a Styles change
-  takes two undos (shared history); captures lose the role and employer (would
-  send the page title). A hyphenated LinkedIn employer now stays whole.
+  phrasings), proposed as their own task and later closed on branch
+  fix/rolefit-claim-grounding (4b4034e, not merged here). A hyphenated LinkedIn
+  employer now stays whole.
 - [TOOL] **Bug-hunt round ten**: the Prepare brief keeps every analyzed
   and saved item and says which ones its 9,000-character budget leaves out;
   the landing page moves keyboard focus with its in-page links; a labelled
@@ -138,23 +151,3 @@ D-entries in `docs/decisions.md`.
   each side's spacing; PDF import splits contact items at dingbat icons and
   sets rating runs aside. Each reviewed. Reverted after two failed reviews:
   icon-prefixed headings and private-use separators (open, src/resume/AGENTS.md).
-- [TOOL] **Bug-hunt round eight** (product-delivery; two reviewers per shared
-  package): the editor never applies a toolbar command to a replaced
-  document's selection; PDF export drops U+00AD and primes each face, so a
-  soft hyphen no longer turns every later "-" blank and U+2010/U+2011 no
-  longer change how "-" extracts (content byte-identical otherwise, 30
-  families); Ghosted marks are dated after a follow-up hold; pinned job
-  fetches fall back across every validated address. Residual: layout still
-  measures U+00AD as 0.5 em (measure.ts; a layout decision).
-
-## 2026-10-29
-
-- [TOOL] **Bug-hunt round seven**: an unreadable saved resume is an error on
-  the snapshot, not a failed workspace (variants, history and letters stay
-  reachable); over-limit contacts are refused, not cut; tracker months group
-  by local day; a new Typeset tab never writes its restored draft back over
-  another tab's. Each reviewed. Follow-up: variant lists skip directories and
-  links that do not resolve to a file; the unreadable file is named and the
-  variant last open is reopened; the companion's Providers summary says when
-  a reused service does not use its providers. Accepted: Prepare and Polish
-  duplicate gates may name a lost-reply record (it is saved).
