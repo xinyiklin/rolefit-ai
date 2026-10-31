@@ -23,7 +23,7 @@ import {
   proseHasUngroundedTerm
 } from "./grounding.ts";
 import { candidateClaimIssue } from "./claimEvidence.ts";
-import { hasUngroundedNumericClaim } from "./sanitize.ts";
+import { hasUngroundedNumericClaim, withoutPostingScaleFacts } from "./sanitize.ts";
 
 // Optional dispatch-attempt collector: callConfiguredProvider bumps `attempts`.
 type AttemptStats = { attempts?: number };
@@ -153,11 +153,12 @@ export function bindApplicationAnswers(
     const text = typeof answer.answer === "string" ? answer.answer.trim() : "";
     if (!text || text.length > 4_000 || /<\/?[a-z][^>]*>|[\u0000-\u0008\u000b\u000c\u000e-\u001f]/i.test(text)) unusableAnswers();
     const warnings: string[] = [];
-    const claimIssue = candidateClaimIssue(text, groundingText, groundingText);
+    const claims = withoutPostingScaleFacts(text, jobText);
+    const claimIssue = candidateClaimIssue(claims, groundingText, groundingText);
     if (
       claimIssue
       || proseHasUngroundedTerm(text, jobLower, groundingLower)
-      || hasUngroundedNumericClaim(text, groundingText)
+      || hasUngroundedNumericClaim(claims, groundingText)
       // The JD-specific prose gate above cannot see a fabricated technology
       // absent from the posting (for example, claiming Salesforce in a Python-
       // only application). Application prose may name the target company, so

@@ -7,18 +7,8 @@ import type { ResolvedCoverLetterContext } from "../../src/lib/coverLetterPrefli
 import { GROUPING_HEADINGS, profileHeadingName, profileHeadingOwners, profileHeadings } from "../../shared/candidateProfileContract.ts";
 import type { CoverLetterValidationIssue } from "./coverLetterIssues.ts";
 import { affirmativeEvidence, candidateClaimIssue, evidenceSegments, hasContradictoryClaimEvidence } from "./claimEvidence.ts";
-import { curatedClaimTerms, hasUnsupportedOwnershipIncrease, isTermGrounded } from "./grounding.ts";
+import { curatedClaimTerms, findUngroundedAffiliation, hasUnsupportedOwnershipIncrease } from "./grounding.ts";
 import { candidateClaimSentences, coverLetterGroundingIssues } from "./coverLetterGroundingIssues.ts";
-
-function unsupportedAffiliation(sentence: string, grounding: string): string | null {
-  // Explicit prior affiliations need candidate evidence; ordinary acronyms are
-  // not names merely because they are capitalized.
-  const affiliations = /(?:^At |\b(?:worked (?:at|for)|employed by|joined|my (?:work|role|time) at) )([A-Z][\p{L}\p{N}.'’&-]*(?:[ \t]+(?!(?:I|We|My|Our)\b)[A-Z][\p{L}\p{N}.'’&-]*)*)/gu;
-  for (const match of sentence.matchAll(affiliations)) {
-    if (!isTermGrounded(match[1], grounding)) return `Unsupported affiliation: ${match[1]}`;
-  }
-  return null;
-}
 
 const ENTRY_LABEL_SEPARATOR = " · ";
 
@@ -108,6 +98,14 @@ export function coverLetterParagraphClaims({
   }));
   if (authoredProse) sources.push({ id: "source_letter", entry: "", group: "source_letter", text: authoredProse });
   const employer = `${jobText}\n${employerContext ?? ""}`;
+  // Whether the candidate was ever at a workplace or school is a question for all of
+  // their evidence: a letter rarely cites the Education entry it names. The base letter
+  // is not evidence of one: it usually names the last company it was sent to.
+  const affiliationEvidence = affirmativeEvidence(sources.filter((source) => source.id !== "source_letter").map((source) => source.text).join("\n"));
+  const affiliation = (sentence: string) => {
+    const name = findUngroundedAffiliation(sentence, affiliationEvidence, [resolved.company.trim()]);
+    return name ? `Unsupported affiliation: ${name}` : null;
+  };
   // Only a resume entry with a multi-part label (title plus dates, employer, or
   // stack) can be named: a Skills row ("Cloud"), a single-title entry, or an
   // answer label never narrows a sentence to itself or lends its tools to a job.
@@ -156,7 +154,7 @@ export function coverLetterParagraphClaims({
       const conflict = (isCandidate
         ? hasUnsupportedOwnershipIncrease(sentence, grounding, grounding) ? "Unsupported ownership or responsibility" : null
         : candidateClaimIssue(sentence, sourceText, sourceText)) ||
-        (isCandidate ? unsupportedAffiliation(sentence, grounding) : null);
+        (isCandidate ? affiliation(sentence) : null);
       if (conflict && factualIssues.length === 0) {
         issues.push({
           code: isCandidate ? "unsupported_claim" : "unsupported_employer_claim",

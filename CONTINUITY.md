@@ -35,7 +35,7 @@ D-entries in `docs/decisions.md`.
   exports in a browser; only its build and offline suite were run.
 - 2026-10-26 [USER] 0.24.0: after the release PR's squash merge and the user's
   go-ahead, tag `rolefit-preview-v0.24.0-beta.1` and confirm the workflow.
-  Pre-tag: merge the dev-smoke fix (Vite watcher scope, below).
+  The dev-smoke fix (Vite watcher scope, 02c141d) is now in this branch too.
 
 ## Deferred backlog
 
@@ -109,6 +109,12 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-30
 
+- [USER+TOOL] **Merged fix/rolefit-claim-grounding** ([USER] approved): its
+  4b4034e closes the five AI evidence-check gaps (a percent keeps its metric
+  and a duration its skills; multiplier verbs are outcomes; scale words are
+  quantity claims; workplaces and schools need candidate evidence), two
+  reviewers, and it brought main's 02c141d (dev Vite watcher scoped to client
+  source). grounding-probes kept both sides (151 checks).
 - [TOOL] **Bug-hunt round twelve** (desktop, providers, Prepare/Polish, engine;
   13 confirmed): Windows shows a missing CLI as not installed and offers another
   port when the saved one is reserved; CLI rate-limit, overload, sign-in and
@@ -130,9 +136,8 @@ D-entries in `docs/decisions.md`.
   margin survives an outside-click close (Escape still cancels). Each
   reviewed. Reverted after two failed reviews: five AI evidence-check gaps
   (percent/duration subject, multiplier verbs, scale words, employer/school
-  phrasings), proposed as their own task and later closed on branch
-  fix/rolefit-claim-grounding (4b4034e, not merged here). A hyphenated LinkedIn
-  employer now stays whole.
+  phrasings), proposed as their own task, closed in 4b4034e and merged here.
+  A hyphenated LinkedIn employer now stays whole.
 - [TOOL] **Bug-hunt round ten**: the Prepare brief keeps every analyzed
   and saved item and says which ones its 9,000-character budget leaves out;
   the landing page moves keyboard focus with its in-page links; a labelled
