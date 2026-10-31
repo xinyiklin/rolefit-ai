@@ -1,14 +1,15 @@
 // Pure editing math for the typeset editor (no DOM, no React): the mapping
 // between a field's VALUE (inline-marks string, ASCII ligatures, real
 // whitespace) and its DISPLAY form (what the engine paints: tags stripped,
-// --- → — / -- → – / ' → ’, authored horizontal whitespace preserved, and
+// --- → — / -- → – / ' → ’ outside links, authored horizontal whitespace preserved, and
 // literal hard breaks preserved as "\n"). Every edit is expressed in display coordinates
 // (where the caret lives) and applied to the value without losing marks,
 // ligature sources, or preserved outer whitespace.
 //
 // The display model mirrors measure.ts exactly: segmentsFromInlineMarks's tag
-// grammar (<b>/<i>/<u>, unclosed tolerated) and texLigatures's sequential
-// replaces (which a longest-match walker reproduces for any hyphen run).
+// grammar (<b>/<i>/<u>, unclosed tolerated) and displayText: texLigatures's
+// sequential replaces within one segment (which a longest-match walker
+// reproduces for any hyphen run), skipped for a link word (see wordAt).
 // `<lt>` is one display "<"; serializeChars writes it back only where a raw "<"
 // would start a tag, so typed or pasted tag-shaped text always stays text.
 
@@ -97,6 +98,33 @@ const TAG_RE = new RegExp(
 
 // ---- value → display ----
 
+// The engine's display form leaves a link word as typed: a whitespace-free run
+// read across tags (<lt> is text), so re-serializing marks never changes it,
+// that automaticLinkHref accepts whole. A character inside an explicit <link>
+// is always as typed. Painted text and this map must agree character for
+// character, or caret offsets and diff-based edits drift.
+function wordAt(value: string, start: number): { text: string; end: number } {
+  let text = "";
+  let j = start;
+  while (j < value.length && !/\s/.test(value[j])) {
+    if (value[j] === "<") {
+      if (isInlineLiteralLessThan(value.slice(j, j + INLINE_LITERAL_LESS_THAN.length))) {
+        text += "<";
+        j += INLINE_LITERAL_LESS_THAN.length;
+        continue;
+      }
+      const tag = TAG_RE.exec(value.slice(j));
+      if (tag) {
+        j += tag[0].length;
+        continue;
+      }
+    }
+    text += value[j];
+    j += 1;
+  }
+  return { text, end: j };
+}
+
 export function buildDisplayMap(value: string, opts?: { uppercase?: boolean; preserveWhitespace?: boolean }): DisplayMap {
   // Single-line fields render their value verbatim (white-space: pre), so their
   // display keeps every space — the caret can sit between repeated spaces and
@@ -121,6 +149,8 @@ export function buildDisplayMap(value: string, opts?: { uppercase?: boolean; pre
   const indentStack: number[] = [];
   const linkStack: Array<string | null> = [];
   let linkSuppressed = 0;
+  let wordEnd = 0;
+  let wordIsAutoLink = false;
   let i = 0;
   while (i < value.length) {
     const tag = TAG_RE.exec(value.slice(i));
@@ -224,11 +254,19 @@ export function buildDisplayMap(value: string, opts?: { uppercase?: boolean; pre
       i = j;
       continue;
     }
+    if (i >= wordEnd) {
+      const word = wordAt(value, i);
+      wordEnd = word.end;
+      wordIsAutoLink = automaticLinkHref(word.text) !== null;
+    }
     let raw: string;
     let shown: string;
     if (ch === "<" && isInlineLiteralLessThan(value.slice(i, i + INLINE_LITERAL_LESS_THAN.length))) {
       raw = value.slice(i, i + INLINE_LITERAL_LESS_THAN.length);
       shown = "<";
+    } else if (wordIsAutoLink || flags.linkHref !== null) {
+      raw = ch;
+      shown = ch;
     } else if (value.startsWith("---", i)) {
       raw = "---";
       shown = "—";

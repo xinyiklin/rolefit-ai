@@ -51,10 +51,10 @@ export function wrapHeadRow(
 
 export function wrapSingleField(
   value: string, runs: GlyphRun[], width: number, size: number,
-  family: DocumentFontFamily, tracking: number, faceOverride?: FaceOverride
+  family: DocumentFontFamily, tracking: number, faceOverride?: FaceOverride, preDisplayed = false
 ): GlyphRun[][] {
   if (runs.every(run => run.x + run.width <= width + 1e-7) && !/[\r\n]/.test(value)) return [runs];
-  return breakParagraph(paragraphItems(value, size, family, tracking, faceOverride), width, "left")
+  return breakParagraph(paragraphItems(value, size, family, tracking, faceOverride, preDisplayed), width, "left")
     .map(line => {
       const fragment = line.runs.length
         ? line.runs.map(run => ({ ...run, src: runs[0].src }))

@@ -11,7 +11,7 @@ export { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
 // (also used by measurement/painting); this file re-exports it (and uses it
 // locally below) rather than keeping a second copy.
 export { texLigatures } from "@typeset/engine/typeset/measure.ts";
-import { texLigatures } from "@typeset/engine/typeset/measure.ts";
+import { displayText } from "@typeset/engine/typeset/measure.ts";
 import { hasInlineMarkTags } from "@typeset/engine/lib/inlineMarksText.ts";
 export { inlineMarksToHtml } from "./inlineMarksHtml";
 import { inlineMarksToHtml } from "./inlineMarksHtml";
@@ -27,8 +27,9 @@ const TEX_LIGATURE_RE = /---|--|'/;
 // for the tiny allowed tag set, so pasted/typed HTML cannot execute.
 export function renderInlineMarks(text: string): ReactNode {
   if (!hasInlineMarkTags(text)) {
-    // Plain text still gets the TeX-ligature preview (no HTML needed).
-    return TEX_LIGATURE_RE.test(text) ? texLigatures(text) : text;
+    // Plain text still gets the TeX-ligature preview (no HTML needed); a link
+    // word keeps its typed punctuation, as the engine paints it.
+    return TEX_LIGATURE_RE.test(text) ? displayText(text) : text;
   }
   return <span dangerouslySetInnerHTML={{ __html: inlineMarksToHtml(text) }} />;
 }

@@ -4,7 +4,8 @@
 //
 // Shaping stages:
 //   1. display punctuation: --- → —, -- → –, ' → ’ (ResumeData stays ASCII;
-//      transformation happens during measurement and painting)
+//      runs carry the display form, from displayText, and every function here
+//      measures the text it is given as drawn)
 //   2. f-ligatures: longest-match ff/fi/fl/ffi/ffl → single ligature advance
 //   3. pair kerning between adjacent glyphs from the committed font tables
 //
@@ -25,6 +26,7 @@ import type {
   PenaltyItem
 } from "./types.ts";
 import {
+  INLINE_LITERAL_LESS_THAN,
   INLINE_MARK_TAG_PATTERN,
   isInlineFontSizePt,
   isInlineLiteralLessThan,
@@ -57,12 +59,72 @@ export function texLigatures(text: string): string {
   return text.replace(/---/g, "—").replace(/--/g, "–").replace(/'/g, "’");
 }
 
-// A single-line field run's painted text: a tab or no-break space (U+00A0, the
+// Display form: display punctuation for every word except a link, which shows
+// exactly as typed so the page and the PDF's extracted text carry the address
+// the link opens ("o'brien@…", punycode "xn--…"). A word is a whitespace-free
+// run across tags (<lt> is text), so re-serializing marks can never change it;
+// it is a link when automaticLinkHref accepts the whole word, and a character
+// inside an explicit <link> (suppressed or not) is always shown as typed.
+// Substitutions stay within one segment. The editor's display map and
+// RoleFit's inline-mark HTML apply the same rule, so caret offsets stay in step.
+const isLinkWord = (word: string) => automaticLinkHref(word) !== null;
+const ligatedUnlessLink = (text: string, linked: (start: number) => boolean) =>
+  text.replace(/\S+/g, (piece, at: number) => (linked(at) ? piece : texLigatures(piece)));
+
+// Display form of text with no inline-mark tags.
+export function displayText(text: string): string {
+  return text.replace(/\S+/g, (word) => (isLinkWord(word) ? word : texLigatures(word)));
+}
+
+// Each segment's display form, deciding link words across segment boundaries.
+function withDisplay(segments: Omit<StyledSegment, "display">[]): StyledSegment[] {
+  const full = segments.map((segment) => segment.text).join("");
+  const linked = new Uint8Array(full.length);
+  for (const word of full.matchAll(/\S+/g)) if (isLinkWord(word[0])) linked.fill(1, word.index, word.index + word[0].length);
+  let offset = 0;
+  return segments.map((segment) => {
+    const base = offset;
+    offset += segment.text.length;
+    return { ...segment, display: segment.href ? segment.text : ligatedUnlessLink(segment.text, (at) => linked[base + at] === 1) };
+  });
+}
+
+// An inline-marked value with every segment in display form and every tag
+// kept, for a caller that drops tags before laying it out (small-caps headings
+// strip <b>/<i>/<u>, which would join "-<b>-</b>" into one "--"). Lay the
+// result out with preDisplayed so nothing is transformed twice. A literal "<"
+// is written back as <lt>, so it can never start a tag once others are gone.
+export function displayInlineMarkedText(value: string): string {
+  const segments = segmentsFromInlineMarks(value);
+  let next = 0;
+  let out = "";
+  let text = "";
+  let cursor = 0;
+  const flush = () => {
+    if (text) out += segments[next++].display.replace(/</g, INLINE_LITERAL_LESS_THAN);
+    text = "";
+  };
+  for (const match of value.matchAll(INLINE_TAG_RE)) {
+    text += value.slice(cursor, match.index);
+    cursor = match.index + match[0].length;
+    if (isInlineLiteralLessThan(match[0])) {
+      text += "<";
+      continue;
+    }
+    flush();
+    out += match[0];
+  }
+  text += value.slice(cursor);
+  flush();
+  return out;
+}
+
+// A single-line field run's painted text from its display form: a tab or no-break space (U+00A0, the
 // figure space U+2007, the narrow U+202F) is set as one space, as paragraph glue
 // sets them, so layout, DOM and PDF draw one width.
 // One character for one, so editor offsets are unchanged.
-export function paintedText(text: string): string {
-  return texLigatures(text).replace(/[\t\u00a0\u2007\u202f]/g, " ");
+export function paintedText(display: string): string {
+  return display.replace(/[\t\u00a0\u2007\u202f]/g, " ");
 }
 
 const F_LIGATURES = ["ffi", "ffl", "ff", "fi", "fl"] as const;
@@ -150,9 +212,9 @@ function shapeUnits(display: string, style: FontStyle): { units: number; glyphs:
   return { units, glyphs };
 }
 
-// Width in bp of a text fragment at a style. Applies display punctuation first.
+// Width in bp of display-form text at a style.
 export function measure(text: string, style: FontStyle): number {
-  const shaped = shapeUnits(composed(texLigatures(text), fontFace(style.family, style.face).metrics), style);
+  const shaped = shapeUnits(composed(text, fontFace(style.family, style.face).metrics), style);
   return (shaped.units / 1000) * style.size + Math.max(0, shaped.glyphs - 1) * style.tracking;
 }
 
@@ -161,7 +223,7 @@ export function measure(text: string, style: FontStyle): number {
 export function runFamilies(text: string, style: FontStyle): DocumentFontFamily[] {
   const own = fontFace(style.family, style.face).metrics;
   const fallback = fallbackMetrics(style);
-  for (const ch of composed(texLigatures(text), own)) {
+  for (const ch of composed(text, own)) {
     if (borrowed(ch, own, fallback)) return [style.family, DOCUMENT_FONT_FAMILIES[style.family].fallback!];
   }
   return [style.family];
@@ -174,7 +236,7 @@ export type FaceSegment = { text: string; family: DocumentFontFamily; offset: nu
 
 export function faceSegments(text: string, style: FontStyle): FaceSegment[] {
   const own = fontFace(style.family, style.face).metrics;
-  const display = composed(texLigatures(text), own);
+  const display = composed(text, own);
   const fallback = fallbackMetrics(style);
   const fallbackFamily = DOCUMENT_FONT_FAMILIES[style.family].fallback;
   const segments: FaceSegment[] = [];
@@ -239,7 +301,7 @@ export function inkExtent(text: string, style: FontStyle): { height: number; dep
   const fallback = fallbackMetrics(style);
   let maxY = 0;
   let minY = 0;
-  for (const ch of composed(texLigatures(text), own)) {
+  for (const ch of composed(text, own)) {
     const b = (borrowed(ch, own, fallback) ? fallback! : own).bbox[ch];
     if (!b) continue;
     if (b[1] > maxY) maxY = b[1];
@@ -302,11 +364,13 @@ type StyledSegment = {
   lineHeight: number | null;
   href: string | null;
   linkSuppressed: boolean;
+  // The text as painted (displayText's rule, decided across segments).
+  display: string;
 };
 
 // Split the resume's inline-marks form (`a <b>c</b> d`) into styled segments.
 export function segmentsFromInlineMarks(value: string): StyledSegment[] {
-  const out: StyledSegment[] = [];
+  const out: Omit<StyledSegment, "display">[] = [];
   let bold = 0;
   let italic = 0;
   let underline = 0;
@@ -367,7 +431,7 @@ export function segmentsFromInlineMarks(value: string): StyledSegment[] {
   }
   text += value.slice(cursor);
   push();
-  return out;
+  return withDisplay(out);
 }
 
 // Build the box/glue/penalty item stream for one paragraph of inline-marked
@@ -379,7 +443,8 @@ export function paragraphItems(
   sizeBp: number,
   family: DocumentFontFamily,
   tracking: number,
-  faceOverride?: FaceOverride
+  faceOverride?: FaceOverride,
+  preDisplayed = false
 ): ParaItem[] {
   const items: ParaItem[] = [];
   const segments = segmentsFromInlineMarks(value);
@@ -417,8 +482,10 @@ export function paragraphItems(
       tracking
     };
     // Preserve leading/trailing space significance across segment boundaries.
+    // Display form keeps every whitespace run, so the two splits align.
     const parts = seg.text.split(/(\r\n|\r|\n|[^\S\r\n]+)/);
-    for (const part of parts) {
+    const shown = (preDisplayed ? seg.text : seg.display).split(/(\r\n|\r|\n|[^\S\r\n]+)/);
+    for (const [index, part] of parts.entries()) {
       if (!part) continue;
       if (part === "\n" || part === "\r" || part === "\r\n") {
         // A hard break is structural, but authored spaces before it remain
@@ -458,7 +525,7 @@ export function paragraphItems(
       }
       pushWord(
         items,
-        part,
+        shown[index],
         style,
         seg.linkSuppressed ? undefined : seg.href ?? automaticLinkHref(part) ?? undefined,
         seg.underline,
@@ -476,19 +543,18 @@ export function paragraphItems(
 
 // A word becomes one box, or — when it contains explicit hyphens with material
 // on both sides — hyphen-terminated fragments separated by penalty items.
-// CONTRACT: box/run text is stored in display form (– — ’), matching its
-// measured width. Renderers draw it verbatim and never re-transform it;
-// texLigatures is idempotent, so measure() re-applying it is safe.
+// CONTRACT: box/run text is stored in display form (displayText), matching
+// its measured width. Renderers and measure() take it verbatim and never
+// re-transform it: a link keeps the punctuation it was typed with.
 function pushWord(
   items: ParaItem[],
-  word: string,
+  display: string,
   style: FontStyle,
   href?: string,
   underline = false,
   lineHeight: number | null = null,
   linkSuppressed = false
 ) {
-  const display = texLigatures(word);
   const pieces = display.split(/(?<=-)(?=[^-])/); // split AFTER each hyphen run
   for (let i = 0; i < pieces.length; i += 1) {
     if (i > 0) items.push({ kind: "penalty", penalty: EXHYPHEN_PENALTY } satisfies PenaltyItem);

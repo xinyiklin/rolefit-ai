@@ -23,7 +23,11 @@ typesetting guide when a change affects painted output or layout provenance.
   disagree on which characters an outer size covers. The display map reads
   `<lt>` as one literal `<`, and `serializeChars` writes `<lt>` back only
   where a raw `<` would start a tag, so typed and pasted tag-shaped text stays
-  text. HTML and plain-text paste encode clipboard text with
+  text. Display punctuation follows the engine's rule (typeset guide): a word
+  read across tags and accepted whole by `automaticLinkHref`, or a character
+  inside an explicit `<link>`, keeps its typed `--`/`'`, including while its
+  auto-link is deferred, so the map holds the painted text character for
+  character and re-serializing marks never changes it (`link-display.mjs`). HTML and plain-text paste encode clipboard text with
   `escapeInlineMarkText` before it reaches the grammar. Paragraph merges join
   through `mergeParagraphValues` and cross-field folds with
   `joinInlineMarkText`, and header or document paste stores blocks through

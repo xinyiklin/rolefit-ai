@@ -142,6 +142,25 @@ it truthfully.
   still kerns and ligates across all but ZWNJ, so the DOM can drift by one kern
   there (`special-spaces.mjs`). Other default-ignorable characters (bidi
   embeddings and isolates, variation selectors) still take that fallback.
+- `measure.ts` is the one owner of display punctuation (`---` → —, `--` → –,
+  `'` → ’): `displayText` for text without tags, and each segment's
+  `display` from `segmentsFromInlineMarks`. A link word keeps exactly what was
+  typed. A word is a whitespace-free run read ACROSS tags (`<lt>` is text); it
+  is a link word when `automaticLinkHref` accepts it whole, and a character
+  inside an explicit `<link>`, suppressed or not, is always as typed.
+  Substitutions stay within one segment. Otherwise the page and the PDF's
+  extracted text showed `sean.o’brien@…` or `xn–bcher…` while the link opened
+  the typed address. Reading words across tags keeps the decision invariant
+  when an edit re-serializes marks (`<b>a--b</b><b>@x.co</b>` becomes one run),
+  so a mark-split address shows as typed in every piece. Runs carry this
+  display form, and `measure`, `faceSegments`, `runFamilies` and `inkExtent`
+  take it verbatim. The editor's `buildDisplayMap` and RoleFit's
+  `inlineMarksToHtml` apply the same rule; any drift moves the caret and lets
+  diff-based typing rewrite formatting or swallow text into a link
+  (`pdf-links.mjs`, the editor's `link-display.mjs`). A caller that drops tags
+  before layout (small-caps headings strip `<b>`/`<i>`/`<u>`, which would
+  join `-<b>-</b>` into one `--`) takes `displayInlineMarkedText` first and
+  lays out with `preDisplayed`.
 - `paintedText` (`measure.ts`) owns how a single-line field run is painted and
   measured: a tab or a no-break space paints as one ordinary space in layout,
   DOM and PDF alike (`special-spaces.mjs`). In paragraphs and wrapping fields a

@@ -1,5 +1,5 @@
 import { INLINE_MARK_TAG_PATTERN, isInlineLiteralLessThan } from "@typeset/engine/lib/inlineMarksText.ts";
-import { texLigatures } from "@typeset/engine/typeset/measure.ts";
+import { segmentsFromInlineMarks } from "@typeset/engine/typeset/measure.ts";
 
 // Instance over the engine's single inline-mark grammar (D057). Only b/i/u
 // render semantically; the structural marks (link/font/size/align/nolink) are
@@ -20,12 +20,26 @@ export function inlineMarksToHtml(value: string): string {
   const source = String(value ?? "");
   let html = "";
   let cursor = 0;
+  // Text between two real tags is one engine segment, shown in the engine's
+  // display form: a link word keeps the punctuation it was typed with.
+  const segments = segmentsFromInlineMarks(source);
+  let next = 0;
+  let text = "";
+  const flush = () => {
+    if (text) html += escapeHtml(segments[next++].display);
+    text = "";
+  };
 
   for (const match of source.matchAll(INLINE_TAG_RE)) {
     const tag = match[0].toLowerCase();
-    html += escapeHtml(texLigatures(source.slice(cursor, match.index)));
-    if (isInlineLiteralLessThan(tag)) html += "&lt;";
-    else if (tag === "<b>") html += "<strong>";
+    text += source.slice(cursor, match.index);
+    cursor = (match.index ?? 0) + match[0].length;
+    if (isInlineLiteralLessThan(tag)) {
+      text += "<";
+      continue;
+    }
+    flush();
+    if (tag === "<b>") html += "<strong>";
     else if (tag === "</b>") html += "</strong>";
     else if (tag === "<i>") html += "<em>";
     else if (tag === "</i>") html += "</em>";
@@ -33,9 +47,9 @@ export function inlineMarksToHtml(value: string): string {
     else if (tag === "</u>") html += "</u>";
     // Any other grammar tag carries structure, not display text: drop the tag,
     // keep its content.
-    cursor = (match.index ?? 0) + match[0].length;
   }
 
-  html += escapeHtml(texLigatures(source.slice(cursor)));
+  text += source.slice(cursor);
+  flush();
   return html.replace(/\n/g, "<br>");
 }
