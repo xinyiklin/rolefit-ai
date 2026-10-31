@@ -34,6 +34,7 @@ import { ApplicationsLoadingSkeleton, AnalyticsLoadingSkeleton } from "./section
 import { useDebouncedValue } from "./hooks/useDebouncedValue";
 import { useDocStyle } from "@typeset/editor/hooks/useDocStyle.ts";
 import { createHistoryClock } from "@typeset/editor/hooks/historyClock.ts";
+import { commitDetachedHistory } from "./lib/detachedHistory";
 import { FormattingToolbar } from "@typeset/editor/components/toolbar/FormattingToolbar.tsx";
 import { DocumentStructureControls } from "@typeset/editor/components/toolbar/DocumentStructureControls.tsx";
 import {
@@ -713,6 +714,11 @@ function App() {
     actions: resumeEditorActions
   } = useResumeEditor(resumeHistoryClock);
   const typesetEditorRef = useRef<TypesetEditorHandle>(null);
+  const commitUnmountedResumeHistory = (direction: "undo" | "redo") => commitDetachedHistory(
+    direction,
+    { undoSequence: resumeUndoSequence, redoSequence: resumeRedoSequence, undo: resumeEditorActions.undo, redo: resumeEditorActions.redo },
+    docStyle
+  );
   const resumeFitViewportRef = useRef<HTMLDivElement>(null);
   const [inlineFormat, setInlineFormat] = useState<InlineFormatState>(EMPTY_INLINE_FORMAT);
   // The caret each editor was left at, held across the tab switch that unmounts
@@ -3141,11 +3147,11 @@ function App() {
                 <FormattingToolbar
                   onUndo={() => {
                     if (typesetEditorRef.current) typesetEditorRef.current.undo();
-                    else resumeEditorActions.undo();
+                    else commitUnmountedResumeHistory("undo");
                   }}
                   onRedo={() => {
                     if (typesetEditorRef.current) typesetEditorRef.current.redo();
-                    else resumeEditorActions.redo();
+                    else commitUnmountedResumeHistory("redo");
                   }}
                   canUndo={canUndoResume || docStyle.canUndo}
                   canRedo={canRedoResume || docStyle.canRedo}

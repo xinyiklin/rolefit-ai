@@ -158,4 +158,13 @@ assert.match(
   "the letter alignment gesture calls the group seam (a pass-through: letter style keeps no history)"
 );
 
+// With the editor unmounted (a narrow window), toolbar undo/redo follows the same
+// history rule, so a grouped step or a newer style step is not skipped.
+{
+  const app = read("../../App.tsx");
+  assert.match(app, /else commitUnmountedResumeHistory\("undo"\);/, "the unmounted toolbar undo uses the shared rule");
+  assert.match(app, /else commitUnmountedResumeHistory\("redo"\);/, "the unmounted toolbar redo uses the shared rule");
+  assert.match(app, /commitDetachedHistory\(\s*direction,\s*\{ undoSequence: resumeUndoSequence, redoSequence: resumeRedoSequence, undo: resumeEditorActions\.undo, redo: resumeEditorActions\.redo \},\s*docStyle\s*\)/, "it passes the resume and style histories to the shared rule");
+}
+
 console.log("grouped style history probes passed");
