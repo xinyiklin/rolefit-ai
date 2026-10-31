@@ -2129,6 +2129,57 @@ assert.match(editorSource, /readSelection\(\) \?\? \(savedRangeIsCurrent\(\) \? 
 assert.match(editorSource, /editorToolbarOwnsFocus\(\) && savedRangeIsCurrent\(\) \? lastRangeRef\.current : null/, "the caret overlay ignores another document's range");
 assert.match(editorSource, /const saved = savedRangeIsCurrent\(\);\s*const ranges = readRanges\(\) \?\? \(saved \? lastRangesRef\.current : null\);[\s\S]{0,120}?return saved && lastRangeRef\.current \?/, "toolbar commands ignore another document's ranges");
 
+// A plain-text edit can flip ANOTHER word into or out of link shape, changing
+// its display length (`–` ⇄ `--`). Link edges and the caret ride on the edited
+// characters, so neither slides: only the typed or deleted text changes.
+{
+  const L = "<link=https%3A%2F%2Fe.test%2F>";
+  const plainEdit = (value, edit) => {
+    const before = dm(value);
+    const result = applyPlainTextInputEdit(value, edit(before.display));
+    const after = dm(result.value);
+    return {
+      before: before.display,
+      value: result.value,
+      caret: displayIndexForValueIndex(after, result.caretValueIndex)
+    };
+  };
+  // "q--r@x.orb@x" is no address, so its "--" shows as "–"; a space after "b"
+  // makes "q--r@x.orb" one, and its "--" shows as typed.
+  const straddle = "q--r@x.or" + L + "b@x</link>";
+  const spaced = plainEdit(straddle, (text) => text.slice(0, 9) + " " + text.slice(9));
+  assert.equal(spaced.before, "q–r@x.orb@x");
+  assert.equal(spaced.value, "q--r@x.or" + L + "b @x</link>", "the link start stays on \"b\"");
+  assert.equal(spaced.caret, 11, "the caret lands right after the typed space");
+  const deleted = plainEdit(straddle, (text) => text.slice(0, 9) + text.slice(10));
+  assert.equal(deleted.value, "q--r@x.or" + L + "bx</link>", "deleting \"@\" keeps \"r\" unlinked");
+  assert.equal(deleted.caret, 10, "the caret stays at the deletion point");
+
+  // A small-caps heading edited through the DOM diff flips the other way: "@"
+  // typed into "555--@x.co" unshapes it, so "--" collapses to "–".
+  const heading = "o  555--<link=https%3A%2F%2Fe.test%2Fo'n--x>@x.co</link>";
+  const unshaped = plainEdit(heading, (text) => text.slice(0, 10) + "@" + text.slice(10));
+  assert.equal(unshaped.value, "o  555--<link=https%3A%2F%2Fe.test%2Fo'n--x>@x@.co</link>");
+  assert.equal(unshaped.caret, 10, "the caret follows the typed \"@\", not the collapsed dash");
+  assert.equal(plainEdit(heading, (text) => text.slice(0, 9) + text.slice(10)).caret, 8);
+
+  // Typing "-" beside "-" inside a link: the link keeps its whole run.
+  const dashed = plainEdit(L + "x-y</link>", (text) => text.slice(0, 2) + "-" + text.slice(2));
+  assert.equal(dashed.value, L + "x--y</link>");
+  assert.equal(dashed.caret, 3);
+
+  // Re-applying a link run's href leaves each character's <nolink> state alone.
+  const suppressed = plainEdit(
+    "<nolink>" + L + "don't </link> </nolink>",
+    (text) => text.slice(0, 1) + "z" + text.slice(1)
+  );
+  assert.equal(
+    suppressed.value,
+    "<nolink>" + L + "dzon't </link></nolink><nolink> </nolink>",
+    "a link inside <nolink> stays suppressed after an edit"
+  );
+}
+
 console.log(
   `typeset editing: whitespace, rich clipboard, bounded typography, indentation stops, drag hit-area, selection-boundary resolution, ${FONT_FAMILY_OPTIONS.length}-family tag round-trip, literal tag text, and hyperlink-editing checks passed`
 );

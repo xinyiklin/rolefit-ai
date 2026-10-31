@@ -516,6 +516,25 @@ export function applyEdit(
   insert: string,
   typingFormat?: Partial<TypingFormat>
 ): { value: string; caretValueIndex: number } {
+  const edit = editChars(map, dStart, dEnd, insert, typingFormat);
+  return withBoundary(serializeChars(edit.prefix, edit.chars, edit.suffix, edit.boundary));
+}
+
+// The character text a run of display chars stores, `<lt>` read as "<".
+const charsText = (chars: readonly DisplayChar[]): string =>
+  chars.map((char) => (isInlineLiteralLessThan(char.raw) ? "<" : char.raw)).join("");
+
+// applyEdit before serialization: the old map's characters with [dStart, dEnd)
+// replaced, and `boundary` the CHARACTER index right after the insertion. An
+// index here is character identity; a display index is not, because an edit can
+// change how many display positions another word's characters occupy.
+function editChars(
+  map: DisplayMap,
+  dStart: number,
+  dEnd: number,
+  insert: string,
+  typingFormat?: Partial<TypingFormat>
+): { prefix: string; chars: DisplayChar[]; suffix: string; boundary: number } {
   const inherit = map.chars[dStart - 1] ?? map.chars[dStart] ?? emptyFieldFormat(map);
   // Character formatting is inherited from the LEFT, the way typing works. Link
   // state is not: a word processor does not extend a hyperlink when you type at
@@ -571,7 +590,7 @@ export function applyEdit(
     : [];
   const suffix = reviveSuffix ? "" : map.suffix;
   const chars = [...map.chars.slice(0, dStart), ...leading, ...inserted, ...map.chars.slice(dEnd)];
-  return withBoundary(serializeChars(map.prefix, chars, suffix, dStart + leading.length + inserted.length));
+  return { prefix: map.prefix, chars, suffix, boundary: dStart + leading.length + inserted.length };
 }
 
 export function applyPlainTextInputEdit(
@@ -622,7 +641,7 @@ export function applyPlainTextInputEdit(
     const insertionInside =
       prefix === dEnd && prefix > start && prefix < end;
     if (intersectsReplacement || insertionInside) {
-      const automaticHref = automaticLinkHref(map.display.slice(start, end));
+      const automaticHref = automaticLinkHref(charsText(map.chars.slice(start, end)));
       affectedLinks.push({
         start,
         end,
@@ -636,48 +655,30 @@ export function applyPlainTextInputEdit(
     }
   }
 
-  let edited = applyEdit(
-    map,
-    prefix,
-    dEnd,
-    insert
-  );
-  const delta = insert.length - (dEnd - prefix);
-  const transformedBoundary = (
-    index: number,
-    edge: "start" | "end"
-  ): number => {
+  // Link edges and the caret ride on the edited CHARACTERS, never on a
+  // re-read display: the edit can flip another word into or out of link shape
+  // (`–` ⇄ `--`), which changes its display length, so a display offset from
+  // the old map slid the link start and the caret by a character.
+  const edit = editChars(map, prefix, dEnd, insert);
+  const shift = edit.chars.length - map.chars.length;
+  const moved = (index: number, edge: "start" | "end"): number => {
     if (index <= prefix) return index;
-    if (index >= dEnd) return index + delta;
-    return edge === "start" ? prefix : prefix + insert.length;
+    if (index >= dEnd) return index + shift;
+    return edge === "start" ? prefix : edit.boundary;
   };
+  let chars = edit.chars;
   for (const link of affectedLinks) {
-    const editedMap = buildDisplayMap(edited.value, { preserveWhitespace: true });
-    const start = Math.max(
-      0,
-      Math.min(transformedBoundary(link.start, "start"), editedMap.chars.length)
-    );
-    const end = Math.max(
-      start,
-      Math.min(transformedBoundary(link.end, "end"), editedMap.chars.length)
-    );
+    const start = moved(link.start, "start");
+    const end = Math.max(start, moved(link.end, "end"));
     const href = link.automatic
-      ? automaticLinkHref(editedMap.display.slice(start, end))
+      ? automaticLinkHref(charsText(chars.slice(start, end)))
       : link.href;
-    const chars = editedMap.chars.map((char, index) =>
-      index >= start && index < end
-        ? { ...char, linkHref: href, linkSuppressed: false }
-        : char
-    );
-    edited = withBoundary(
-      serializeChars(
-        editedMap.prefix,
-        chars,
-        editedMap.suffix,
-        Math.min(prefix + insert.length, chars.length)
-      )
+    // Only the href is re-applied: each character keeps its own <nolink> state.
+    chars = chars.map((char, index) =>
+      index >= start && index < end ? { ...char, linkHref: href } : char
     );
   }
+  const edited = withBoundary(serializeChars(edit.prefix, chars, edit.suffix, edit.boundary));
   return {
     ...edited,
     ...(removed.length === 0 && insert.length > 0

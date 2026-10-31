@@ -27,7 +27,13 @@ typesetting guide when a change affects painted output or layout provenance.
   read across tags and accepted whole by `automaticLinkHref`, or a character
   inside an explicit `<link>`, keeps its typed `--`/`'`, including while its
   auto-link is deferred, so the map holds the painted text character for
-  character and re-serializing marks never changes it (`link-display.mjs`). HTML and plain-text paste encode clipboard text with
+  character and re-serializing marks never changes it (`link-display.mjs`).
+  Because one edit can flip ANOTHER word into or out of link shape (`–` ⇄
+  `--`), a display index from the pre-edit map is not a stable position.
+  `applyPlainTextInputEdit` carries link edges and the caret on the edited
+  character array (`editChars`) and serializes once, never through a re-read
+  display; re-applying a link run's href leaves each character's `<nolink>`
+  state alone. HTML and plain-text paste encode clipboard text with
   `escapeInlineMarkText` before it reaches the grammar. Paragraph merges join
   through `mergeParagraphValues` and cross-field folds with
   `joinInlineMarkText`, and header or document paste stores blocks through
