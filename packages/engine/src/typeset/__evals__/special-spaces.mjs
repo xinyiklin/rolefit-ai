@@ -16,6 +16,8 @@ await ensureAllFontMetrics();
 // Built from code points: a literal no-break space is invisible in source.
 const NBSP = String.fromCharCode(0xa0);
 const TAB = String.fromCharCode(0x09);
+const NARROW = String.fromCharCode(0x202f);
+const FIGURE = String.fromCharCode(0x2007);
 const lines = (doc) => doc.pages.flatMap((page) => page.lines);
 const resume = (item, contact = []) => ({
   header: { name: "Name", contact },
@@ -33,6 +35,14 @@ const resume = (item, contact = []) => ({
     .filter((line) => line.runs.some((run) => run.src?.kind === "bullet"));
   const broken = bulletLines(`${before} ${after}`);
   assert.ok(broken.length === 2 && broken[0].runs.at(-1).text === "$5", "the ordinary space is where this bullet wraps");
+  for (const tie of [NARROW, FIGURE]) {
+    const tied = bulletLines(`${before}${tie}${after}`);
+    const name = tie.codePointAt(0).toString(16);
+    assert.equal(tied.length, 2, `a ${name} space still wraps the bullet once`);
+    assert.notEqual(tied[0].runs.at(-1).text, "$5", `a ${name} space is never the break`);
+    const next = tied[1].runs.map((run) => run.text);
+    assert.ok(next.indexOf("$5") >= 0 && next.indexOf("$5") < next.indexOf("million"), `a ${name} space moves $5 down with million`);
+  }
   const kept = bulletLines(`${before}${NBSP}${after}`);
   assert.equal(kept.length, 2, "the bullet still wraps once");
   assert.notEqual(kept[0].runs.at(-1).text, "$5", "the no-break space is never the break");
@@ -55,7 +65,8 @@ const cases = [
   ["titleRight", { titleRight: `Jan${NBSP}2020 - Mar${NBSP}2024` }],
   ["subtitleRight", { subtitleRight: `San Francisco, CA${TAB}2019 - 2024` }],
   ["titleLeft", { titleLeft: `<b>Senior${TAB}Engineer</b>` }],
-  ["contact", {}, [`Lisbon,${NBSP}PT`, `City${TAB}Region`]]
+  ["contact", {}, [`Lisbon,${NBSP}PT`, `City${TAB}Region`]],
+  ["titleRight", { titleRight: `Jan${NARROW}2020 - Mar${FIGURE}2024` }]
 ];
 let checked = 0;
 for (const family of FONT_FAMILY_IDS) {
@@ -71,7 +82,7 @@ for (const family of FONT_FAMILY_IDS) {
       .filter((run) => (run.src?.kind === "entry" && run.src.field === field) || (field === "contact" && run.src?.kind === "contact"));
     assert.ok(runs.length, `${family}/${field} lays out`);
     for (const run of runs) {
-      assert.doesNotMatch(run.text, new RegExp(`[${TAB}${NBSP}]`), `${family}/${field} paints a tab or no-break space as one space`);
+      assert.doesNotMatch(run.text, new RegExp(`[${TAB}${NBSP}${NARROW}${FIGURE}]`), `${family}/${field} paints a tab or no-break space as one space`);
       assert.equal(run.style.family, family, `${family}/${field} draws in its own family`);
       const face = fontFor(run.style.face);
       const shaped = (face.layout(run.text).advanceWidth / face.unitsPerEm) * run.style.size;

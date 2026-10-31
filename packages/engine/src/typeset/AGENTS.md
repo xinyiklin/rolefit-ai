@@ -140,12 +140,13 @@ it truthfully.
 - `paintedText` (`measure.ts`) owns how a single-line field run is painted and
   measured: a tab or a no-break space paints as one ordinary space in layout,
   DOM and PDF alike (`special-spaces.mjs`). In paragraphs and wrapping fields a
-  run of only no-break spaces (U+00A0) stays stretchable glue behind a
-  forbidding penalty, so the optimal breaker never breaks there and editor and
-  PDF justify it alike. When no break set fits the paragraph (an oversized token,
-  or a no-break-tied run wider than the column), the emergency greedy breaker
-  may break at any of its no-break spaces, keeping words whole; tying it into a word box instead would let
-  CSS word-spacing stretch it in the editor but not in the PDF.
+  run of only no-break spaces (U+00A0, U+2007, U+202F) stays stretchable glue
+  behind a forbidding penalty, so the optimal breaker never breaks there and
+  editor and PDF justify it alike. When no break set fits the paragraph (an
+  oversized token, or a no-break-tied run wider than the column), the emergency
+  greedy breaker may break at any of its no-break spaces, keeping words whole;
+  tying it into a word box instead would let CSS word-spacing stretch it in the
+  editor but not in the PDF.
 - Underline and link rules come from `underlineSpans` plus `underlineRule`, so
   every renderer draws one rule per contiguous underlined phrase at one
   face-derived depth. Never derive a rule from the text a renderer happens to

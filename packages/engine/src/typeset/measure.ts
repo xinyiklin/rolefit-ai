@@ -57,11 +57,12 @@ export function texLigatures(text: string): string {
   return text.replace(/---/g, "—").replace(/--/g, "–").replace(/'/g, "’");
 }
 
-// A single-line field run's painted text: a tab or no-break space is set as one
-// space, as paragraph glue sets them, so layout, DOM and PDF draw one width.
+// A single-line field run's painted text: a tab or no-break space (U+00A0, the
+// figure space U+2007, the narrow U+202F) is set as one space, as paragraph glue
+// sets them, so layout, DOM and PDF draw one width.
 // One character for one, so editor offsets are unchanged.
 export function paintedText(text: string): string {
-  return texLigatures(text).replace(/[\t\u00a0]/g, " ");
+  return texLigatures(text).replace(/[\t\u00a0\u2007\u202f]/g, " ");
 }
 
 const F_LIGATURES = ["ffi", "ffl", "ff", "fi", "fl"] as const;
@@ -422,7 +423,7 @@ export function paragraphItems(
       }
       if (/^\s+$/.test(part)) {
         // Accumulate consecutive whitespace, even across a tag boundary.
-        const tied = /^\u00a0+$/.test(part);
+        const tied = /^[\u00a0\u2007\u202f]+$/.test(part);
         if (pending) {
           pending.count += part.length;
           pending.tied &&= tied;
