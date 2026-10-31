@@ -206,10 +206,11 @@ function createHarness({
       return refs[index];
     },
     useEffect() {},
-    captureExtension(onItem, onStart, enabled) {
+    captureExtension(onItem, onStart, enabled, onGone) {
       extension.onItem = onItem;
       extension.onStart = onStart;
       extension.enabled = enabled;
+      extension.onGone = onGone;
     }
   };
 
@@ -1062,6 +1063,37 @@ for (const fitProvider of ["codex-cli", "anthropic"]) {
     [null],
     "editing the URL still releases the prepared job"
   );
+}
+
+{
+  // A posting that vanished while "preparing" leaves the receiving state with a
+  // visible reason instead of locking Prepare until a reload.
+  const lost = createHarness();
+  lost.render();
+  lost.extension.onStart();
+  lost.extension.onGone();
+  const phases = lost.log.filter(({ event }) => event === "state:extensionPhase").map(({ value }) => value);
+  assert.deepEqual(phases, ["receiving", null], "a lost extension posting leaves the receiving state");
+  const progress = lost.log.filter(({ event }) => event === "state:progress").at(-1)?.value;
+  assert.equal(progress?.status, "failed");
+  assert.equal(progress?.errorHeadline, "Extension posting lost");
+}
+{
+  // The posting vanishes while the tab's own link preparation runs: the
+  // receiving phase still ends, so Prepare does not stay locked afterwards.
+  const gate = deferred();
+  const busy = createHarness({ jobAnalysisGate: gate });
+  const run = runUrl(busy);
+  for (let i = 0; i < 20; i += 1) await settleAsyncWork();
+  busy.render();
+  busy.extension.onStart();
+  busy.extension.onGone();
+  gate.resolve();
+  await run;
+  for (let i = 0; i < 20; i += 1) await settleAsyncWork();
+  assert.equal(busy.state[1], null, "the receiving phase ends even while another run is busy");
+  const active = prepareActive({ isExtractingLink: busy.state[0], extensionImportPhase: busy.state[1], jobAnalysisProgress: busy.state[3], preparationAutomationPending: false });
+  assert.equal(active, false, "Prepare unlocks once the link run settles");
 }
 
 console.log("Job intake entry-point characterization: passed");

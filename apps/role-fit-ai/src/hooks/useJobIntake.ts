@@ -1495,7 +1495,21 @@ export function useJobIntake({
       setJobAnalysisProgress((prev) => (prev.status === "running" ? prev : { status: "running" }));
       setJobAnalysisProgressVisible(true);
     },
-    extensionImportsReady
+    extensionImportsReady,
+    () => {
+      // The prepared posting vanished before delivery (for example, a server
+      // restart): always leave the receiving phase, but a run already in flight
+      // (a link or paste preparation) keeps its own card.
+      setExtensionImportPhase((phase) => (phase === "receiving" ? null : phase));
+      if (jobAnalysisBusyRef.current) return;
+      setJobAnalysisRetrySource(null);
+      setJobAnalysisProgress({
+        status: "failed",
+        errorHeadline: "Extension posting lost",
+        error: "The posting from the extension did not arrive. Send it again from the extension."
+      });
+      setJobAnalysisProgressVisible(true);
+    }
   );
 
   // Resolve the job analysis card's Retry to the live handler for the last action, so
