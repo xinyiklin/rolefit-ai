@@ -109,6 +109,12 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-30
 
+- [TOOL] **Bug-hunt round thirteen**: a vanished extension posting no longer
+  leaves Prepare on "Receiving"; narrow-window toolbar undo/redo follows the
+  editor's history rule (grouped steps move together); U+202F and U+2007 act
+  like U+00A0 (engine, two reviewers). Each reviewed; full checks 216/216.
+  Residual: other Unicode spaces (U+2009, U+3000) still keep their own glyph
+  in single-line fields; letter style has no undo history.
 - [USER+TOOL] **Merged fix/rolefit-claim-grounding** ([USER] approved): its
   4b4034e closes the five AI evidence-check gaps (a percent keeps its metric
   and a duration its skills; multiplier verbs are outcomes; scale words are
@@ -124,10 +130,9 @@ D-entries in `docs/decisions.md`.
   reviewers). [USER] asked for and approved: extension imports send the page
   title so LinkedIn/Indeed/Handshake records keep role and employer; one
   alignment or reset gesture is one undo step (editor, two reviewers). Residual:
-  letter style has no undo history; narrow-window RoleFit fallback undo is
-  content-only; the emergency line breaker may break at a no-break space;
-  U+202F/U+2007 and some date-range shapes are unhandled; a vanished extension
-  import can leave Prepare on "Receiving".
+  letter style has no undo history; the emergency line breaker may break at a
+  no-break space; some date-range shapes still link (round thirteen fixed the
+  rest of this list).
 - [TOOL] **Bug-hunt round eleven** (five-area sweep, 16 confirmed): outside
   writers cannot store a "ready" answer with a placeholder or a blank pair; an
   MCP correction replaces the earlier answer; follow-ups sort by date; Indeed
@@ -149,10 +154,3 @@ D-entries in `docs/decisions.md`.
   until its date is added ([USER] chose refusal). Each reviewed. Residual: the
   tracker append route (MCP add_application_answers) still stores a "ready"
   answer that holds a placeholder; reopen re-judges it.
-- [TOOL] **Bug-hunt round nine**: a cover letter past the .cover limits no
-  longer crashes RoleFit (it reads changed, recovery keeps its last valid
-  version, saves refuse with the codec's message); accented names keep their
-  letters in file names; Undo works on a row settled by hand; diff views keep
-  each side's spacing; PDF import splits contact items at dingbat icons and
-  sets rating runs aside. Each reviewed. Reverted after two failed reviews:
-  icon-prefixed headings and private-use separators (open, src/resume/AGENTS.md).
