@@ -109,6 +109,17 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-30
 
+- [TOOL] **Bug-hunt round fourteen** (five-area sweep, 18 confirmed, 17
+  fixed): invisible format characters measure zero and merged runs measure
+  whole, as the PDF draws them (engine, two reviewers); paragraph merges keep
+  the upper format, link Apply keeps edge spaces, nested-block and trailing-br
+  paste, quoted copied fonts (editor, two reviewers); Typeset warns on another
+  tab's rename and blocked storage; RoleFit restores pre-Interested-migration
+  backups, reads past 40 variants, hides fs errno text, and keeps closed
+  records out of next actions/Upcoming. Full check passed. Open: linked
+  emails/URLs with "--" or "'" display rewritten punctuation (needs engine and
+  editor together); a .resume summary with no bullets (codec change, needs
+  [USER]); a "-" pair split by a mark or paragraph tag shows an en dash.
 - [TOOL] **Bug-hunt round thirteen**: a vanished extension posting no longer
   leaves Prepare on "Receiving"; narrow-window toolbar undo/redo follows the
   editor's history rule (grouped steps move together); U+202F and U+2007 act
@@ -143,14 +154,3 @@ D-entries in `docs/decisions.md`.
   (percent/duration subject, multiplier verbs, scale words, employer/school
   phrasings), proposed as their own task, closed in 4b4034e and merged here.
   A hyphenated LinkedIn employer now stays whole.
-- [TOOL] **Bug-hunt round ten**: the Prepare brief keeps every analyzed
-  and saved item and says which ones its 9,000-character budget leaves out;
-  the landing page moves keyboard focus with its in-page links; a labelled
-  answer range ("Word count: 250-300") caps at its second number only when
-  nothing but a waiver or the next question follows (anything unclear keeps
-  the old first-number cap; no new minimum, other limits unchanged; sixteen
-  review rounds); answers with a placeholder are never ready on any edit
-  path; a migrated undated record with documents is refused a move to Skipped
-  until its date is added ([USER] chose refusal). Each reviewed. Residual: the
-  tracker append route (MCP add_application_answers) still stores a "ready"
-  answer that holds a placeholder; reopen re-judges it.
