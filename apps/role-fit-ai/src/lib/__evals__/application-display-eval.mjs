@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   appFitVerdict,
   applicationActivityDate,
+  displayCompany,
   compareNextAction,
   isJobOnlySkippedApplication,
   applicationSearchRank,
@@ -213,6 +214,35 @@ assert.equal(
   null,
   "identity search excludes descriptions and notes"
 );
+const roleless = application({ company: "Acme", role: "", title: "Acme" });
+for (const query of ["not", "set", "role", "role not set"]) {
+  assert.equal(
+    applicationSearchRank(roleless, query, ""),
+    null,
+    `search never matches the "Role not set" placeholder (${query})`
+  );
+}
+assert.equal(
+  applicationSearchRank(application({ company: "Acme", role: "  Notion Specialist " }), "notion", ""),
+  2,
+  "a stored role still ranks as a role match"
+);
+
+// A company-less record's title is its role ("role at company" without one).
+assert.equal(
+  displayCompany(application({ company: "", title: "Front-End Developer" })),
+  "Front-End Developer",
+  "a hyphen inside a word never cuts the title"
+);
+assert.equal(
+  displayCompany(application({ company: "", title: "Full-Stack Engineer - Platform" })),
+  "Full-Stack Engineer",
+  "a spaced hyphen still separates the lead segment"
+);
+assert.equal(displayCompany(application({ company: "", title: "Acme · Engineer" })), "Acme");
+assert.equal(displayCompany(application({ company: "", title: "Acme|Engineer" })), "Acme");
+assert.equal(displayCompany(application({ company: " Real-Co ", title: "Front-End Developer" })), "Real-Co");
+assert.equal(displayCompany(application({ company: "", title: "" })), "Unknown company");
 
 const fitWarnings = [
   "Match 1: this requirement is repeated.",

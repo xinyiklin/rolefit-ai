@@ -18,7 +18,8 @@ import {
   sentApplications,
   silenceBins,
   trackingHygiene,
-  upcomingItems
+  upcomingItems,
+  upcomingList
 } from "../applicationAnalytics.ts";
 import {
   activityCount,
@@ -607,6 +608,20 @@ assert.deepEqual(
   [["a12", -2], ["a1", 2]],
   "overdue follow-ups lead; ones beyond a week and on closed records are left out"
 );
+{
+  // "Coming up" merges both kinds: soonest first, an interview before a
+  // follow-up on the same day, and each kind keeps upcomingItems' company order.
+  const item = (key, kind, days) => ({ key, kind, days, at: "", application: { id: key } });
+  const interviews = [item("Alpha", "interview", 1), item("Beta", "interview", 1), item("Gamma", "interview", 1), item("Delta", "interview", 4)];
+  const followups = [item("Echo", "followup", -1), item("Fox", "followup", 1), item("Golf", "followup", 1)];
+  assert.deepEqual(
+    upcomingList(interviews, followups).map((entry) => entry.key),
+    ["Echo", "Alpha", "Beta", "Gamma", "Fox", "Golf", "Delta"],
+    "same-day interviews keep their company order instead of reversing"
+  );
+  const section = (await import("node:fs")).readFileSync(new URL("../../sections/analytics/UpcomingSection.tsx", import.meta.url), "utf8");
+  assert.match(section, /const items = upcomingList\(interviews, followups\);/, "the Coming up card shows upcomingList's order");
+}
 
 // --- Silence: open submitted records by days since their last activity -------
 assert.deepEqual([...SILENCE_EDGES], [0, 8, 15, 31, 60]);

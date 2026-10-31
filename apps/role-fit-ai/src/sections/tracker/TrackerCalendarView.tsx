@@ -4,6 +4,7 @@ import {
   applicationSearchRank,
   dateKey,
   displayCompany,
+  isInactiveApplication,
   matchesActivityFilter,
   postingIdIndex,
   type ApplicationActivityFilter,
@@ -139,8 +140,10 @@ export function TrackerCalendarView({
   // reviews), soonest first. Exclude "applied" events: those are historical
   // "submitted on" markers, and a batch applied today would otherwise fill the
   // whole list with dated-today submissions instead of actual next actions.
+  // A closed or Skipped record's dates stay on the grid but are no longer
+  // to-dos; a Draft's planned next step still is.
   const upcoming = events
-    .filter((event) => event.type !== "applied")
+    .filter((event) => event.type !== "applied" && !isInactiveApplication(event.app))
     .filter((event) => event.date.getTime() >= new Date(today.toDateString()).getTime())
     .sort((a, b) => a.date.getTime() - b.date.getTime())
     .slice(0, 5);
