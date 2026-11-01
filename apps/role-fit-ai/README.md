@@ -721,8 +721,9 @@ another port; only loopback origins are accepted. Tools:
 - `update_application` — repair a saved record: set its job brief, posting,
   Fit snapshot, notes, or `resumeUsed`, and attach a `.resume` or `.cover` a
   submitted record never received. Values are stored exactly as sent or
-  refused with field-level `issues`; a saved document is never replaced, and
-  resending an update that is already saved changes nothing.
+  refused with field-level `issues`; fields cannot be cleared, a saved
+  document is never replaced, and resending an update that is already saved
+  changes nothing.
 - `list_resumes` and `get_resume`, `list_cover_letters` and `get_cover_letter`
   — the saved base resumes and cover letters, each as its `.resume`/`.cover`
   source and the plain text RoleFit reads.

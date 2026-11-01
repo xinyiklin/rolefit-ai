@@ -3,8 +3,9 @@
 // running RoleFit serves. The PDF goes to a path the agent names (D103); the
 // workspace is never touched.
 
-import { lstat, realpath, writeFile } from "node:fs/promises";
-import { basename, dirname, isAbsolute, resolve } from "node:path";
+import { randomUUID } from "node:crypto";
+import { access, lstat, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 
 import { coverLetterStyleToDocumentStyle, parseCoverLetterFile } from "@typeset/engine/lib/coverLetter.ts";
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
@@ -24,9 +25,10 @@ function ancestors(dir: string): string[] {
 }
 
 export function createRenderTool(client: RoleFitClient, baseUrl: string): Tool {
-  // Refuses a path inside RoleFit's workspace (the health route names it only
-  // by fingerprint, so each folder above the target is fingerprinted) or a
-  // symlink, so a render can never replace a saved document.
+  // Refuses a path inside RoleFit's workspace, so a render can never replace a
+  // saved document: a folder above the target matches the health route's
+  // fingerprint (the configured path) or holds a tracker file (which also
+  // catches a workspace reached through a symlink). A symlink target is refused.
   async function outsideWorkspace(outputPath: string): Promise<ToolResult | null> {
     let realParent: string;
     try {
@@ -40,10 +42,11 @@ export function createRenderTool(client: RoleFitClient, baseUrl: string): Tool {
     if (!health.ok) return health;
     const fingerprint = (health.value as { workspaceFingerprint?: unknown }).workspaceFingerprint;
     if (typeof fingerprint !== "string" || !fingerprint) return fail("RoleFit did not say where its workspace is, so no PDF was written.");
-    const folders = new Set([...ancestors(resolve(dirname(outputPath))), ...ancestors(realParent)]);
-    return [...folders].some((folder) => computeWorkspaceFingerprint(folder) === fingerprint)
-      ? fail("outputPath: inside RoleFit's workspace, which holds the saved documents; choose a folder outside it.")
-      : null;
+    const folders = [...new Set([...ancestors(resolve(dirname(outputPath))), ...ancestors(realParent)])];
+    const holdsTracker = async (folder: string) => access(join(folder, "applications.json")).then(() => true, () => false);
+    const inside = folders.some((folder) => computeWorkspaceFingerprint(folder) === fingerprint)
+      || (await Promise.all(folders.map(holdsTracker))).some(Boolean);
+    return inside ? fail("outputPath: inside RoleFit's workspace, which holds the saved documents; choose a folder outside it.") : null;
   }
 
   // The document's .resume/.cover source from exactly one place.
@@ -130,9 +133,18 @@ export function createRenderTool(client: RoleFitClient, baseUrl: string): Tool {
       } catch (error) {
         return fail(`RoleFit's fonts could not be loaded from ${baseUrl}, so no PDF was written (${error instanceof Error ? error.message : String(error)}). Start RoleFit and try again.`);
       }
+      // An overwrite renames a finished file over the old name, so it never
+      // writes through a link into another file.
+      const temporary = join(dirname(outputPath), `.${basename(outputPath)}.${randomUUID()}.tmp`);
       try {
-        await writeFile(outputPath, bytes, { flag: overwrite ? "w" : "wx", mode: 0o600 });
+        if (overwrite) {
+          await writeFile(temporary, bytes, { flag: "wx", mode: 0o600 });
+          await rename(temporary, outputPath);
+        } else {
+          await writeFile(outputPath, bytes, { flag: "wx", mode: 0o600 });
+        }
       } catch (error) {
+        await rm(temporary, { force: true }).catch(() => undefined);
         const code = (error as { code?: string }).code;
         return fail(code === "EEXIST"
           ? "outputPath: a file is already there; choose another path or send overwrite: true."

@@ -14,7 +14,7 @@
 // of the text as written, refusing to replace a file unasked.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, symlink } from "node:fs/promises";
+import { link, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
@@ -399,6 +399,17 @@ const call = async (name, args) => (await rpc("tools/call", { name, arguments: a
     } finally {
       workspaceFingerprint = realFingerprint;
     }
+    // A workspace whose configured path differs (reached through a symlink)
+    // is still recognized by its tracker file.
+    await writeFile(join(workspace, "applications.json"), "{}");
+    const viaLink = await call("render_pdf", { kind: "resume", sourceText: resumeSource, outputPath: join(dir, "linked", "a1", "resume.pdf"), overwrite: true });
+    assert.match(viaLink.structuredContent.error, /inside RoleFit's workspace/, "a folder holding a tracker file is a workspace");
+    // An overwrite replaces the name, never the content of a hard-linked file.
+    await mkdir(join(dir, "kept"));
+    await writeFile(join(dir, "kept", "saved.pdf"), "saved bytes");
+    await link(join(dir, "kept", "saved.pdf"), join(dir, "Hardlink.pdf"));
+    assert.equal((await call("render_pdf", { kind: "resume", sourceText: resumeSource, outputPath: join(dir, "Hardlink.pdf"), overwrite: true })).isError, false);
+    assert.equal(await readFile(join(dir, "kept", "saved.pdf"), "utf8"), "saved bytes", "the other name keeps its bytes");
     globalThis.fetch = async () => { throw new TypeError("fetch failed"); };
     const offline = await call("render_pdf", { kind: "resume", sourceText: resumeSource, outputPath: join(dir, "Offline.pdf") });
     assert.match(offline.structuredContent.error, /fonts could not be loaded/);

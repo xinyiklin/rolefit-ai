@@ -130,7 +130,10 @@ const aiCalls = () => calls.filter(({ path }) => !["/api/workspace/preferences",
   const fallback = (await call("analyze_job", { text: posting })).value;
   assert.equal(fallback.source, "local");
   assert.equal(fallback.aiError, "The provider is unavailable.");
-  assert.deepEqual(fallback.providerRun, stageFields("job-analysis"), "a failed analysis still names the provider it was sent to");
+  assert.equal(fallback.providerRun, undefined, "a refusal that reports no provider run claims none");
+  reply["/api/job-analysis"] = () => json(502, { error: "The provider returned no brief.", provider: "anthropic", model: "claude-opus-5-5" });
+  const failedRun = (await call("analyze_job", { text: posting })).value;
+  assert.equal(failedRun.providerRun.model, "claude-opus-5-5", "a failed run the route reports is named");
   assert.ok(fallback.jobDescription.length > 0, "the local brief still comes back");
   calls.length = 0;
   assert.equal((await call("analyze_job", { text: "Too short." })).value.source, "local");

@@ -730,7 +730,8 @@ later entry wins.
   `resumeUsed` under the commit's exact-as-sent rule and `baseUpdatedAt`, and
   attaches a `.resume`/`.cover` a submitted record lacks; it never replaces a
   saved document (a record of what was sent), resending an already-saved
-  update answers `changed: false` without a write, and a Draft or job-only Skip
+  update answers `changed: false` without a write (before the revision check,
+  as the status route does), an empty string cannot clear a field, and a Draft or job-only Skip
   gets documents and `resumeUsed` only with its first submission, where the
   status route now accepts `resumeUsed`. Stage, dates, history, answers, and
   identity keep their own routes. The MCP `render_pdf` tool lays out and emits
@@ -738,14 +739,17 @@ later entry wins.
   document) with the engine RoleFit exports with, fonts read from the running
   RoleFit's `/fonts`, and writes it only to an absolute `.pdf` path the agent
   names, refusing to replace a file unless `overwrite` is set, a symlink, and
-  any path inside the workspace (matched against the health route's workspace
-  fingerprint for every folder above the target, so no path is exposed); it adds no text
+  any path inside the workspace: a folder above the target matches the health
+  route's workspace fingerprint (no path is exposed) or holds an
+  `applications.json` (which catches a workspace reached through a symlink; the
+  health contract is unchanged). An overwrite renames a finished temp file over
+  the name, so it never writes through a hard link; it adds no text
   (no appended sign-off) and returns the page count. `polish_resume` takes
   `apply` ("all" or ids) and returns exactly what `apply_resume_edits` would,
   so a restarted MCP process cannot strand a proposal; a bad id keeps the
   proposal. Every AI tool reports `providerRun` (the route's provider, model,
   effort, and attempts, falling back to the request's; `analyze_job` reports
-  it whenever it sent a request, even one that failed; provider and model stay
+  it whenever the route answered for a run, even a failed analysis; provider and model stay
   the stage's saved Settings, never tool inputs). `draft_answer` takes an
   optional `jobDescription` that wins over the record's brief. `get_answers`
   adds each answer's `origin` (`ai-draft` with the drafting provider, model,
