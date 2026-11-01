@@ -1,17 +1,19 @@
 // The tools the local MCP server offers an agent: tracker, document, answer and
 // profile reads and writes over the running RoleFit server's routes (client.ts),
-// plus the AI stages (aiTools.ts).
+// plus the AI stages (aiTools.ts) and PDF rendering (renderTool.ts).
 
 import { MAX_APPENDED_ANSWERS } from "../server/applications/answerService.ts";
 import { COMMIT_STATUSES, MAX_ACKNOWLEDGED_DUPLICATES } from "../server/applications/commitService.ts";
 import { APPLICATION_EVENT_TYPES } from "../server/applications/eventService.ts";
 import { APPLICATION_SOURCES } from "../server/applications/schema.ts";
+import { RESUME_USED_VALUES } from "../server/applications/statusService.ts";
 import { INTERVIEW_KINDS, STAGE_HISTORY_NOTE_MAX_LENGTH } from "../shared/applicationStageHistoryContract.ts";
 import { FIT_ASSESSMENT_VERDICTS } from "../shared/fitAssessmentContract.ts";
 import { APPLICATION_STATUSES } from "../src/lib/applicationStatusTransitions.ts";
 import { findDuplicateApplications, normalizeCompanyName } from "../src/lib/jobIdentity.ts";
 import { LEGACY_NOT_APPLYING_REASONS, NOT_APPLYING_REASONS } from "../src/lib/notApplying.ts";
 import { createAiTools } from "./aiTools.ts";
+import { createRenderTool } from "./renderTool.ts";
 import { candidateProfile, createClient, isToolResult, type SavedAnswer, type Tool, type TrackerRecord } from "./client.ts";
 
 const SEARCH_LIMIT_MAX = 100;
@@ -63,17 +65,32 @@ function latestAnswers(answers: readonly SavedAnswer[] = []): SavedAnswer[] {
   return [...latest.values()];
 }
 
-const answerSummary = ({ question, answer, savedAt, status, warnings }: SavedAnswer) => ({
+// `origin` says whose words were saved: RoleFit's answer stage (and which
+// provider and model), or text the user wrote or edited, or an agent saved as a
+// plain pair. An edit drops the generation, so "ai-draft" means unedited.
+const answerSummary = ({ question, answer, savedAt, status, warnings, questionId, generation }: SavedAnswer) => ({
   question,
   answer,
   savedAt,
+  ...(questionId ? { questionId } : {}),
+  ...(generation
+    ? {
+        origin: "ai-draft",
+        drafted: {
+          provider: generation.provider,
+          model: generation.model,
+          ...(generation.reasoningEffort ? { reasoningEffort: generation.reasoningEffort } : {}),
+          at: generation.createdAt
+        }
+      }
+    : { origin: "saved-text" }),
   ...(status ? { status } : {}),
   ...(warnings?.length ? { warnings } : {})
 });
 
 export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): Tool[] {
   const client = createClient(baseUrl, fetchImpl);
-  const { request, listApplications, getApplication, applicationDocument, workspaceVariant } = client;
+  const { request, listTracker, getApplication, applicationDocument, workspaceVariant } = client;
 
   return [
     {
@@ -83,7 +100,9 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
         "Find tracker records before committing a new one or changing a stage. `posting` runs the tracker's own " +
         "duplicate matcher (posting id, requisition id, URL, company + role, description similarity) and returns " +
         "matches strongest first with their evidence; `company`, `query` and `status` filter. Returns summaries, " +
-        "including each record's id and updatedAt.",
+        "including each record's id and updatedAt. If the tracker holds records RoleFit cannot read safely, they are " +
+        "left out and named in `invalidRecords` (no duplicate check covers them, and RoleFit refuses every tracker " +
+        "write until they are repaired or a backup is restored).",
       inputSchema: {
         type: "object",
         properties: {
@@ -107,8 +126,9 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
         additionalProperties: false
       },
       async run(args) {
-        const applications = await listApplications();
-        if (!Array.isArray(applications)) return applications;
+        const listed = await listTracker();
+        if (isToolResult(listed)) return listed;
+        const { applications, invalidRecords } = listed;
         const posting = args.posting === undefined ? null : args.posting;
         if (posting !== null && (!posting || typeof posting !== "object" || Array.isArray(posting)
           || Object.values(posting).some((value) => typeof value !== "string"))) {
@@ -149,7 +169,8 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
               createdAt: record.createdAt,
               updatedAt: record.updatedAt,
               ...(match ? { match } : {})
-            }))
+            })),
+            ...(invalidRecords ? { invalidRecords } : {})
           }
         };
       }
@@ -178,8 +199,8 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
       description:
         "Create one tracker record, with its tailored resume and cover letter, in a single atomic save. Use status " +
         "`applied` for a submitted application, `not_applying` for a job you decided to skip, or `draft` for one " +
-        "you started but have not submitted (no documents or dates; submit it later with update_application_status, " +
-        "sending its documents then). An applied commit must include documents.resume, the .resume that was sent. " +
+        "you started but have not submitted (no documents, dates or resumeUsed; submit it later with " +
+        "update_application_status, sending its documents and resumeUsed then; fix other fields with update_application). An applied commit must include documents.resume, the .resume that was sent. " +
         "The server runs the tracker's duplicate matcher and refuses with status 409 and `duplicates` while any " +
         "match is not listed in acknowledgedDuplicates; if the match is the same application (often your own " +
         "draft), change that record instead. Send dryRun: true to get the same answer without saving anything. " +
@@ -260,8 +281,9 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
         "to the latest saved record and adds the stage-history entry. Moves the menu does not offer are refused " +
         "with the allowed list. A first submission (a Draft, or a job-only Skip, moving to a submitted stage) must " +
         "send documents with the .resume that was sent, and the .cover if one was; the stage and documents save " +
-        "together or not at all. Any other move refuses documents. Setting the current stage again changes " +
-        "nothing and saves no documents, so a retry after a lost reply is safe.",
+        "together or not at all, with `resumeUsed` if you send it. Any other move refuses documents and " +
+        "resumeUsed. Setting the current stage again changes nothing and saves no documents, so a retry after a " +
+        "lost reply is safe.",
       inputSchema: {
         type: "object",
         required: ["id", "status"],
@@ -276,11 +298,50 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
             ...timestamp,
             description: "The updatedAt you read; if the record changed since, the change is refused and the current record returned."
           },
-          documents: editableDocuments("Only for a first submission, where resume is required.")
+          documents: editableDocuments("Only for a first submission, where resume is required."),
+          resumeUsed: { type: "string", enum: [...RESUME_USED_VALUES], description: "Which resume was sent; only for a first submission." }
         }
       },
       run: ({ id, ...body }) => typeof id === "string"
         ? request("POST", `/api/applications/${encodeURIComponent(id)}/status`, body)
+        : Promise.resolve({ ok: false, value: { error: "id: required string" } })
+    },
+    {
+      name: "update_application",
+      title: "Update application",
+      description:
+        "Repair a saved record's snapshot: set its job brief (jobDescription), posting (rawJobDescription), Fit " +
+        "Assessment snapshot, notes, or resumeUsed, and attach a .resume or .cover that a submitted record never " +
+        "received. Each field you send replaces the saved value and is stored exactly as sent, or nothing is saved " +
+        "and `issues` names each field. A saved document is never replaced (it records what was sent), and a Draft " +
+        "or skipped job gets documents and resumeUsed with its first submission (update_application_status). " +
+        "Stage, dates, timeline and answers have their own tools. Repeating the same update is harmless.",
+      inputSchema: {
+        type: "object",
+        required: ["id"],
+        additionalProperties: false,
+        properties: {
+          id: { type: "string", description: "The record id from search_applications." },
+          fields: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              jobDescription: { type: "string", description: "The prepared job brief." },
+              rawJobDescription: { type: "string", description: "The original posting text." },
+              fitAssessment: { type: "object", description: "A fitAssessment snapshot from assess_fit, unchanged." },
+              notes: { type: "string" },
+              resumeUsed: { type: "string", enum: [...RESUME_USED_VALUES], description: "Submitted records only." }
+            }
+          },
+          documents: editableDocuments("A document the submitted record does not have yet."),
+          baseUpdatedAt: {
+            ...timestamp,
+            description: "The updatedAt you read; if the record changed since, nothing is saved and the current record is returned."
+          }
+        }
+      },
+      run: ({ id, ...body }) => typeof id === "string"
+        ? request("POST", `/api/applications/${encodeURIComponent(id)}/update`, body)
         : Promise.resolve({ ok: false, value: { error: "id: required string" } })
     },
     {
@@ -449,7 +510,10 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
       description:
         "Search the answers saved on every application, to reuse or adapt an earlier one. Each record contributes " +
         "only its newest answer to each question (a correction saved with add_application_answers replaces the " +
-        "earlier one here), newest first, with the application it belongs to.",
+        "earlier one here), newest first, with the application it belongs to and when it was saved. `origin` is " +
+        "ai-draft for an unedited RoleFit draft (`drafted` names the provider, model and time) or saved-text for " +
+        "words the user wrote or edited, or that were saved as a plain answer. Neither origin means RoleFit checked " +
+        "the answer against this job.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -460,8 +524,9 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
         }
       },
       async run(args) {
-        const applications = await listApplications();
-        if (!Array.isArray(applications)) return applications;
+        const listed = await listTracker();
+        if (isToolResult(listed)) return listed;
+        const { applications, invalidRecords } = listed;
         const company = typeof args.company === "string" ? normalizeCompanyName(args.company) : "";
         const terms = typeof args.query === "string" ? args.query.toLowerCase().split(/\s+/).filter(Boolean) : [];
         const results = applications
@@ -479,8 +544,12 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
             total: results.length,
             answers: results.slice(0, limit).map(({ record, answer }) => ({
               ...answerSummary(answer),
-              application: { id: record.id, title: record.title, company: record.company, role: record.role, status: record.status }
-            }))
+              application: {
+                id: record.id, title: record.title, company: record.company, role: record.role, status: record.status,
+                ...(record.appliedAt ? { appliedAt: record.appliedAt } : {})
+              }
+            })),
+            ...(invalidRecords ? { invalidRecordsSkipped: invalidRecords.length } : {})
           }
         };
       }
@@ -499,6 +568,7 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
         return isToolResult(read) ? read : { ok: true, value: { saved: read.saved, ...candidateProfile(read.settings) } };
       }
     },
-    ...createAiTools(client)
+    ...createAiTools(client),
+    createRenderTool(client, baseUrl)
   ];
 }

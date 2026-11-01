@@ -13,7 +13,9 @@ import { MAX_DOCUMENT_BYTES } from "./documents.ts";
 import { ApplicationAnswersError, appendApplicationAnswers } from "./answerService.ts";
 import { logApplicationEvent } from "./eventService.ts";
 import { changeApplicationStatus } from "./statusService.ts";
+import { ApplicationUpdateError, updateApplication } from "./updateService.ts";
 import {
+  INVALID_TRACKER_RECORDS_MESSAGE,
   readApplications,
   readApplicationsSnapshot,
   withApplicationsLock,
@@ -27,15 +29,17 @@ import {
 } from "./routeSupport.ts";
 
 // The revision names one validated tracker state. A client that already holds
-// it gets 304 instead of the whole tracker.
+// it gets 304 instead of the whole tracker. Records that are not canonical are
+// left out and named in `invalidRecords`; every write refuses until they are
+// repaired, so listing the rest cannot lose them.
 export async function handleListApplications(
   req: IncomingMessage,
   res: ServerResponse,
   workspaceDir = jobWorkspaceDir
 ): Promise<void> {
   try {
-    const { applications, revision } = await withApplicationsLock(() =>
-      readApplicationsSnapshot(workspaceDir)
+    const { applications, revision, invalid } = await withApplicationsLock(() =>
+      readApplicationsSnapshot(workspaceDir, { allowInvalid: true })
     );
     const etag = `"${revision}"`;
     if (req.headers["if-none-match"] === etag) {
@@ -46,7 +50,8 @@ export async function handleListApplications(
     sendJson(res, 200, {
       applications,
       revision,
-      path: "workspace/applications.json"
+      path: "workspace/applications.json",
+      ...(invalid.length ? { invalidRecords: invalid, invalidRecordsMessage: INVALID_TRACKER_RECORDS_MESSAGE } : {})
     }, { ETag: etag });
   } catch (error) {
     if (workspaceGateHandled(error, res)) return;
@@ -286,6 +291,26 @@ export async function handleLogApplicationEvent(
   }
 }
 
+// A field-level repair of one record (D103); attaching a document carries the
+// commit's size limit.
+export async function handleUpdateApplication(
+  req: IncomingMessage,
+  res: ServerResponse,
+  id: string,
+  workspaceDir = jobWorkspaceDir
+): Promise<void> {
+  if (req.method !== "POST") {
+    sendJson(res, 405, { error: "Use POST." });
+    return;
+  }
+  try {
+    const body = JSON.parse(await readBody(req, 3 * MAX_DOCUMENT_BYTES + 1_000_000)) as unknown;
+    sendJson(res, 200, await updateApplication(workspaceDir, id, body));
+  } catch (error) {
+    sendRecordWriteError(error, res, "The update failed. Nothing was saved.");
+  }
+}
+
 // The per-record routes outside the browser share one error shape: a stale
 // revision returns the current record, refusals keep their issues, and only
 // an unexpected failure is a 500.
@@ -297,7 +322,7 @@ function sendRecordWriteError(error: unknown, res: ServerResponse, fallback: str
     : tooLarge ? 413 : error instanceof SyntaxError ? 400 : 500;
   sendJson(res, status, {
     error: tooLarge ? "The request is larger than the supported limit. Nothing was saved." : storageErrorMessage(error, fallback),
-    ...(error instanceof ApplicationAnswersError ? { issues: error.issues } : {}),
+    ...(error instanceof ApplicationAnswersError || error instanceof ApplicationUpdateError ? { issues: error.issues } : {}),
     ...(status === 409 && error instanceof ApplicationsStorageError && error.currentApplications
       ? { application: error.currentApplications[0] }
       : {})

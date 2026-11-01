@@ -855,7 +855,9 @@ Good server verification covers:
   snapshot, only sparse tracker mutations are accepted, server-authoritative
   unmutated rows retain deterministic ordering, successful own writes retain
   unchanged record references, and corrupt application JSON or malformed strict
-  `.resume` data fails closed without destructive reseeding; the 2,000-record
+  `.resume` data fails closed without destructive reseeding (one invalid record
+  leaves the list serving the rest, named in `invalidRecords`, with every write
+  refused, D103); the 2,000-record
   limit, the validated-snapshot cache (outside, same-size, and invalid edits,
   explicit invalidation, and an outside replace racing a write), `304`
   refreshes, and sparse PUT responses are covered by
@@ -885,6 +887,14 @@ Good server verification covers:
   it. The browser, MCP, and extension surfaces are covered by
   `workspace-preferences-sync-eval.mjs`, `mcp-probes.mjs`, and
   `extension-analyze-errors.mjs`
+- agent record repair and PDF rendering (D103): `application-update-probes.mjs`
+  locks the update route's exact-as-sent fields, document attach without
+  replacement, Draft/Skip limits, first-submission `resumeUsed`, rollback, and
+  refusal over an unreadable record; `mcp-probes.mjs` renders through
+  `render_pdf` (a signed letter keeps one sign-off, files are never replaced
+  unasked) and checks answer origin and unreadable-record reporting;
+  `mcp-ai-probes.mjs` checks `providerRun`, `polish_resume`'s `apply`, and
+  `draft_answer`'s passed brief
 - routine AI logs remain shape-only and exclude model-authored target IDs,
   free-form error text, provider bodies, and private prompt content
 

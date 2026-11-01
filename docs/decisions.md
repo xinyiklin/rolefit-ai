@@ -583,13 +583,14 @@ later entry wins.
   all 351 pairs (candidate pairs replaced the all-pairs loop on 2026-10-09).
   2026-08-11 [CODE]: duplicates link by posting group or record a reviewed
   separation.
-- 2026-08-09 [USER+CODE+TOOL] D056 AMENDED by D095: Tracker reads fail closed on unknown fields,
+- 2026-08-09 [USER+CODE+TOOL] D056 AMENDED by D095, D103: Tracker reads fail closed on unknown fields,
   retired shapes, duplicate ids, and malformed data; only a redundant derived
   Fit summary leaf is normalized for comparison; the tracker key `initialFit`
   stays a storage-boundary name. [USER+CODE] Legacy tracker-schema compatibility
   was left to a one-user preview migration. (D095: legacy shapes now migrate
   once through numbered tracker versions; nothing is normalized only for
-  comparison.)
+  comparison. D103: the list route serves the readable records and names the
+  invalid ones; every other read and every write still refuses.)
 - 2026-10-20 [USER+CODE+TOOL] D091 ACTIVE: **Submitted applications keep a dated
   stage history** (`stageHistory`): stage changes after submission, interviews
   with a kind and a derived round, employer responses, and follow-ups sent.
@@ -660,7 +661,7 @@ later entry wins.
   0.20/0.21 read its files and drop only the version, which reads back as
   version 0. Builds before it still report newer files as corrupt. Contract:
   `apps/role-fit-ai/docs/engineering/workspace-backup.md#schema-versions-and-newer-files`.
-- 2026-10-24 [USER+CODE+TOOL] D100 AMENDED by D101: **The agent commit also saves
+- 2026-10-24 [USER+CODE+TOOL] D100 AMENDED by D101, D103: **The agent commit also saves
   Drafts, refuses unacknowledged duplicates, and has a dry run.**
   `POST /api/applications/commit` accepts `status: "draft"` with no
   `appliedAt`, `notApplyingAt`, or documents (submitted later through the
@@ -675,6 +676,8 @@ later entry wins.
   Fit Assessment. The user chose this batch from an agent's five proposals;
   an MCP Fit snapshot, field-level updates, documents on an existing record,
   and server-side PDF rendering are undecided.
+  (D103: field-level updates, a missing document on a submitted record, and
+  PDF rendering are decided.)
 - 2026-10-26 [USER+CODE+TOOL] D101 AMENDED by D102: **An agent-recorded submission
   always carries its resume.** `POST /api/applications/commit` refuses
   `status: "applied"` without `documents.resume`. `POST
@@ -690,7 +693,7 @@ later entry wins.
   `get_candidate_profile` over existing routes, with no server change. The
   user chose this after an agent's gap review (2026-10-24); AI stages over MCP
   and server-side PDF rendering remain undecided.
-- 2026-10-26 [USER+CODE+TOOL] D102 ACTIVE: **RoleFit's AI stages are MCP
+- 2026-10-26 [USER+CODE+TOOL] D102 AMENDED by D103: **RoleFit's AI stages are MCP
   tools that save nothing.** `analyze_job`, `assess_fit`, `polish_resume`
   with `apply_resume_edits`, `polish_cover_letter`, `draft_answer`, and
   `review_application` call the existing AI routes with each stage's saved
@@ -717,6 +720,45 @@ later entry wins.
   closed client aborts its request, which stops RoleFit's provider run. An
   agent's tool call is a billed API call or CLI run, approved through the
   agent's own tool approval. Server-side PDF rendering remains undecided.
+  (D103: decided; `draft_answer` may also take the brief directly.)
+- 2026-11-01 [USER+CODE+TOOL] D103 ACTIVE: **Agents can repair records, render
+  PDFs, and accept a polish in one call; one bad record no longer hides the
+  tracker.** The user asked the agent to take its recommendations on seven
+  pipeline gaps and make the judgments (2026-11-01). `POST
+  /api/applications/<id>/update` (`updateService.ts`, MCP `update_application`)
+  sets `jobDescription`, `rawJobDescription`, `fitAssessment`, `notes`, and
+  `resumeUsed` under the commit's exact-as-sent rule and `baseUpdatedAt`, and
+  attaches a `.resume`/`.cover` a submitted record lacks; it never replaces a
+  saved document (a record of what was sent), and a Draft or job-only Skip
+  gets documents and `resumeUsed` only with its first submission, where the
+  status route now accepts `resumeUsed`. Stage, dates, history, answers, and
+  identity keep their own routes. The MCP `render_pdf` tool lays out and emits
+  a `.resume`/`.cover` (source text, saved variant, or a record's saved
+  document) with the engine RoleFit exports with, fonts read from the running
+  RoleFit's `/fonts`, and writes it only to an absolute `.pdf` path the agent
+  names, refusing to replace a file unless `overwrite` is set; it adds no text
+  (no appended sign-off) and returns the page count. `polish_resume` takes
+  `apply` ("all" or ids) and returns exactly what `apply_resume_edits` would,
+  so a restarted MCP process cannot strand a proposal; a bad id keeps the
+  proposal. Every AI tool reports `providerRun` (the route's provider, model,
+  effort, and attempts, falling back to the request's; provider and model stay
+  the stage's saved Settings, never tool inputs). `draft_answer` takes an
+  optional `jobDescription` that wins over the record's brief. `get_answers`
+  adds each answer's `origin` (`ai-draft` with the drafting provider, model,
+  and time for an unedited RoleFit draft, else `saved-text`), `questionId`, and
+  the record's `appliedAt`. The tracker list route skips and flags invalid
+  records: `GET /api/applications` serves the canonical records plus
+  `invalidRecords` (index, id, title, company, field-path issues, never stored
+  values) and a message the browser shows on its tracker error line, while
+  every other tracker read and every write refuses with that message until the
+  file is repaired or a backup restored, so no write can drop an unread record.
+  File-level problems (shape, version, count, duplicate ids) still fail the
+  whole read, a file with invalid records is never version-rewritten, and
+  backup and restore validation stay strict. `polish_cover_letter` already
+  returned the applied `.cover` as `sourceText` (no change). Left open: an
+  in-app repair or delete action for an invalid record (repair is still a file
+  edit or backup restore), replacing a saved document, persisting proposals
+  across MCP restarts beyond `apply`, and choosing a provider per tool call.
 
 ### Extension
 

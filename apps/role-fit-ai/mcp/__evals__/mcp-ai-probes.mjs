@@ -11,7 +11,10 @@
 // signals reach the agent: concern notices carried between stages, the
 // review outcome, Fit-gap statements, dropped job terms, and its response
 // checks. An over-limit Profile stops the stages that read it, and unreadable
-// settings every stage, before any provider call.
+// settings every stage, before any provider call. D103: every stage reports
+// the provider, model and effort that ran (`providerRun`); polish_resume's
+// `apply` returns exactly what apply_resume_edits would; draft_answer answers
+// against a passed brief, so a record without one can still be answered.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
@@ -121,11 +124,13 @@ const aiCalls = () => calls.filter(({ path }) => !["/api/workspace/preferences",
   assert.match(analyzed.value.jobDescription, /Build Python APIs and data pipelines/);
   assert.equal(analyzed.value.rawJobDescription, posting);
   assert.equal(analyzed.value.tracking.company, "Acme");
+  assert.deepEqual(analyzed.value.providerRun, stageFields("job-analysis"));
 
   reply["/api/job-analysis"] = () => json(502, { error: "The provider is unavailable." });
   const fallback = (await call("analyze_job", { text: posting })).value;
   assert.equal(fallback.source, "local");
   assert.equal(fallback.aiError, "The provider is unavailable.");
+  assert.equal(fallback.providerRun, undefined, "the local brief claims no provider run");
   assert.ok(fallback.jobDescription.length > 0, "the local brief still comes back");
   calls.length = 0;
   assert.equal((await call("analyze_job", { text: "Too short." })).value.source, "local");
@@ -184,6 +189,8 @@ const aiCalls = () => calls.filter(({ path }) => !["/api/workspace/preferences",
   assert.equal(suggestion.kind, "rewrite");
   assert.equal(suggestion.proposedText, "Rewritten grounded bullet.");
   assert.deepEqual(suggestion.warnings, ["Check the number."]);
+  assert.deepEqual(polished.value.providerRun, stageFields("resume-polish"), "what ran, falling back to what was asked for");
+  assert.equal(polished.value.applied, undefined, "nothing is applied unless asked");
 
   const applied = await call("apply_resume_edits", { proposalId: polished.value.proposalId, accept: [suggestion.id] });
   assert.equal(applied.ok, true, JSON.stringify(applied.value));
@@ -202,6 +209,28 @@ const aiCalls = () => calls.filter(({ path }) => !["/api/workspace/preferences",
   assert.deepEqual(refused.value.issues, ["accept: nope is not in this proposal", "edits.other: not in accept"]);
   assert.match((await call("apply_resume_edits", { proposalId: polished.value.proposalId, accept: [suggestion.id], edits: { [suggestion.id]: " " } })).value.error, /Nothing was applied/);
   assert.match((await call("apply_resume_edits", { proposalId: "gone", accept: ["x"] })).value.error, /run polish_resume again/);
+
+  // Polish and accept in one call: the same result apply_resume_edits gives.
+  const original = reply["/api/resume-polish"];
+  reply["/api/resume-polish"] = (body) => {
+    const response = original(body);
+    return response.json().then((value) => json(200, { ...value, provider: "anthropic", model: "claude-opus-5-5", reasoningEffort: "max", attempts: 2 }));
+  };
+  const oneCall = await call("polish_resume", { resume: { fileName: "default.resume" }, jobDescription: brief, apply: "all" });
+  assert.equal(oneCall.ok, true, JSON.stringify(oneCall.value));
+  assert.deepEqual(oneCall.value.providerRun, { provider: "anthropic", model: "claude-opus-5-5", reasoningEffort: "max", attempts: 2 }, "the route's own report wins");
+  assert.equal(oneCall.value.applied.applied, 1);
+  assert.equal(oneCall.value.applied.text, applied.value.text, "apply: all equals accepting every suggestion");
+  assert.deepEqual(oneCall.value.applied.warnings, [{ id: oneCall.value.suggestions[0].id, warnings: ["Check the number."] }]);
+  assert.deepEqual(oneCall.value.applied.resumeConcerns, ["Check the number."]);
+  const byId = await call("polish_resume", { resume: { fileName: "default.resume" }, jobDescription: brief, apply: ["nope"] });
+  assert.equal(byId.ok, true, "a bad id never discards the billed proposal");
+  assert.deepEqual(byId.value.applied.issues, ["accept: nope is not in this proposal"]);
+  assert.equal((await call("apply_resume_edits", { proposalId: byId.value.proposalId, accept: [byId.value.suggestions[0].id] })).ok, true, "the proposal is still kept");
+  calls.length = 0;
+  assert.match((await call("polish_resume", { resume: { fileName: "default.resume" }, jobDescription: brief, apply: "some" })).value.error, /^apply:/);
+  assert.equal(aiCalls().length, 0, "a malformed apply is refused before the provider runs");
+  reply["/api/resume-polish"] = original;
 
   settings.resumePolishReview = true;
   settings.boldBulletKeywords = false;
@@ -239,6 +268,7 @@ const aiCalls = () => calls.filter(({ path }) => !["/api/workspace/preferences",
   assert.deepEqual({ provider: sent.provider, model: sent.model, reasoningEffort: sent.reasoningEffort }, stageFields("cover-polish"));
   const letter = parseCoverLetterFile(ready.value.sourceText);
   assert.equal(letter.data.header.name, "Synthetic Applicant", "the letterhead is kept");
+  assert.deepEqual(ready.value.providerRun, stageFields("cover-polish"));
   assert.equal(coverLetterPlainText(letter.data), "Dear Acme Hiring Team,\n\nI build reliable Python services.\n\nSincerely,\nSynthetic Applicant");
 
   reply["/api/cover-polish"] = () => json(422, { error: "Polish blocked.", status: "blocked", issues: [{ code: "unsupported-claim", message: "An unsupported claim.", excerpt: "x" }], reasons: ["x"] });
@@ -271,10 +301,22 @@ const aiCalls = () => calls.filter(({ path }) => !["/api/workspace/preferences",
   assert.equal(sent.customInstructions, "Shared guidance.");
   assert.deepEqual({ provider: sent.provider, model: sent.model, reasoningEffort: sent.reasoningEffort }, stageFields("application-answers"));
   assert.equal(drafted.value.answer.answer, "I build reliable APIs.");
+  assert.deepEqual(drafted.value.providerRun, stageFields("application-answers"));
+
+  // A passed brief is answered against, so a record without one still works.
+  calls.length = 0;
+  const passedBrief = "Own the payments API: design, ship and operate reliable services for merchants.";
+  const withBrief = await call("draft_answer", { id: "b2", question: "Why?", jobDescription: passedBrief, resume: { fileName: "default.resume" } });
+  assert.equal(withBrief.ok, true, JSON.stringify(withBrief.value));
+  assert.equal(aiCalls()[0].body.jobText, passedBrief);
+  calls.length = 0;
+  await call("draft_answer", { id: "a1", question: "Why Acme?", jobDescription: passedBrief });
+  assert.equal(aiCalls()[0].body.jobText, passedBrief, "a passed brief wins over the record's");
+  assert.match((await call("draft_answer", { id: "a1", question: "Why?", jobDescription: "short" })).value.error, /^jobDescription:/);
 
   reply["/api/application-answers"] = (body) => json(200, { answer: revision(body, { userFacts: { provenance: "user-declared", facts: ["x"] } }) });
   assert.match((await call("draft_answer", { id: "a1", question: "Why Acme?" })).value.error, /did not match/, "a generated revision never carries user facts");
-  assert.match((await call("draft_answer", { id: "b2", question: "Why?" })).value.error, /no job brief/);
+  assert.match((await call("draft_answer", { id: "b2", question: "Why?" })).value.error, /no job brief .* pass `jobDescription`/);
   assert.match((await call("draft_answer", { id: "zz", question: "Why?" })).value.error, /No application has id zz/);
 }
 
@@ -295,6 +337,7 @@ const aiCalls = () => calls.filter(({ path }) => !["/api/workspace/preferences",
   assert.deepEqual({ provider: sent.provider, model: sent.model, reasoningEffort: sent.reasoningEffort }, stageFields("application-review"));
   assert.equal(sent.provider, "openai");
   assert.deepEqual(reviewed.value.reviewedDocuments, ["resume", "coverLetter"]);
+  assert.deepEqual(reviewed.value.providerRun, stageFields("application-review"));
   calls.length = 0;
   await call("review_application", { id: "a1" });
   assert.ok(!aiCalls()[0].body.evidence.some((item) => item.kind === "resume"), "without baseResume only the Profile is evidence");
