@@ -143,11 +143,6 @@ export function createClient(baseUrl: string, fetchImpl: typeof fetch = fetch) {
     return { applications, ...(invalidRecords?.length ? { invalidRecords } : {}) };
   }
 
-  async function listApplications(): Promise<TrackerRecord[] | ToolResult> {
-    const listed = await listTracker();
-    return isToolResult(listed) ? listed : listed.applications;
-  }
-
   async function getApplication(id: unknown): Promise<TrackerRecord | ToolResult> {
     if (typeof id !== "string" || !id) return { ok: false, value: { error: "id: required string" } };
     const listed = await listTracker();
@@ -209,7 +204,7 @@ export function createClient(baseUrl: string, fetchImpl: typeof fetch = fetch) {
     return { saved: snapshot.exists, settings: snapshot.settings ?? {} };
   }
 
-  return { request, listTracker, listApplications, getApplication, applicationDocument, workspaceVariant, readSettings };
+  return { request, listTracker, getApplication, applicationDocument, workspaceVariant, readSettings };
 }
 
 export type RoleFitClient = ReturnType<typeof createClient>;
