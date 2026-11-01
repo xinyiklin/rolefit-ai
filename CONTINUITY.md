@@ -36,7 +36,6 @@ D-entries in `docs/decisions.md`.
 
 - 2026-11-01 [USER] 0.25.0: tag `rolefit-preview-v0.25.0-beta.1` after the
   release PR merges and confirm the workflow (it runs the native smokes).
-
 ## Deferred backlog
 
 - 2026-10-18 [CODE+TOOL] `main` has no required status checks and the `ec2`
@@ -109,12 +108,11 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-11-01
 
-- [USER+CODE+TOOL] **Agent pipeline gaps** (D103, #289): `update_application`,
-  submission `resumeUsed`, `render_pdf`, Polish `apply`, `providerRun`, answer
-  brief and `origin`, and a tracker list naming invalid records with writes
-  refused. Linux, Node 24.22.1: tsc, build, offline 206/206, CI green; stdio
-  server scripted against `dev:rolefit`. Not run: desktop probes, an agent
-  client, live providers, browser QA of the tracker notice.
+- [USER+CODE+TOOL] **Agent pipeline gaps** (D103, #289) and **0.25.0 prepared**
+  (minor). Linux x64, Node 24.22.1: check (desktop probes, offline 206/206),
+  Electron dev smoke (non-root, Xvfb), release contract 14/14. Not run: native
+  `make` + packaged smoke (only the workflow's; a failure burns beta.1), an
+  agent client, live providers, browser QA of the tracker notice.
 
 ## 2026-10-26
 
