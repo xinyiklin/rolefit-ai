@@ -721,7 +721,8 @@ another port; only loopback origins are accepted. Tools:
 - `update_application` — repair a saved record: set its job brief, posting,
   Fit snapshot, notes, or `resumeUsed`, and attach a `.resume` or `.cover` a
   submitted record never received. Values are stored exactly as sent or
-  refused with field-level `issues`; a saved document is never replaced.
+  refused with field-level `issues`; a saved document is never replaced, and
+  resending an update that is already saved changes nothing.
 - `list_resumes` and `get_resume`, `list_cover_letters` and `get_cover_letter`
   — the saved base resumes and cover letters, each as its `.resume`/`.cover`
   source and the plain text RoleFit reads.
@@ -730,8 +731,8 @@ another port; only loopback origins are accepted. Tools:
   `missing` list.
 - `get_answers` — the newest saved answer to each question across every
   application, searchable by words and company, with the application it came
-  from, when it was saved, and its `origin` (an unedited RoleFit draft names
-  the provider and model that drafted it).
+  from, when it was saved, and its `origin` (an answer saved with RoleFit's
+  drafting record names the provider and model; editing in the app drops it).
 - `get_candidate_profile` — the Profile Background and the candidate facts the
   user declared in Settings.
 
@@ -769,14 +770,15 @@ read as the candidate's own evidence, so it should be a saved resume or
 `render_pdf` writes a `.resume` or `.cover` (source text, a saved one, or a
 record's saved document) as the PDF RoleFit itself would export, to an
 absolute `.pdf` path the agent names, and returns its page count. It renders
-the text as written and never replaces an existing file unless asked; it reads
-the font files from the running RoleFit.
+the text as written, never replaces an existing file unless asked, and refuses
+a symbolic link or any path inside the RoleFit workspace; it reads the font
+files from the running RoleFit.
 
 The agent receives the tracker, document, and profile data it reads and every
 AI-stage result (briefs, proposals, answers, review findings), so its own model
 provider sees that personal data. Separately, the AI-stage tools send their
 inputs, including saved documents and your Profile, to the provider set in
-RoleFit for that stage, as the app does A PDF from `render_pdf` holds the
+RoleFit for that stage, as the app does. A PDF from `render_pdf` holds the
 document's personal data wherever the agent writes it, outside the RoleFit
 workspace and its backups.
 

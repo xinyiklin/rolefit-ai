@@ -3,19 +3,49 @@
 // running RoleFit serves. The PDF goes to a path the agent names (D103); the
 // workspace is never touched.
 
-import { writeFile } from "node:fs/promises";
-import { basename, isAbsolute } from "node:path";
+import { lstat, realpath, writeFile } from "node:fs/promises";
+import { basename, dirname, isAbsolute, resolve } from "node:path";
 
 import { coverLetterStyleToDocumentStyle, parseCoverLetterFile } from "@typeset/engine/lib/coverLetter.ts";
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import { ensureLayoutMetrics, layoutCoverLetter, layoutResume, type LayoutDocument } from "@typeset/engine/typeset/layout.ts";
 import { emitPdf, fetchFontBytes } from "@typeset/engine/typeset/pdf/emit.ts";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
+import { computeWorkspaceFingerprint } from "../server/health-contract.ts";
 import { isToolResult, type DocumentKind, type RoleFitClient, type Tool, type ToolResult } from "./client.ts";
 
 const fail = (error: string): ToolResult => ({ ok: false, value: { error } });
 
+// Every folder from `dir` up to the filesystem root.
+function ancestors(dir: string): string[] {
+  const found = [dir];
+  while (dirname(found.at(-1)!) !== found.at(-1)) found.push(dirname(found.at(-1)!));
+  return found;
+}
+
 export function createRenderTool(client: RoleFitClient, baseUrl: string): Tool {
+  // Refuses a path inside RoleFit's workspace (the health route names it only
+  // by fingerprint, so each folder above the target is fingerprinted) or a
+  // symlink, so a render can never replace a saved document.
+  async function outsideWorkspace(outputPath: string): Promise<ToolResult | null> {
+    let realParent: string;
+    try {
+      realParent = await realpath(dirname(outputPath));
+    } catch {
+      return fail("outputPath: its folder does not exist.");
+    }
+    const existing = await lstat(outputPath).catch(() => null);
+    if (existing?.isSymbolicLink()) return fail("outputPath: is a symbolic link; choose a regular file path.");
+    const health = await client.request("GET", "/api/health");
+    if (!health.ok) return health;
+    const fingerprint = (health.value as { workspaceFingerprint?: unknown }).workspaceFingerprint;
+    if (typeof fingerprint !== "string" || !fingerprint) return fail("RoleFit did not say where its workspace is, so no PDF was written.");
+    const folders = new Set([...ancestors(resolve(dirname(outputPath))), ...ancestors(realParent)]);
+    return [...folders].some((folder) => computeWorkspaceFingerprint(folder) === fingerprint)
+      ? fail("outputPath: inside RoleFit's workspace, which holds the saved documents; choose a folder outside it.")
+      : null;
+  }
+
   // The document's .resume/.cover source from exactly one place.
   async function source(kind: DocumentKind, args: Record<string, unknown>): Promise<string | ToolResult> {
     const { sourceText, fileName, applicationId } = args;
@@ -46,7 +76,8 @@ export function createRenderTool(client: RoleFitClient, baseUrl: string): Tool {
       "polish_cover_letter's sourceText), a saved one by fileName, or the one saved on a tracker record by " +
       "applicationId. The text is rendered as written; nothing is added, so a letter whose text ends with a " +
       "sign-off has it once. Returns the path, page count and size. Refuses to replace an existing file unless " +
-      "overwrite is true. Needs RoleFit running (it reads RoleFit's font files). Saves nothing in RoleFit.",
+      "overwrite is true, and refuses a symbolic link or any path inside RoleFit's workspace. Needs RoleFit " +
+      "running (it reads RoleFit's font files). Saves nothing in RoleFit.",
     inputSchema: {
       type: "object",
       required: ["kind", "outputPath"],
@@ -56,7 +87,7 @@ export function createRenderTool(client: RoleFitClient, baseUrl: string): Tool {
         sourceText: { type: "string", description: "The complete .resume or .cover file text." },
         fileName: { type: "string", description: "A saved resume or cover letter (list_resumes, list_cover_letters)." },
         applicationId: { type: "string", description: "A tracker record whose saved document to render." },
-        outputPath: { type: "string", description: "Absolute path of the PDF to write, ending in .pdf; its folder must exist." },
+        outputPath: { type: "string", description: "Absolute path of the PDF to write, ending in .pdf, outside RoleFit's workspace; its folder must exist." },
         overwrite: { type: "boolean", description: "Replace a file already at outputPath." },
         title: { type: "string", maxLength: 200, description: "The PDF's document title; defaults to the file name." }
       }
@@ -69,6 +100,8 @@ export function createRenderTool(client: RoleFitClient, baseUrl: string): Tool {
       }
       if (overwrite !== undefined && typeof overwrite !== "boolean") return fail("overwrite: true or false");
       if (title !== undefined && (typeof title !== "string" || title.length > 200)) return fail("title: text of at most 200 characters");
+      const location = await outsideWorkspace(outputPath);
+      if (location) return location;
       const text = await source(kind, args);
       if (isToolResult(text)) return text;
       let document: LayoutDocument;

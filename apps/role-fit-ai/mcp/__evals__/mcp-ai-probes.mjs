@@ -130,7 +130,7 @@ const aiCalls = () => calls.filter(({ path }) => !["/api/workspace/preferences",
   const fallback = (await call("analyze_job", { text: posting })).value;
   assert.equal(fallback.source, "local");
   assert.equal(fallback.aiError, "The provider is unavailable.");
-  assert.equal(fallback.providerRun, undefined, "the local brief claims no provider run");
+  assert.deepEqual(fallback.providerRun, stageFields("job-analysis"), "a failed analysis still names the provider it was sent to");
   assert.ok(fallback.jobDescription.length > 0, "the local brief still comes back");
   calls.length = 0;
   assert.equal((await call("analyze_job", { text: "Too short." })).value.source, "local");

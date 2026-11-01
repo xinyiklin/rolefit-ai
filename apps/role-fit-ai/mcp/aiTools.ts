@@ -287,13 +287,14 @@ export function createAiTools(client: RoleFitClient): Tool[] {
           if (isToolResult(context)) return context;
           const analyzed = await post("/api/job-analysis", { text, url: link, ...context.fields }, signal);
           if (signal?.aborted) return analyzed;
+          // Reported even when the analysis failed: the request was sent to this provider.
+          ran = providerRun(analyzed.value, context.fields);
           const fields = analyzed.value as Partial<AiJobAnalysisFields> & { source?: string; error?: string };
           if (analyzed.ok && fields.source === "ai") {
             const result = extractedFromAiOrLocal(fields, text, link, context.fields, extracted);
             extracted = result.extracted;
             source = result.source;
             if (result.failure) aiError = result.failure.detail;
-            if (source === "ai") ran = providerRun(fields, context.fields);
           } else {
             aiError = fields.error ?? "The job analysis returned no usable result.";
           }

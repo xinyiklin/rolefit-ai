@@ -14,7 +14,7 @@
 // of the text as written, refusing to replace a file unasked.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
@@ -26,6 +26,7 @@ import { serializeResumeData } from "../../src/lib/resumeText.ts";
 
 import { handleMcpMessage, serveStdio } from "../server.ts";
 import { roleFitBaseUrl } from "../client.ts";
+import { computeWorkspaceFingerprint } from "../../server/health-contract.ts";
 import { createTools } from "../tools.ts";
 
 const base = "http://127.0.0.1:5181";
@@ -61,6 +62,7 @@ const coverSource = serializeCoverLetterFile({
     items: [{ id: "body", titleLeft: "", titleRight: "", subtitleLeft: "", subtitleRight: "", bullets: [{ id: "paragraph", text: "Dear Hiring Team,\n\nSynthetic cover letter paragraph." }] }]
   }]
 }, COVER_LETTER_STYLE_DEFAULTS);
+let workspaceFingerprint = computeWorkspaceFingerprint("/nonexistent/rolefit-probe-workspace");
 let preferences = { exists: true, settings: { profileBackground: "Built payment APIs.", citizenshipStatus: "us-citizen", educationLevel: "unspecified", major: "" } };
 const calls = [];
 async function fakeFetch(url, init = {}) {
@@ -79,6 +81,7 @@ async function fakeFetch(url, init = {}) {
   if (path === "/api/applications/a1/documents/cover.cover") return new Response(coverSource, { status: 200, headers: { "Content-Type": "application/octet-stream" } });
   if (path === "/api/applications/c3/documents/resume.resume") return new Response("{broken", { status: 200, headers: { "Content-Type": "application/octet-stream" } });
   if (path === "/api/workspace/preferences") return json(200, preferences);
+  if (path === "/api/health") return json(200, { service: "role-fit-ai", status: "ok", workspaceFingerprint });
   if (path === "/api/applications/a1/answers") return json(200, { application: { id: "a1" }, added: 1 });
   if (path === "/api/applications/a1/events") return json(200, { application: { id: "a1" }, statusChanged: true });
   if (path === "/api/workspace" && init.method === "GET") {
@@ -375,7 +378,27 @@ const call = async (name, args) => (await rpc("tools/call", { name, arguments: a
     assert.match((await call("render_pdf", { kind: "resume", sourceText: resumeSource, outputPath: "Resume.pdf" })).structuredContent.error, /absolute path/);
     assert.match((await call("render_pdf", { kind: "resume", sourceText: resumeSource, outputPath: join(dir, "Resume.txt") })).structuredContent.error, /ending in \.pdf/);
     assert.match((await call("render_pdf", { kind: "resume", sourceText: resumeSource, fileName: "default.resume", outputPath: join(dir, "x.pdf") })).structuredContent.error, /exactly one/);
-    assert.match((await call("render_pdf", { kind: "resume", sourceText: resumeSource, outputPath: join(dir, "missing", "x.pdf") })).structuredContent.error, /could not write/);
+    assert.match((await call("render_pdf", { kind: "resume", sourceText: resumeSource, outputPath: join(dir, "missing", "x.pdf") })).structuredContent.error, /folder does not exist/);
+
+    // Never inside RoleFit's workspace (named by fingerprint), even through a
+    // symlinked folder, and never through a symlinked file.
+    const workspace = join(dir, "workspace");
+    await mkdir(join(workspace, "applications", "a1"), { recursive: true });
+    await symlink(join(workspace, "applications"), join(dir, "linked"));
+    await symlink(join(workspace, "applications", "a1", "resume.pdf"), join(dir, "Linked.pdf"));
+    const realFingerprint = workspaceFingerprint;
+    workspaceFingerprint = computeWorkspaceFingerprint(workspace);
+    try {
+      for (const outputPath of [join(workspace, "applications", "a1", "resume.pdf"), join(dir, "linked", "a1", "resume.pdf")]) {
+        const inside = await call("render_pdf", { kind: "resume", sourceText: resumeSource, outputPath, overwrite: true });
+        assert.match(inside.structuredContent.error, /inside RoleFit's workspace/, outputPath);
+      }
+      assert.match((await call("render_pdf", { kind: "resume", sourceText: resumeSource, outputPath: join(dir, "Linked.pdf"), overwrite: true })).structuredContent.error, /symbolic link/);
+      await assert.rejects(readFile(join(workspace, "applications", "a1", "resume.pdf")), /ENOENT/, "nothing was written into the workspace");
+      assert.equal((await call("render_pdf", { kind: "resume", sourceText: resumeSource, outputPath: join(dir, "Outside.pdf") })).isError, false, "a sibling folder is outside");
+    } finally {
+      workspaceFingerprint = realFingerprint;
+    }
     globalThis.fetch = async () => { throw new TypeError("fetch failed"); };
     const offline = await call("render_pdf", { kind: "resume", sourceText: resumeSource, outputPath: join(dir, "Offline.pdf") });
     assert.match(offline.structuredContent.error, /fonts could not be loaded/);

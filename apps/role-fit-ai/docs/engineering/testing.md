@@ -889,10 +889,12 @@ Good server verification covers:
   `extension-analyze-errors.mjs`
 - agent record repair and PDF rendering (D103): `application-update-probes.mjs`
   locks the update route's exact-as-sent fields, document attach without
-  replacement, Draft/Skip limits, first-submission `resumeUsed`, rollback, and
-  refusal over an unreadable record; `mcp-probes.mjs` renders through
-  `render_pdf` (a signed letter keeps one sign-off, files are never replaced
-  unasked) and checks answer origin and unreadable-record reporting;
+  replacement, no-op retries, Draft/Skip limits, first-submission `resumeUsed`,
+  rollback, and refusal over an unreadable record; `tracker-revision-probes.mjs`
+  adds shared ids across unreadable records, no version rewrite, and the issue
+  cap; `mcp-probes.mjs` renders through `render_pdf` (a signed letter keeps one
+  sign-off, files are never replaced unasked, workspace and symlink targets are
+  refused) and checks answer origin and unreadable-record reporting;
   `mcp-ai-probes.mjs` checks `providerRun`, `polish_resume`'s `apply`, and
   `draft_answer`'s passed brief
 - routine AI logs remain shape-only and exclude model-authored target IDs,

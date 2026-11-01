@@ -202,6 +202,7 @@ export function parseStoredApplications(text: string): {
 // A readable title or company helps the user find the record; values are
 // clipped so a damaged field never floods the response.
 const recordLabel = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim().slice(0, 200) : undefined);
+const MAX_LISTED_ISSUES = 20;
 
 /**
  * Parse stored tracker text, separating non-canonical records from the rest.
@@ -242,7 +243,10 @@ function inspectStoredApplications(text: string): {
       return;
     }
     const fields = record && typeof record === "object" && !Array.isArray(record) ? record as Record<string, unknown> : {};
-    const issues = strictApplicationIssues(record).issues;
+    const found = strictApplicationIssues(record).issues;
+    const issues = found.length > MAX_LISTED_ISSUES
+      ? [...found.slice(0, MAX_LISTED_ISSUES), `and ${found.length - MAX_LISTED_ISSUES} more`]
+      : found;
     invalid.push({
       index,
       ...(recordLabel(fields.id) ? { id: recordLabel(fields.id) } : {}),
@@ -251,7 +255,12 @@ function inspectStoredApplications(text: string): {
       issues: issues.length ? issues : ["not in the stored record shape"]
     });
   });
-  if (duplicateApplicationId(sane)) throw new Error("Invalid application record.");
+  // An id shared with an unreadable record is a file-level fault too.
+  const ids = [...sane.map(({ id }) => id), ...migrated.flatMap((record, index) => {
+    const id = invalid.some((entry) => entry.index === index) && record && typeof record === "object" ? (record as { id?: unknown }).id : undefined;
+    return typeof id === "string" ? [id] : [];
+  })];
+  if (new Set(ids).size !== ids.length) throw new Error("Invalid application record.");
   return { applications: sane, invalid, needsUpgrade: version < TRACKER_SCHEMA_VERSION };
 }
 

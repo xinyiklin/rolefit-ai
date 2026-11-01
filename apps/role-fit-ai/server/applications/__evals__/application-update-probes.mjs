@@ -4,7 +4,8 @@
 // Locked here: an update sets only the listed snapshot fields, stores each
 // exactly as sent or refuses with field-named issues and writes nothing,
 // advances updatedAt, and honours baseUpdatedAt; a submitted record can gain a
-// document it never received, never replace one; a Draft or job-only Skip gets
+// document it never received, never replace one; resending a saved update is
+// a no-op even with the old baseUpdatedAt; a Draft or job-only Skip gets
 // documents and resumeUsed only with its first submission, which now accepts
 // resumeUsed; a failed tracker write removes an attached file; and a tracker
 // holding an unreadable record refuses the update.
@@ -103,6 +104,13 @@ try {
     assert.deepEqual(record.stageHistory, applied.stageHistory, "history is untouched");
     assert.deepEqual(strictApplicationIssues(JSON.parse(JSON.stringify(record))).issues, [], "the record re-validates strictly");
 
+    // A retry after a lost reply: same values, the old baseUpdatedAt, no write.
+    const unchanged = await trackerText();
+    const retried = await update(applied.id, { fields, baseUpdatedAt: applied.updatedAt });
+    assert.equal(retried.status, 200, retried.chunk);
+    assert.equal(retried.json.changed, false);
+    assert.equal(await trackerText(), unchanged, "a repeated update writes nothing");
+
     const stale = await update(applied.id, { fields: { notes: "late" }, baseUpdatedAt: applied.updatedAt });
     assert.equal(stale.status, 409);
     assert.equal(stale.json.application.id, applied.id, "a stale update returns the current record");
@@ -114,6 +122,7 @@ try {
     const cases = [
       [{ fields: { status: "offer" } }, /fields\.status: not updatable here/],
       [{ fields: { notes: null } }, /fields\.notes: send a value/],
+      [{ fields: { jobDescription: "" } }, /fields\.jobDescription: send a value/],
       [{ fields: { resumeUsed: "mine" } }, /fields\.resumeUsed: must be base or tailored/],
       [{ fields: { notes: "x".repeat(APPLICATION_NOTES_MAX_LENGTH + 1) } }, /fields\.notes: longer than/],
       [{ fields: { fitAssessment: { resumeLabel: "x" } } }, /fields\.fitAssessment/],
@@ -145,10 +154,13 @@ try {
     assert.equal(await readFile(join(dir, "cover.cover"), "utf8"), coverSource);
 
     const before = await trackerText();
-    const again = await update(applied.id, { documents: { cover: { sourceText: coverSource } } });
+    const repeated = await update(applied.id, { documents: { cover: { sourceText: coverSource } }, fields: { notes: "Repaired." } });
+    assert.equal(repeated.json.changed, false, "resending the saved cover is a no-op, not a replacement");
+    const otherCover = coverSource.replace("Synthetic paragraph.", "A different paragraph.");
+    const again = await update(applied.id, { documents: { cover: { sourceText: otherCover } } });
     assert.equal(again.status, 400);
     assert.match(again.json.issues[0], /already has its cover; a saved document is never replaced/);
-    assert.match((await update(applied.id, { documents: { resume: { sourceText: resumeSource } } })).json.issues[0], /already has its resume/);
+    assert.match((await update(applied.id, { documents: { resume: { sourceText: `${resumeSource}\n` } } })).json.issues[0], /already has its resume/);
     assert.equal(await trackerText(), before);
   }
 

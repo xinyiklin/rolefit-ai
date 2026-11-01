@@ -175,7 +175,7 @@ RoleFit owns:
   never reads or writes the workspace itself (D094, D101); its AI-stage tools
   send the browser's request for each stage and save nothing (D102), and
   `render_pdf` renders with the engine and writes only to the agent's named
-  path (D103).
+  path, never inside the workspace (D103).
 - `desktop/`: the compact four-provider manager, encrypted API-key vault,
   provider-owned CLI setup, private owned-server credential bridge, and local
   server lifecycle. It never owns the Drafting Desk or personal workspace.

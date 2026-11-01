@@ -57,7 +57,7 @@ for provider, prompt, sanitizer, and review work.
   tracker write fails (D101, D103); `updateService.ts` owns the agent's
   field-level record repair (job snapshot, notes, `resumeUsed`, and a
   document a submitted record lacks, never a replacement; exact-as-sent like
-  the commit, D103); `answerService.ts` owns
+  the commit, and a resent saved update is a no-op, D103); `answerService.ts` owns
   answer stamping for both the commit and the later-answers append, and
   `eventService.ts` logs timeline entries through the Log buttons'
   `withEntrySaved` (D094). The

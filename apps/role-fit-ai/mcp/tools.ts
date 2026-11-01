@@ -65,9 +65,9 @@ function latestAnswers(answers: readonly SavedAnswer[] = []): SavedAnswer[] {
   return [...latest.values()];
 }
 
-// `origin` says whose words were saved: RoleFit's answer stage (and which
-// provider and model), or text the user wrote or edited, or an agent saved as a
-// plain pair. An edit drops the generation, so "ai-draft" means unedited.
+// `origin` says how the answer was saved: with RoleFit's answer-stage record
+// (provider and model), which the app drops when the user edits the text, or
+// without one (typed, edited, or saved as a plain pair).
 const answerSummary = ({ question, answer, savedAt, status, warnings, questionId, generation }: SavedAnswer) => ({
   question,
   answer,
@@ -315,7 +315,9 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
         "received. Each field you send replaces the saved value and is stored exactly as sent, or nothing is saved " +
         "and `issues` names each field. A saved document is never replaced (it records what was sent), and a Draft " +
         "or skipped job gets documents and resumeUsed with its first submission (update_application_status). " +
-        "Stage, dates, timeline and answers have their own tools. Repeating the same update is harmless.",
+        "Stage, dates, timeline and answers have their own tools. Resending an update that is already saved (same " +
+        "values, same document source) changes nothing and answers changed: false, so a retry after a lost reply " +
+        "is safe.",
       inputSchema: {
         type: "object",
         required: ["id"],
@@ -511,9 +513,9 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
         "Search the answers saved on every application, to reuse or adapt an earlier one. Each record contributes " +
         "only its newest answer to each question (a correction saved with add_application_answers replaces the " +
         "earlier one here), newest first, with the application it belongs to and when it was saved. `origin` is " +
-        "ai-draft for an unedited RoleFit draft (`drafted` names the provider, model and time) or saved-text for " +
-        "words the user wrote or edited, or that were saved as a plain answer. Neither origin means RoleFit checked " +
-        "the answer against this job.",
+        "ai-draft when the answer was saved with RoleFit's drafting record (`drafted` names the provider, model and " +
+        "time; the app drops that record when the user edits the text) or saved-text otherwise (typed, edited, or " +
+        "saved as a plain answer). Neither origin means RoleFit checked the answer against this job.",
       inputSchema: {
         type: "object",
         additionalProperties: false,

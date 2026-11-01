@@ -5,6 +5,7 @@
 // replaced, because it records what was sent.
 
 import { join } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 
 import { commitDocuments } from "./commitService.ts";
 import { documentArtifacts } from "./documentService.ts";
@@ -53,7 +54,7 @@ export async function updateApplication(workspaceDir: string, id: string, body: 
     for (const [key, value] of Object.entries(fields)) {
       if (!(UPDATABLE_FIELDS as readonly string[]).includes(key)) {
         issues.push(`fields.${key}: not updatable here (send ${UPDATABLE_FIELDS.join(", ")})`);
-      } else if (value === null || value === undefined) {
+      } else if (value === null || value === undefined || value === "") {
         issues.push(`fields.${key}: send a value; fields cannot be cleared here`);
       }
     }
@@ -69,10 +70,25 @@ export async function updateApplication(workspaceDir: string, id: string, body: 
   const dir = applicationDocumentDir(id, workspaceDir);
   if (!dir) throw new ApplicationsStorageError("Invalid application id.", 400);
 
+  const files = documents.map((document) => `${document.kind}.${DOCUMENT_SOURCE_EXTENSION[document.kind]}`);
   return withApplicationsLock(async () => {
     const snapshot = await readApplicationsSnapshot(workspaceDir);
     const current = snapshot.applications.find((application) => application.id === id);
     if (!current) throw new ApplicationsStorageError("Application not found.", 404);
+    // A retry after a lost reply finds its own change already saved: every
+    // field equal and every document saved with the same source. Answer it
+    // unchanged, before the revision check, as the status route does.
+    const currentJson = JSON.parse(JSON.stringify(current)) as Record<string, unknown>;
+    const previous = await Promise.all(files.map((file) => readOptionalApplicationFile(join(dir, file))));
+    const sameDocument = (index: number) => {
+      const artifactKey = documents[index].kind === "resume" ? "resumeArtifacts" : "coverLetterArtifacts";
+      return Boolean(current[artifactKey]) && previous[index]?.toString("utf8") === documents[index].sourceText;
+    };
+    // A document already saved with this exact source is a repeat, not a replacement.
+    const pending = documents.flatMap((document, index) => (sameDocument(index) ? [] : [{ document, file: files[index], previous: previous[index] }]));
+    if (Object.entries(fields as Record<string, unknown>).every(([key, value]) => isDeepStrictEqual(currentJson[key], value)) && !pending.length) {
+      return { application: current, revision: snapshot.revision, changed: false };
+    }
     if (baseUpdatedAt !== undefined && baseUpdatedAt !== current.updatedAt) {
       throw new ApplicationsStorageError(
         "This application changed since it was read. Review the current record before changing it.",
@@ -87,7 +103,7 @@ export async function updateApplication(workspaceDir: string, id: string, body: 
     if ((fields as Record<string, unknown>).resumeUsed !== undefined && !submitted) {
       refusals.push("fields.resumeUsed: only a submitted record has one; send it with its first submission");
     }
-    for (const document of documents) {
+    for (const { document } of pending) {
       const artifactKey = document.kind === "resume" ? "resumeArtifacts" : "coverLetterArtifacts";
       if (!submitted) {
         refusals.push(`documents.${document.kind}: a Draft or skipped job gets documents with its first submission (update_application_status)`);
@@ -101,10 +117,10 @@ export async function updateApplication(workspaceDir: string, id: string, body: 
     // The stored record as JSON (no undefined keys), so the strict check below
     // compares only values that exist.
     const candidate: Record<string, unknown> = {
-      ...JSON.parse(JSON.stringify(current)),
+      ...currentJson,
       ...(fields as Record<string, unknown>),
       updatedAt,
-      ...Object.fromEntries(documents.map((document) => [
+      ...Object.fromEntries(pending.map(({ document }) => [
         document.kind === "resume" ? "resumeArtifacts" : "coverLetterArtifacts",
         documentArtifacts({ hasPdf: false, sourceText: document.sourceText, fileName: document.fileName, savedAt: updatedAt })
       ]))
@@ -112,18 +128,17 @@ export async function updateApplication(workspaceDir: string, id: string, body: 
     // Every value sent is stored exactly as sent, or nothing is.
     const strict = strictApplicationIssues(candidate);
     if (!strict.application || strict.issues.length) {
-      throw new ApplicationUpdateError(strict.issues.map((issue) => (issue.startsWith("fields.") ? issue : `fields.${issue}`)));
+      const sentField = (issue: string) => (UPDATABLE_FIELDS as readonly string[]).includes(issue.split(/[.:[]/, 1)[0]);
+      throw new ApplicationUpdateError(strict.issues.map((issue) => (sentField(issue) ? `fields.${issue}` : issue)));
     }
     const reconciled = reconcileApplicationMutations(
       snapshot.applications,
       sanitizeApplications([strict.application]),
       [{ id, operation: "upsert", baseUpdatedAt: current.updatedAt }]
     );
-    const files = documents.map((document) => `${document.kind}.${DOCUMENT_SOURCE_EXTENSION[document.kind]}`);
-    const previous = await Promise.all(files.map((file) => readOptionalApplicationFile(join(dir, file))));
     try {
-      for (const [index, document] of documents.entries()) {
-        await writeApplicationFile(dir, files[index], Buffer.from(document.sourceText, "utf8"));
+      for (const { document, file } of pending) {
+        await writeApplicationFile(dir, file, Buffer.from(document.sourceText, "utf8"));
       }
       const saved = await dependencies.writeApplicationsSnapshot(workspaceDir, reconciled);
       return {
@@ -132,7 +147,7 @@ export async function updateApplication(workspaceDir: string, id: string, body: 
         changed: true
       };
     } catch (error) {
-      await Promise.all(files.map((file, index) => restoreApplicationFile(dir, file, previous[index]))).catch(() => undefined);
+      await Promise.all(pending.map(({ file, previous: bytes }) => restoreApplicationFile(dir, file, bytes))).catch(() => undefined);
       throw error;
     }
   });

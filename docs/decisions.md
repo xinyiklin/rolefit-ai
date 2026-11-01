@@ -729,30 +729,36 @@ later entry wins.
   sets `jobDescription`, `rawJobDescription`, `fitAssessment`, `notes`, and
   `resumeUsed` under the commit's exact-as-sent rule and `baseUpdatedAt`, and
   attaches a `.resume`/`.cover` a submitted record lacks; it never replaces a
-  saved document (a record of what was sent), and a Draft or job-only Skip
+  saved document (a record of what was sent), resending an already-saved
+  update answers `changed: false` without a write, and a Draft or job-only Skip
   gets documents and `resumeUsed` only with its first submission, where the
   status route now accepts `resumeUsed`. Stage, dates, history, answers, and
   identity keep their own routes. The MCP `render_pdf` tool lays out and emits
   a `.resume`/`.cover` (source text, saved variant, or a record's saved
   document) with the engine RoleFit exports with, fonts read from the running
   RoleFit's `/fonts`, and writes it only to an absolute `.pdf` path the agent
-  names, refusing to replace a file unless `overwrite` is set; it adds no text
+  names, refusing to replace a file unless `overwrite` is set, a symlink, and
+  any path inside the workspace (matched against the health route's workspace
+  fingerprint for every folder above the target, so no path is exposed); it adds no text
   (no appended sign-off) and returns the page count. `polish_resume` takes
   `apply` ("all" or ids) and returns exactly what `apply_resume_edits` would,
   so a restarted MCP process cannot strand a proposal; a bad id keeps the
   proposal. Every AI tool reports `providerRun` (the route's provider, model,
-  effort, and attempts, falling back to the request's; provider and model stay
+  effort, and attempts, falling back to the request's; `analyze_job` reports
+  it whenever it sent a request, even one that failed; provider and model stay
   the stage's saved Settings, never tool inputs). `draft_answer` takes an
   optional `jobDescription` that wins over the record's brief. `get_answers`
   adds each answer's `origin` (`ai-draft` with the drafting provider, model,
-  and time for an unedited RoleFit draft, else `saved-text`), `questionId`, and
+  and time when saved with RoleFit's generation record, which the app drops on
+  a user edit; the server does not prove it unedited; else `saved-text`), `questionId`, and
   the record's `appliedAt`. The tracker list route skips and flags invalid
   records: `GET /api/applications` serves the canonical records plus
-  `invalidRecords` (index, id, title, company, field-path issues, never stored
-  values) and a message the browser shows on its tracker error line, while
+  `invalidRecords` (index, id, title, company, at most 20 field-path issues,
+  never stored values) and a message the browser shows on its tracker error line, while
   every other tracker read and every write refuses with that message until the
   file is repaired or a backup restored, so no write can drop an unread record.
-  File-level problems (shape, version, count, duplicate ids) still fail the
+  File-level problems (shape, version, count, duplicate ids, including an id a
+  readable and an unreadable record share) still fail the
   whole read, a file with invalid records is never version-rewritten, and
   backup and restore validation stay strict. `polish_cover_letter` already
   returned the applied `.cover` as `sourceText` (no change). Left open: an

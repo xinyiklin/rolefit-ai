@@ -170,6 +170,24 @@ try {
   assert.equal(blocked.status, 500, "a save over an invalid file is refused");
   assert.match(blocked.json.error, /Saving is paused/);
   assert.equal(await readFile(path, "utf8"), text.replace('"status": "applied"', '"status": "bogus"'), "the invalid file is untouched");
+  // An id shared with an unreadable record still fails the whole file.
+  const shared = JSON.parse(text);
+  shared.applications.push({ ...shared.applications[0], status: "bogus" });
+  await writeFile(path, JSON.stringify(shared), "utf8");
+  assert.equal((await list()).status, 500, "a duplicate id across readable and unreadable records fails closed");
+  // A lower-version file with an invalid record is listed but never rewritten.
+  const legacy = JSON.stringify({ applications: [JSON.parse(text).applications[1], { id: "zulu", status: "bogus" }] });
+  await writeFile(path, legacy, "utf8");
+  const legacyList = await list();
+  assert.equal(legacyList.status, 200);
+  assert.equal(legacyList.json.invalidRecords[0].id, "zulu");
+  assert.equal(await readFile(path, "utf8"), legacy, "the version upgrade does not rewrite a file with invalid records");
+  // Issue lists are capped.
+  const noisy = { ...JSON.parse(text).applications[1], id: "noisy", ...Object.fromEntries(Array.from({ length: 50 }, (_, index) => [`junk${index}`, 1])) };
+  await writeFile(path, JSON.stringify({ ...JSON.parse(text), applications: [JSON.parse(text).applications[0], noisy] }), "utf8");
+  const noisyList = await list();
+  assert.equal(noisyList.json.invalidRecords[0].issues.length, 21, "at most 20 issues plus a count");
+  assert.equal(noisyList.json.invalidRecords[0].issues[20], "and 30 more");
   await writeFile(path, text, "utf8");
   assert.equal((await list()).status, 200, "a repaired file loads again");
 
