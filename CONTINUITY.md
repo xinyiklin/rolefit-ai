@@ -33,9 +33,9 @@ D-entries in `docs/decisions.md`.
   main bundle fell 5.8 → 0.5 MB and a two-page resume's first page paints in
   290 ms instead of 715 (production, cold). Open: exercise RoleFit's editor and
   exports in a browser; only its build and offline suite were run.
-
 - 2026-11-01 [USER] 0.25.0: tag `rolefit-preview-v0.25.0-beta.1` after the
   release PR merges and confirm the workflow (it runs the native smokes).
+
 ## Deferred backlog
 
 - 2026-10-18 [CODE+TOOL] `main` has no required status checks and the `ec2`
