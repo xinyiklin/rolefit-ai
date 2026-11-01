@@ -20,7 +20,15 @@ export type Tool = {
   run: (args: Record<string, unknown>, signal?: AbortSignal) => Promise<ToolResult>;
 };
 
-export type SavedAnswer = { question: string; answer: string; savedAt: string; questionId?: string; status?: string; warnings?: string[] };
+export type SavedAnswer = {
+  question: string;
+  answer: string;
+  savedAt: string;
+  questionId?: string;
+  status?: string;
+  warnings?: string[];
+  generation?: { provider: string; model: string; reasoningEffort?: string; createdAt: string };
+};
 type DocumentArtifacts = { hasPdf: boolean; hasSource: boolean; fileName: string; savedAt: string };
 
 export type TrackerRecord = DuplicateCandidate & {
@@ -39,6 +47,8 @@ export type TrackerRecord = DuplicateCandidate & {
   resumeArtifacts?: DocumentArtifacts;
   coverLetterArtifacts?: DocumentArtifacts;
 };
+
+export type InvalidRecord = { index: number; id?: string; title?: string; company?: string; issues: string[] };
 
 export type DocumentKind = "resume" | "cover";
 export type ReadDocument = { fileName: string; savedAt?: string; label?: string; text: string; sourceText: string };
@@ -125,17 +135,27 @@ export function createClient(baseUrl: string, fetchImpl: typeof fetch = fetch) {
     return { ok: response.ok, value };
   }
 
-  async function listApplications(): Promise<TrackerRecord[] | ToolResult> {
+  // The readable records, plus any the server left out as unreadable (D103).
+  async function listTracker(): Promise<{ applications: TrackerRecord[]; invalidRecords?: InvalidRecord[] } | ToolResult> {
     const listed = await request("GET", "/api/applications");
-    return listed.ok ? (listed.value as { applications: TrackerRecord[] }).applications : listed;
+    if (!listed.ok) return listed;
+    const { applications, invalidRecords } = listed.value as { applications: TrackerRecord[]; invalidRecords?: InvalidRecord[] };
+    return { applications, ...(invalidRecords?.length ? { invalidRecords } : {}) };
   }
 
   async function getApplication(id: unknown): Promise<TrackerRecord | ToolResult> {
     if (typeof id !== "string" || !id) return { ok: false, value: { error: "id: required string" } };
-    const applications = await listApplications();
-    if (!Array.isArray(applications)) return applications;
-    return applications.find((application) => application.id === id)
-      ?? { ok: false, value: { error: `No application has id ${id}.` } };
+    const listed = await listTracker();
+    if (isToolResult(listed)) return listed;
+    const record = listed.applications.find((application) => application.id === id);
+    if (record) return record;
+    const unreadable = listed.invalidRecords?.find((invalid) => invalid.id === id);
+    return {
+      ok: false,
+      value: unreadable
+        ? { error: `Application ${id} is saved but RoleFit cannot read it safely; it needs repair in applications.json or a backup restore.`, issues: unreadable.issues }
+        : { error: `No application has id ${id}.` }
+    };
   }
 
   // One document saved on an application, as source and plain text.
@@ -184,7 +204,7 @@ export function createClient(baseUrl: string, fetchImpl: typeof fetch = fetch) {
     return { saved: snapshot.exists, settings: snapshot.settings ?? {} };
   }
 
-  return { request, listApplications, getApplication, applicationDocument, workspaceVariant, readSettings };
+  return { request, listTracker, getApplication, applicationDocument, workspaceVariant, readSettings };
 }
 
 export type RoleFitClient = ReturnType<typeof createClient>;

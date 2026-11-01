@@ -8,10 +8,15 @@
 // the saved documents and names what is missing, answer search returns only the
 // newest answer per question, the profile carries only declared facts, and
 // ROLEFIT_URL is loopback-only. Calls run concurrently and a cancelled or
-// abandoned call is aborted without a reply.
+// abandoned call is aborted without a reply. D103: update_application and a
+// first submission's resumeUsed reach their routes, answers carry their origin,
+// unreadable tracker records are named, and render_pdf writes the engine's PDF
+// of the text as written, refusing to replace a file unasked.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { link, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { fileURLToPath } from "node:url";
 
@@ -21,6 +26,7 @@ import { serializeResumeData } from "../../src/lib/resumeText.ts";
 
 import { handleMcpMessage, serveStdio } from "../server.ts";
 import { roleFitBaseUrl } from "../client.ts";
+import { computeWorkspaceFingerprint } from "../../server/health-contract.ts";
 import { createTools } from "../tools.ts";
 
 const base = "http://127.0.0.1:5181";
@@ -34,7 +40,10 @@ const records = [
     fitAssessment: { resumeLabel: "Base resume", result: { status: "ASSESSED", verdict: "REASONABLE" } },
     applicationAnswers: [
       { question: "Why Acme?", answer: "Old answer.", savedAt: "2026-10-01T00:00:00.000Z", questionId: "q1" },
-      { question: "Why Acme?", answer: "Corrected answer about reliable APIs.", savedAt: "2026-10-02T00:00:00.000Z", questionId: "q1", status: "ready" },
+      {
+        question: "Why Acme?", answer: "Corrected answer about reliable APIs.", savedAt: "2026-10-02T00:00:00.000Z", questionId: "q1", status: "ready",
+        generation: { provider: "claude-cli", model: "opus", reasoningEffort: "high", createdAt: "2026-10-02T00:00:00.000Z", attempts: 1, promptVersion: "v1" }
+      },
       { question: "Salary expectation?", answer: "Open to discussing.", savedAt: "2026-10-01T00:00:00.000Z" }
     ]
   },
@@ -53,6 +62,7 @@ const coverSource = serializeCoverLetterFile({
     items: [{ id: "body", titleLeft: "", titleRight: "", subtitleLeft: "", subtitleRight: "", bullets: [{ id: "paragraph", text: "Dear Hiring Team,\n\nSynthetic cover letter paragraph." }] }]
   }]
 }, COVER_LETTER_STYLE_DEFAULTS);
+let workspaceFingerprint = computeWorkspaceFingerprint("/nonexistent/rolefit-probe-workspace");
 let preferences = { exists: true, settings: { profileBackground: "Built payment APIs.", citizenshipStatus: "us-citizen", educationLevel: "unspecified", major: "" } };
 const calls = [];
 async function fakeFetch(url, init = {}) {
@@ -66,10 +76,12 @@ async function fakeFetch(url, init = {}) {
       : json(400, { error: "The application was not saved.", issues: ["application.title: required"] });
   }
   if (path === "/api/applications/a1/status") return json(200, { application: { id: "a1", status: "interviewing" }, changed: true });
+  if (path === "/api/applications/a1/update") return json(200, { application: { id: "a1" }, changed: true });
   if (path === "/api/applications/a1/documents/resume.resume") return new Response(resumeSource, { status: 200, headers: { "Content-Type": "application/octet-stream" } });
   if (path === "/api/applications/a1/documents/cover.cover") return new Response(coverSource, { status: 200, headers: { "Content-Type": "application/octet-stream" } });
   if (path === "/api/applications/c3/documents/resume.resume") return new Response("{broken", { status: 200, headers: { "Content-Type": "application/octet-stream" } });
   if (path === "/api/workspace/preferences") return json(200, preferences);
+  if (path === "/api/health") return json(200, { service: "role-fit-ai", status: "ok", workspaceFingerprint });
   if (path === "/api/applications/a1/answers") return json(200, { application: { id: "a1" }, added: 1 });
   if (path === "/api/applications/a1/events") return json(200, { application: { id: "a1" }, statusChanged: true });
   if (path === "/api/workspace" && init.method === "GET") {
@@ -111,10 +123,10 @@ const call = async (name, args) => (await rpc("tools/call", { name, arguments: a
   assert.equal(await handleMcpMessage({ jsonrpc: "2.0", id: 7, result: {} }, tools), null, "a client response gets no reply");
   const listed = (await rpc("tools/list")).result.tools;
   assert.deepEqual(listed.map((tool) => tool.name), [
-    "search_applications", "get_application", "commit_application", "update_application_status", "log_application_event",
-    "add_application_answers", "list_resumes", "get_resume", "list_cover_letters", "get_cover_letter", "get_submission_package",
-    "get_answers", "get_candidate_profile", "analyze_job", "assess_fit", "polish_resume", "apply_resume_edits",
-    "polish_cover_letter", "draft_answer", "review_application"
+    "search_applications", "get_application", "commit_application", "update_application_status", "update_application",
+    "log_application_event", "add_application_answers", "list_resumes", "get_resume", "list_cover_letters", "get_cover_letter",
+    "get_submission_package", "get_answers", "get_candidate_profile", "analyze_job", "assess_fit", "polish_resume",
+    "apply_resume_edits", "polish_cover_letter", "draft_answer", "review_application", "render_pdf"
   ]);
   for (const tool of listed) {
     assert.equal(tool.inputSchema.type, "object");
@@ -176,6 +188,17 @@ const call = async (name, args) => (await rpc("tools/call", { name, arguments: a
   const documents = { resume: { sourceText: resumeSource }, cover: { sourceText: coverSource } };
   await call("update_application_status", { id: "a1", status: "applied", documents });
   assert.deepEqual(calls[0].body, { status: "applied", documents }, "submission documents reach the route unchanged");
+  calls.length = 0;
+  await call("update_application_status", { id: "a1", status: "applied", documents, resumeUsed: "tailored" });
+  assert.deepEqual(calls[0].body, { status: "applied", documents, resumeUsed: "tailored" }, "a first submission's resumeUsed reaches the route");
+
+  calls.length = 0;
+  const fields = { jobDescription: "A brief", fitAssessment: { result: { status: "ASSESSED" }, resumeLabel: "Base" }, resumeUsed: "base" };
+  const updated = await call("update_application", { id: "a1", fields, documents: { cover: { sourceText: coverSource } }, baseUpdatedAt: "2026-10-01T00:00:00.000Z" });
+  assert.equal(updated.isError, false);
+  assert.equal(calls[0].url, `${base}/api/applications/a1/update`);
+  assert.deepEqual(calls[0].body, { fields, documents: { cover: { sourceText: coverSource } }, baseUpdatedAt: "2026-10-01T00:00:00.000Z" }, "sent through unchanged");
+  assert.equal((await call("update_application", { fields })).isError, true, "an id is required");
 
   calls.length = 0;
   const answered = await call("add_application_answers", { id: "a1", answers: [{ question: "Q", answer: "A" }] });
@@ -262,12 +285,139 @@ const call = async (name, args) => (await rpc("tools/call", { name, arguments: a
   const all = (await call("get_answers", {})).structuredContent;
   assert.equal(all.total, 3, "the superseded answer is not returned");
   assert.deepEqual(all.answers.map(({ answer }) => answer), ["I like reliable pipelines.", "Corrected answer about reliable APIs.", "Open to discussing."]);
-  assert.deepEqual(all.answers[1].application, { id: "a1", title: "Backend Engineer at Acme", company: "Acme, Inc.", role: "Backend Engineer", status: "applied" });
+  assert.deepEqual(all.answers[1].application, {
+    id: "a1", title: "Backend Engineer at Acme", company: "Acme, Inc.", role: "Backend Engineer", status: "applied", appliedAt: "2026-10-01T00:00:00.000Z"
+  });
   assert.equal(all.answers[1].status, "ready");
+  assert.equal(all.answers[1].questionId, "q1");
+  assert.equal(all.answers[1].origin, "ai-draft");
+  assert.deepEqual(all.answers[1].drafted, { provider: "claude-cli", model: "opus", reasoningEffort: "high", at: "2026-10-02T00:00:00.000Z" });
+  assert.equal(all.answers[0].origin, "saved-text", "an answer without a generation is the user's or a plain saved pair");
+  assert.equal(all.answers[0].drafted, undefined);
   assert.deepEqual((await call("get_answers", { query: "RELIABLE apis" })).structuredContent.answers.map(({ answer }) => answer), ["Corrected answer about reliable APIs."]);
   assert.equal((await call("get_answers", { query: "old answer" })).structuredContent.total, 0);
   assert.equal((await call("get_answers", { company: "globex corp" })).structuredContent.total, 1);
   assert.equal((await call("get_answers", { limit: 1 })).structuredContent.answers.length, 1);
+}
+
+// Records the tracker cannot read safely are named, never silently missing.
+{
+  const invalidRecords = [{ index: 1, id: "bad1", title: "Broken at Hooli", issues: ["status: dropped (not a stored field or not a valid value)"] }];
+  const flagged = createTools(base, async (url) => new URL(url).pathname === "/api/applications"
+    ? new Response(JSON.stringify({ applications: [records[0]], revision: "r1", invalidRecords }), { status: 200 })
+    : new Response("{}", { status: 404 }));
+  const run = (name, args) => flagged.find((tool) => tool.name === name).run(args);
+  const searched = await run("search_applications", {});
+  assert.deepEqual(searched.value.invalidRecords, invalidRecords, "search names the unreadable records");
+  assert.equal(searched.value.total, 1);
+  const unreadable = await run("get_application", { id: "bad1" });
+  assert.equal(unreadable.ok, false);
+  assert.match(unreadable.value.error, /cannot read it safely/);
+  assert.deepEqual(unreadable.value.issues, invalidRecords[0].issues);
+  assert.equal((await run("get_answers", {})).value.invalidRecordsSkipped, 1);
+  assert.equal((await call("search_applications", {})).structuredContent.invalidRecords, undefined, "absent when every record reads");
+}
+
+// render_pdf: the engine's own PDF, fonts from RoleFit's /fonts, written only where asked.
+{
+  const engineFonts = new URL("../../../../packages/engine/fonts/", import.meta.url);
+  const realFetch = globalThis.fetch;
+  const fontRequests = [];
+  globalThis.fetch = async (url, init) => {
+    const { pathname } = new URL(url);
+    if (pathname.startsWith("/fonts/")) {
+      fontRequests.push(url);
+      return new Response(await readFile(new URL(pathname.slice("/fonts/".length), engineFonts)));
+    }
+    return realFetch(url, init);
+  };
+  const dir = await mkdtemp(join(tmpdir(), "rolefit-mcp-pdf-"));
+  try {
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const pdfText = async (path) => {
+      const doc = await pdfjs.getDocument({ data: new Uint8Array(await readFile(path)), useWorkerFetch: false, isEvalSupported: false }).promise;
+      let text = "";
+      for (let page = 1; page <= doc.numPages; page += 1) text += (await (await doc.getPage(page)).getTextContent()).items.map((item) => item.str).join(" ");
+      return { pages: doc.numPages, text };
+    };
+    const resumePath = join(dir, "Resume.pdf");
+    const rendered = await call("render_pdf", { kind: "resume", sourceText: resumeSource, outputPath: resumePath });
+    assert.equal(rendered.isError, false, rendered.content[0].text);
+    assert.equal(rendered.structuredContent.path, resumePath);
+    assert.ok(fontRequests.length > 0 && fontRequests.every((url) => url.startsWith(`${base}/fonts/`)), "fonts come from the running RoleFit");
+    const resumePdf = await pdfText(resumePath);
+    assert.equal(rendered.structuredContent.pages, resumePdf.pages, "the page count is the PDF's");
+    assert.ok(resumePdf.text.includes(parseResumeFile(resumeSource).data.header.name.replace(/<[^>]+>/g, "")), "the resume text is in the PDF");
+
+    const again = await call("render_pdf", { kind: "resume", sourceText: resumeSource, outputPath: resumePath });
+    assert.equal(again.isError, true);
+    assert.match(again.structuredContent.error, /already there/, "an existing file is never replaced unasked");
+    assert.equal((await call("render_pdf", { kind: "resume", sourceText: resumeSource, outputPath: resumePath, overwrite: true })).isError, false);
+
+    // A letter that already ends with its sign-off renders it exactly once.
+    const signed = serializeCoverLetterFile({
+      header: { visible: true, name: "Synthetic Applicant", contact: ["applicant@example.test"] },
+      sections: [{
+        id: "cover", heading: "", type: "summary",
+        items: [{ id: "body", titleLeft: "", titleRight: "", subtitleLeft: "", subtitleRight: "", bullets: [{ id: "paragraph", text: "Dear Hiring Team,\n\nSynthetic cover letter paragraph.\n\nSincerely,\nSynthetic Applicant" }] }]
+      }]
+    }, COVER_LETTER_STYLE_DEFAULTS);
+    const coverPath = join(dir, "Cover.pdf");
+    const cover = await call("render_pdf", { kind: "cover", sourceText: signed, outputPath: coverPath, title: "Cover" });
+    assert.equal(cover.isError, false, cover.content[0].text);
+    const coverPdf = await pdfText(coverPath);
+    assert.equal(coverPdf.pages, 1);
+    assert.equal(coverPdf.text.match(/Sincerely/g)?.length, 1, "nothing is appended to the letter");
+
+    const saved = await call("render_pdf", { kind: "cover", applicationId: "a1", outputPath: join(dir, "Saved.pdf") });
+    assert.equal(saved.isError, false, "a record's saved document renders");
+    assert.equal((await call("render_pdf", { kind: "resume", fileName: "default.resume", outputPath: join(dir, "Base.pdf") })).isError, false);
+    assert.match((await call("render_pdf", { kind: "resume", applicationId: "b2", outputPath: join(dir, "x.pdf") })).structuredContent.error, /PDF only/);
+    assert.match((await call("render_pdf", { kind: "cover", applicationId: "b2", outputPath: join(dir, "x.pdf") })).structuredContent.error, /no saved cover/);
+    assert.match((await call("render_pdf", { kind: "resume", sourceText: "{broken", outputPath: join(dir, "x.pdf") })).structuredContent.error, /could not be read/);
+    assert.match((await call("render_pdf", { kind: "resume", sourceText: resumeSource, outputPath: "Resume.pdf" })).structuredContent.error, /absolute path/);
+    assert.match((await call("render_pdf", { kind: "resume", sourceText: resumeSource, outputPath: join(dir, "Resume.txt") })).structuredContent.error, /ending in \.pdf/);
+    assert.match((await call("render_pdf", { kind: "resume", sourceText: resumeSource, fileName: "default.resume", outputPath: join(dir, "x.pdf") })).structuredContent.error, /exactly one/);
+    assert.match((await call("render_pdf", { kind: "resume", sourceText: resumeSource, outputPath: join(dir, "missing", "x.pdf") })).structuredContent.error, /folder does not exist/);
+
+    // Never inside RoleFit's workspace (named by fingerprint), even through a
+    // symlinked folder, and never through a symlinked file.
+    const workspace = join(dir, "workspace");
+    await mkdir(join(workspace, "applications", "a1"), { recursive: true });
+    await symlink(join(workspace, "applications"), join(dir, "linked"));
+    await symlink(join(workspace, "applications", "a1", "resume.pdf"), join(dir, "Linked.pdf"));
+    const realFingerprint = workspaceFingerprint;
+    workspaceFingerprint = computeWorkspaceFingerprint(workspace);
+    try {
+      for (const outputPath of [join(workspace, "applications", "a1", "resume.pdf"), join(dir, "linked", "a1", "resume.pdf")]) {
+        const inside = await call("render_pdf", { kind: "resume", sourceText: resumeSource, outputPath, overwrite: true });
+        assert.match(inside.structuredContent.error, /inside RoleFit's workspace/, outputPath);
+      }
+      assert.match((await call("render_pdf", { kind: "resume", sourceText: resumeSource, outputPath: join(dir, "Linked.pdf"), overwrite: true })).structuredContent.error, /symbolic link/);
+      await assert.rejects(readFile(join(workspace, "applications", "a1", "resume.pdf")), /ENOENT/, "nothing was written into the workspace");
+      assert.equal((await call("render_pdf", { kind: "resume", sourceText: resumeSource, outputPath: join(dir, "Outside.pdf") })).isError, false, "a sibling folder is outside");
+    } finally {
+      workspaceFingerprint = realFingerprint;
+    }
+    // A workspace whose configured path differs (reached through a symlink)
+    // is still recognized by its tracker file.
+    await writeFile(join(workspace, "applications.json"), "{}");
+    const viaLink = await call("render_pdf", { kind: "resume", sourceText: resumeSource, outputPath: join(dir, "linked", "a1", "resume.pdf"), overwrite: true });
+    assert.match(viaLink.structuredContent.error, /inside RoleFit's workspace/, "a folder holding a tracker file is a workspace");
+    // An overwrite replaces the name, never the content of a hard-linked file.
+    await mkdir(join(dir, "kept"));
+    await writeFile(join(dir, "kept", "saved.pdf"), "saved bytes");
+    await link(join(dir, "kept", "saved.pdf"), join(dir, "Hardlink.pdf"));
+    assert.equal((await call("render_pdf", { kind: "resume", sourceText: resumeSource, outputPath: join(dir, "Hardlink.pdf"), overwrite: true })).isError, false);
+    assert.equal(await readFile(join(dir, "kept", "saved.pdf"), "utf8"), "saved bytes", "the other name keeps its bytes");
+    globalThis.fetch = async () => { throw new TypeError("fetch failed"); };
+    const offline = await call("render_pdf", { kind: "resume", sourceText: resumeSource, outputPath: join(dir, "Offline.pdf") });
+    assert.match(offline.structuredContent.error, /fonts could not be loaded/);
+    await assert.rejects(readFile(join(dir, "Offline.pdf")), /ENOENT/, "no file is written without fonts");
+  } finally {
+    globalThis.fetch = realFetch;
+    await rm(dir, { recursive: true, force: true });
+  }
 }
 
 // get_candidate_profile returns the Profile and only declared facts.

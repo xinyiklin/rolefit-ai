@@ -16,6 +16,7 @@ import { APPLICATION_NOTES_MAX_LENGTH } from "../../../shared/applicationNotesCo
 import {
   applicationsFilePath,
   invalidateApplicationsSnapshot,
+  parseStoredApplications,
   readApplications,
   readApplicationsSnapshot,
   writeApplications
@@ -149,12 +150,44 @@ try {
   assert.notEqual(reread.revision, cached.revision, "an outside same-size edit mints a new revision");
   assert.equal(reread.applications[1].notes, "Offsit", "the outside edit is read");
 
-  // An invalid outside edit fails closed on GET and PUT, then recovers.
+  // An invalid outside edit lists only the readable records, names the bad one
+  // without its content, refuses every write, then recovers (D103).
   await writeFile(path, text.replace('"status": "applied"', '"status": "bogus"'), "utf8");
-  assert.equal((await list()).status, 500, "an invalid outside edit fails closed");
+  const flagged = await list();
+  assert.equal(flagged.status, 200, "one invalid record does not fail the whole list");
+  assert.equal(flagged.json.applications.length, 1, "the readable record is still listed");
+  assert.equal(flagged.json.invalidRecords.length, 1, "the invalid record is named");
+  const [bad] = flagged.json.invalidRecords;
+  assert.equal(bad.id, JSON.parse(text).applications[bad.index].id, "the invalid record is named by its index and id");
+  assert.notEqual(flagged.json.applications[0].id, bad.id, "only the readable record is listed");
+  assert.ok(flagged.json.invalidRecords[0].issues.length, "the invalid record carries its issues");
+  assert.ok(!JSON.stringify(flagged.json.invalidRecords).includes("bogus"), "issues name fields, not stored values");
+  assert.match(flagged.json.invalidRecordsMessage, /Saving is paused/);
+  assert.throws(() => parseStoredApplications(text.replace('"status": "applied"', '"status": "bogus"')), /Invalid application record/,
+    "the strict parser (backup restore) still refuses the file");
+  await assert.rejects(readApplications(workspaceDir), /Saving is paused/, "every other tracker read refuses");
   const blocked = await save([record("delta")], [{ id: "delta", operation: "upsert", baseUpdatedAt: null }], reread.revision);
   assert.equal(blocked.status, 500, "a save over an invalid file is refused");
+  assert.match(blocked.json.error, /Saving is paused/);
   assert.equal(await readFile(path, "utf8"), text.replace('"status": "applied"', '"status": "bogus"'), "the invalid file is untouched");
+  // An id shared with an unreadable record still fails the whole file.
+  const shared = JSON.parse(text);
+  shared.applications.push({ ...shared.applications[0], status: "bogus" });
+  await writeFile(path, JSON.stringify(shared), "utf8");
+  assert.equal((await list()).status, 500, "a duplicate id across readable and unreadable records fails closed");
+  // A lower-version file with an invalid record is listed but never rewritten.
+  const legacy = JSON.stringify({ applications: [JSON.parse(text).applications[1], { id: "zulu", status: "bogus" }] });
+  await writeFile(path, legacy, "utf8");
+  const legacyList = await list();
+  assert.equal(legacyList.status, 200);
+  assert.equal(legacyList.json.invalidRecords[0].id, "zulu");
+  assert.equal(await readFile(path, "utf8"), legacy, "the version upgrade does not rewrite a file with invalid records");
+  // Issue lists are capped.
+  const noisy = { ...JSON.parse(text).applications[1], id: "noisy", ...Object.fromEntries(Array.from({ length: 50 }, (_, index) => [`junk${index}`, 1])) };
+  await writeFile(path, JSON.stringify({ ...JSON.parse(text), applications: [JSON.parse(text).applications[0], noisy] }), "utf8");
+  const noisyList = await list();
+  assert.equal(noisyList.json.invalidRecords[0].issues.length, 21, "at most 20 issues plus a count");
+  assert.equal(noisyList.json.invalidRecords[0].issues[20], "and 30 more");
   await writeFile(path, text, "utf8");
   assert.equal((await list()).status, 200, "a repaired file loads again");
 

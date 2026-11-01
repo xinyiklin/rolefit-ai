@@ -107,6 +107,21 @@ function textList(value: unknown, name: string): string[] | ToolResult {
     : fail(`${name}: must be a list of text`);
 }
 
+// What ran, falling back to what was asked for, as the app records it.
+function providerRun(body: unknown, fields: ReturnType<typeof buildStageRequestFields>) {
+  const value = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
+  const used = (key: "provider" | "model" | "reasoningEffort") =>
+    typeof value[key] === "string" && (value[key] as string).trim() ? (value[key] as string).trim() : fields[key];
+  return {
+    provider: used("provider"),
+    model: used("model"),
+    reasoningEffort: used("reasoningEffort"),
+    ...(typeof value.attempts === "number" && Number.isFinite(value.attempts) ? { attempts: Math.max(1, Math.min(9, Math.round(value.attempts))) } : {})
+  };
+}
+
+const PROVIDER_RUN_NOTE = " `providerRun` names the provider, model and effort that ran.";
+
 // The parsed resume itself, not its source: parsing assigns new element ids,
 // and the suggestions target this parse's. `concerns` are the ones the polish
 // was told about, which stay open whatever is accepted.
@@ -186,6 +201,60 @@ export function createAiTools(client: RoleFitClient): Tool[] {
     };
   }
 
+  // Accepts suggestions exactly as the editor's Accept does (apply_resume_edits,
+  // and polish_resume's `apply`).
+  function applyProposal(proposal: ResumeProposal, accept: unknown, edits: unknown): ToolResult {
+    if (!Array.isArray(accept) || !accept.length || accept.some((id) => typeof id !== "string")) return fail("accept: list the suggestion ids to accept.");
+    const overrides = (edits ?? {}) as Record<string, unknown>;
+    if (typeof overrides !== "object" || Array.isArray(overrides)) return fail("edits: must map suggestion ids to text.");
+    const issues: string[] = [];
+    const accepted: { suggestion: ResumeProposalSuggestion; value: string }[] = [];
+    for (const id of new Set(accept as string[])) {
+      const suggestion = proposal.suggestions.get(id);
+      if (!suggestion) { issues.push(`accept: ${id} is not in this proposal`); continue; }
+      const override = overrides[id];
+      if (override !== undefined && (typeof override !== "string" || suggestion.kind === "reorder" || suggestion.kind === "remove")) {
+        issues.push(`edits.${id}: only a rewrite or an addition takes replacement text`);
+        continue;
+      }
+      const value = (override as string | undefined) ?? proposalValue(suggestion);
+      if ((!suggestion.kind || suggestion.kind === "add") && !value.trim()) { issues.push(`edits.${id}: must not be empty`); continue; }
+      accepted.push({ suggestion, value });
+    }
+    for (const id of Object.keys(overrides)) if (!(accept as string[]).includes(id)) issues.push(`edits.${id}: not in accept`);
+    if (issues.length) return { ok: false, value: { error: "Nothing was applied.", issues } };
+    const data = applyResumeSuggestions(proposal.resume.data, accepted);
+    let sourceText: string;
+    try {
+      sourceText = serializeResumeFile(data, coerceDocStyle(proposal.resume.documentStyle));
+    } catch (error) {
+      return fail(`Nothing was applied: the edited resume is not a valid .resume (${error instanceof Error ? error.message : String(error)}).`);
+    }
+    const decisions: Record<string, ResumeProposalDecision> = Object.fromEntries(
+      accepted.map(({ suggestion, value }) => [suggestion.id, { kind: "accepted", text: value }])
+    );
+    const terminologyWarnings = acceptedTerminologyWarnings(
+      { terminology: proposal.terminology }, proposal.terminology.inputKey, [...proposal.suggestions.values()], decisions, data
+    );
+    const warnings = accepted.flatMap(({ suggestion, value }) => {
+      const notes = [...(suggestion.warnings ?? []), ...(value !== proposalValue(suggestion) ? ["Your replacement text was not checked by RoleFit."] : [])];
+      return notes.length ? [{ id: suggestion.id, warnings: notes }] : [];
+    });
+    // Concerns the polish was told about stay open whatever was accepted.
+    const resumeConcerns = [...new Set([...proposal.concerns, ...warnings.flatMap((item) => item.warnings)])];
+    return {
+      ok: true,
+      value: {
+        applied: accepted.length,
+        sourceText,
+        text: serializeResumeData(data),
+        ...(warnings.length ? { warnings } : {}),
+        ...(resumeConcerns.length ? { resumeConcerns } : {}),
+        ...(terminologyWarnings.length ? { terminologyWarnings } : {})
+      }
+    };
+  }
+
   return [
     {
       name: "analyze_job",
@@ -195,7 +264,7 @@ export function createAiTools(client: RoleFitClient): Tool[] {
         "polish against and to save as the record's jobDescription; keep the posting as rawJobDescription. " +
         "`tracking` holds the facts it found (title, company, role, location, pay); `manualReviewFields` names " +
         "the ones it could not find. If the AI analysis fails, the brief comes from RoleFit's local extractor and " +
-        "`aiError` says why." + RUNS_PROVIDER,
+        "`aiError` says why." + PROVIDER_RUN_NOTE + RUNS_PROVIDER,
       inputSchema: {
         type: "object",
         required: ["text"],
@@ -212,11 +281,15 @@ export function createAiTools(client: RoleFitClient): Tool[] {
         let extracted = extractJobPosting(text, { url: link });
         let source = "local";
         let aiError: string | undefined;
+        let ran: ReturnType<typeof providerRun> | undefined;
         if (text.trim().length >= 40) {
           const context = await stage("job-analysis", false);
           if (isToolResult(context)) return context;
           const analyzed = await post("/api/job-analysis", { text, url: link, ...context.fields }, signal);
           if (signal?.aborted) return analyzed;
+          // Only a run the route reports: its errors do not name the provider today.
+          const reported = analyzed.value as { provider?: unknown } | null;
+          if (analyzed.ok || typeof reported?.provider === "string") ran = providerRun(analyzed.value, context.fields);
           const fields = analyzed.value as Partial<AiJobAnalysisFields> & { source?: string; error?: string };
           if (analyzed.ok && fields.source === "ai") {
             const result = extractedFromAiOrLocal(fields, text, link, context.fields, extracted);
@@ -235,6 +308,7 @@ export function createAiTools(client: RoleFitClient): Tool[] {
             rawJobDescription: text,
             tracking: extracted.tracking,
             manualReviewFields: extracted.manualReviewFields,
+            ...(ran ? { providerRun: ran } : {}),
             ...(aiError ? { aiError } : {})
           }
         };
@@ -246,7 +320,8 @@ export function createAiTools(client: RoleFitClient): Tool[] {
       description:
         "Run RoleFit's Fit Assessment of a resume and the Profile against a posting. `fitAssessment` is the " +
         "snapshot to send unchanged as application.fitAssessment in commit_application, or to polish_resume. " +
-        "Its verdict is advisory; RoleFit never decides whether to apply." + RUNS_PROVIDER,
+        "Its verdict is advisory; RoleFit never decides whether to apply. The snapshot itself names the provider, " +
+        "model and effort that ran." + RUNS_PROVIDER,
       inputSchema: {
         type: "object",
         required: ["jobText", "resume"],
@@ -273,9 +348,6 @@ export function createAiTools(client: RoleFitClient): Tool[] {
         const body = assessed.value as Record<string, unknown>;
         const result = sanitizeFitAssessment(body.fitAssessment);
         if (!result) return fail(typeof body.fitAssessmentError === "string" && body.fitAssessmentError ? body.fitAssessmentError : "Fit Assessment returned no usable screening.");
-        // What ran, falling back to what was asked for, as the app records it.
-        const used = (key: "provider" | "model" | "reasoningEffort") =>
-          typeof body[key] === "string" && (body[key] as string).trim() ? (body[key] as string).trim() : context.fields[key];
         return {
           ok: true,
           value: {
@@ -283,10 +355,7 @@ export function createAiTools(client: RoleFitClient): Tool[] {
               result,
               resumeLabel: document.label ?? document.fileName,
               assessedAt: new Date().toISOString(),
-              provider: used("provider"),
-              model: used("model"),
-              reasoningEffort: used("reasoningEffort"),
-              ...(typeof body.attempts === "number" && Number.isFinite(body.attempts) ? { attempts: Math.max(1, Math.min(9, Math.round(body.attempts))) } : {}),
+              ...providerRun(body, context.fields),
               promptVersion: FIT_ASSESSMENT_PROMPT_VERSION
             }
           }
@@ -302,7 +371,10 @@ export function createAiTools(client: RoleFitClient): Tool[] {
         "(or bullet order), the reason, and any evidence warnings; `heldBack` lists edits the optional review " +
         "held back and `review` says whether that review ran; `fitGaps` says how the edits relate to each Fit gap. " +
         "Nothing changes until apply_resume_edits; pass it `proposalId` and the ids you accept. Proposals are " +
-        "kept in this MCP session only, newest " + CACHED_PROPOSALS + "." + RUNS_PROVIDER,
+        "kept in this MCP process only, newest " + CACHED_PROPOSALS + ", so to accept in the same call pass `apply`: " +
+        "\"all\" (every suggestion, not held-back ones) or a list of ids; `applied` is then exactly what " +
+        "apply_resume_edits returns for them (or its refusal), and is absent when there was nothing to apply." +
+        PROVIDER_RUN_NOTE + RUNS_PROVIDER,
       inputSchema: {
         type: "object",
         required: ["resume", "jobDescription"],
@@ -311,11 +383,18 @@ export function createAiTools(client: RoleFitClient): Tool[] {
           resume: documentInput("resume", "resume", "list_resumes"),
           jobDescription: { type: "string", description: "The job brief from analyze_job (or the record's jobDescription)." },
           fitAssessment: { type: "object", description: "A fitAssessment snapshot from assess_fit or a record, for the same posting." },
-          resumeConcerns: resumeConcernsInput
+          resumeConcerns: resumeConcernsInput,
+          apply: {
+            description: "Accept in the same call: \"all\" or a list of suggestion ids (held-back ids included when you restore them).",
+            anyOf: [{ type: "string", enum: ["all"] }, { type: "array", minItems: 1, uniqueItems: true, items: { type: "string" } }]
+          }
         }
       },
-      async run({ resume, jobDescription, fitAssessment, resumeConcerns }, signal) {
+      async run({ resume, jobDescription, fitAssessment, resumeConcerns, apply }, signal) {
         if (typeof jobDescription !== "string" || jobDescription.trim().length < 40) return fail("jobDescription: the job brief is required (at least 40 characters).");
+        if (apply !== undefined && apply !== "all" && !(Array.isArray(apply) && apply.length && apply.every((id) => typeof id === "string"))) {
+          return fail("apply: \"all\" or a list of suggestion ids.");
+        }
         const concerns = textList(resumeConcerns, "resumeConcerns");
         if (isToolResult(concerns)) return concerns;
         const document = await readDocument("resume", resume, "resume");
@@ -361,12 +440,15 @@ export function createAiTools(client: RoleFitClient): Tool[] {
         const proposalId = randomUUID();
         const terminology = jobTerminology(jobDescription);
         const supportedText = flattenResumeTargets(scope).map((target) => target.currentText).join("\n");
-        proposals.set(proposalId, {
+        const proposal: ResumeProposal = {
           resume: parsed,
           suggestions: new Map([...suggestions, ...heldBack.map((item) => item.suggestion)].map((suggestion) => [suggestion.id, suggestion])),
           terminology: { ...terminology, inputKey: proposalId, terms: terminology.terms.filter(({ keyword }) => affirmativeTerm(supportedText, keyword)) },
           concerns
-        });
+        };
+        proposals.set(proposalId, proposal);
+        const acceptIds = apply === "all" ? suggestions.map((suggestion) => suggestion.id) : apply as string[] | undefined;
+        const applied = acceptIds?.length ? applyProposal(proposal, acceptIds, undefined) : undefined;
         for (const key of [...proposals.keys()].slice(0, Math.max(0, proposals.size - CACHED_PROPOSALS))) proposals.delete(key);
         const bulletText = new Map(data.sections.flatMap((section) => section.items.flatMap((entry) =>
           entry.bullets.map((bullet) => [bullet.id, stripInlineMarks(bullet.text)] as const))));
@@ -389,7 +471,9 @@ export function createAiTools(client: RoleFitClient): Tool[] {
             heldBack: heldBack.map((item) => ({ ...suggestionSummary(item.suggestion, bulletText), heldBackReason: item.reason, ...(item.note ? { note: item.note } : {}) })),
             ...(fitGaps.length ? { fitGaps } : {}),
             ...(advice?.length ? { advice } : {}),
-            ...(warnings.length ? { warnings } : {})
+            ...(warnings.length ? { warnings } : {}),
+            providerRun: providerRun(polished.value, context.fields),
+            ...(applied ? { applied: applied.value } : {})
           }
         };
       }
@@ -417,56 +501,8 @@ export function createAiTools(client: RoleFitClient): Tool[] {
       },
       async run({ proposalId, accept, edits }) {
         const proposal = typeof proposalId === "string" ? proposals.get(proposalId) : undefined;
-        if (!proposal) return fail("proposalId: unknown or expired; run polish_resume again.");
-        if (!Array.isArray(accept) || !accept.length || accept.some((id) => typeof id !== "string")) return fail("accept: list the suggestion ids to accept.");
-        const overrides = (edits ?? {}) as Record<string, unknown>;
-        if (typeof overrides !== "object" || Array.isArray(overrides)) return fail("edits: must map suggestion ids to text.");
-        const issues: string[] = [];
-        const accepted: { suggestion: ResumeProposalSuggestion; value: string }[] = [];
-        for (const id of new Set(accept as string[])) {
-          const suggestion = proposal.suggestions.get(id);
-          if (!suggestion) { issues.push(`accept: ${id} is not in this proposal`); continue; }
-          const override = overrides[id];
-          if (override !== undefined && (typeof override !== "string" || suggestion.kind === "reorder" || suggestion.kind === "remove")) {
-            issues.push(`edits.${id}: only a rewrite or an addition takes replacement text`);
-            continue;
-          }
-          const value = (override as string | undefined) ?? proposalValue(suggestion);
-          if ((!suggestion.kind || suggestion.kind === "add") && !value.trim()) { issues.push(`edits.${id}: must not be empty`); continue; }
-          accepted.push({ suggestion, value });
-        }
-        for (const id of Object.keys(overrides)) if (!(accept as string[]).includes(id)) issues.push(`edits.${id}: not in accept`);
-        if (issues.length) return { ok: false, value: { error: "Nothing was applied.", issues } };
-        const data = applyResumeSuggestions(proposal.resume.data, accepted);
-        let sourceText: string;
-        try {
-          sourceText = serializeResumeFile(data, coerceDocStyle(proposal.resume.documentStyle));
-        } catch (error) {
-          return fail(`Nothing was applied: the edited resume is not a valid .resume (${error instanceof Error ? error.message : String(error)}).`);
-        }
-        const decisions: Record<string, ResumeProposalDecision> = Object.fromEntries(
-          accepted.map(({ suggestion, value }) => [suggestion.id, { kind: "accepted", text: value }])
-        );
-        const terminologyWarnings = acceptedTerminologyWarnings(
-          { terminology: proposal.terminology }, proposal.terminology.inputKey, [...proposal.suggestions.values()], decisions, data
-        );
-        const warnings = accepted.flatMap(({ suggestion, value }) => {
-          const notes = [...(suggestion.warnings ?? []), ...(value !== proposalValue(suggestion) ? ["Your replacement text was not checked by RoleFit."] : [])];
-          return notes.length ? [{ id: suggestion.id, warnings: notes }] : [];
-        });
-        // Concerns the polish was told about stay open whatever was accepted.
-        const resumeConcerns = [...new Set([...proposal.concerns, ...warnings.flatMap((item) => item.warnings)])];
-        return {
-          ok: true,
-          value: {
-            applied: accepted.length,
-            sourceText,
-            text: serializeResumeData(data),
-            ...(warnings.length ? { warnings } : {}),
-            ...(resumeConcerns.length ? { resumeConcerns } : {}),
-            ...(terminologyWarnings.length ? { terminologyWarnings } : {})
-          }
-        };
+        if (!proposal) return fail("proposalId: unknown or expired; run polish_resume again, or pass `apply` to polish_resume to accept in the same call.");
+        return applyProposal(proposal, accept, edits);
       }
     },
     {
@@ -479,7 +515,8 @@ export function createAiTools(client: RoleFitClient): Tool[] {
         "send their answers back as `details` and `slotAnswers` (RoleFit treats them as the candidate's evidence, so " +
         "never supply them yourself). On success `text` is the proposed letter and `sourceText` the .cover with it " +
         "applied (letterhead and formatting kept), to use or discard; if you use it, pass its `concerns` as " +
-        "coverConcerns the next time you polish that letter." + RUNS_PROVIDER,
+        "coverConcerns the next time you polish that letter. Render `sourceText` with render_pdf for the PDF to " +
+        "submit." + PROVIDER_RUN_NOTE + RUNS_PROVIDER,
       inputSchema: {
         type: "object",
         required: ["coverLetter", "resume", "jobDescription"],
@@ -594,7 +631,8 @@ export function createAiTools(client: RoleFitClient): Tool[] {
             ...(warnings.length ? { warnings } : {}),
             ...(concerns.length ? { concerns } : {}),
             ...(preflight.warnings.length ? { notes: preflight.warnings } : {}),
-            evidenceUsed: result.evidenceUsed
+            evidenceUsed: result.evidenceUsed,
+            providerRun: providerRun(result, context.fields)
           }
         };
       }
@@ -604,11 +642,12 @@ export function createAiTools(client: RoleFitClient): Tool[] {
       title: "Draft answer",
       description:
         "Draft an answer to one application question with RoleFit's answer stage, for a saved tracker record " +
-        "(commit a Draft first). It reads the record's job brief and posting, and its saved resume unless you pass " +
-        "`resume`. The result is an answer revision to save unchanged with add_application_answers. If it asks " +
+        "(commit a Draft first). It answers against `jobDescription` when you pass one (the brief from " +
+        "analyze_job), otherwise the record's saved brief, plus the record's posting, and its saved resume unless " +
+        "you pass `resume`. The result is an answer revision to save unchanged with add_application_answers. If it asks " +
         "for a clarification, ask the user and call again with their reply as `clarification`; to revise a draft, " +
         "send it as previousAnswer with a `refinement`. RoleFit treats `clarification` and `explicitFacts` as the " +
-        "candidate's evidence, so they must come from the user." + RUNS_PROVIDER,
+        "candidate's evidence, so they must come from the user." + PROVIDER_RUN_NOTE + RUNS_PROVIDER,
       inputSchema: {
         type: "object",
         required: ["id", "question"],
@@ -616,6 +655,7 @@ export function createAiTools(client: RoleFitClient): Tool[] {
         properties: {
           id: { type: "string", description: "The record id from search_applications." },
           question: { type: "string", description: "The employer's question, exactly as written." },
+          jobDescription: { type: "string", description: "The job brief to answer against (from analyze_job); defaults to the record's saved brief." },
           questionId: { type: "string", description: "Keep the same id when redrafting the same question." },
           questionRevision: { type: "integer", minimum: 1, description: "Raise it when the question text changed." },
           resume: documentInput("resume to answer from", "resume", "list_resumes"),
@@ -631,13 +671,17 @@ export function createAiTools(client: RoleFitClient): Tool[] {
           explicitFacts: { type: "array", items: { type: "string" }, description: "Facts the user stated for this answer." }
         }
       },
-      async run({ id, question, questionId, questionRevision, resume, resumeConcerns, previousAnswer, refinement, clarification, explicitFacts }, signal) {
+      async run({ id, question, jobDescription, questionId, questionRevision, resume, resumeConcerns, previousAnswer, refinement, clarification, explicitFacts }, signal) {
         if (typeof question !== "string" || !question.trim()) return fail("question: required text");
+        if (jobDescription !== undefined && (typeof jobDescription !== "string" || jobDescription.trim().length < 40)) {
+          return fail("jobDescription: the job brief must be at least 40 characters when given.");
+        }
         const concerns = textList(resumeConcerns, "resumeConcerns");
         if (isToolResult(concerns)) return concerns;
         const record = await client.getApplication(id);
         if (isToolResult(record)) return record;
-        if (!record.jobDescription?.trim()) return fail("This record has no job brief (jobDescription) to answer against.");
+        const jobText = (jobDescription as string | undefined) ?? record.jobDescription ?? "";
+        if (!jobText.trim()) return fail("This record has no job brief (jobDescription) to answer against; pass `jobDescription` from analyze_job.");
         let resumeText: string;
         if (resume !== undefined) {
           const document = await readDocument("resume", resume, "resume");
@@ -670,7 +714,7 @@ export function createAiTools(client: RoleFitClient): Tool[] {
           clarification,
           explicitFacts,
           resumeText,
-          jobText: record.jobDescription,
+          jobText,
           rawJobText: record.rawJobDescription ?? "",
           candidateContext: context.candidateContext,
           customInstructions: context.customInstructions,
@@ -684,7 +728,7 @@ export function createAiTools(client: RoleFitClient): Tool[] {
           || answer.questionRevision !== turn.question.revision || answer.question !== turn.question.text) {
           return fail("The answer did not match this question. Draft it again.");
         }
-        return { ok: true, value: { answer } };
+        return { ok: true, value: { answer, providerRun: providerRun(drafted.value, context.fields) } };
       }
     },
     {
@@ -695,7 +739,7 @@ export function createAiTools(client: RoleFitClient): Tool[] {
         "posting, checking claims against the original resume (`baseResume`) and the Profile. It reviews only " +
         "documents saved with editable source and never application answers; it changes and submits nothing. " +
         "When the review cannot run (the provider failed, or the Profile or evidence is over its limit), the result is " +
-        "an error that still carries RoleFit's local checks." + RUNS_PROVIDER,
+        "an error that still carries RoleFit's local checks." + PROVIDER_RUN_NOTE + RUNS_PROVIDER,
       inputSchema: {
         type: "object",
         required: ["id"],
@@ -744,7 +788,7 @@ export function createAiTools(client: RoleFitClient): Tool[] {
         if (!reviewed.ok) return reviewed;
         const result = sanitizeApplicationReviewResult(reviewed.value, input);
         if (!result) return fail("The final review returned an invalid result.");
-        return { ok: !result.error, value: result };
+        return { ok: !result.error, value: { ...result, providerRun: providerRun(reviewed.value, context.fields) } };
       }
     }
   ];

@@ -289,9 +289,10 @@ class ApplicationConflictError extends Error {
   }
 }
 
+// `notice` is the server's message when it left unreadable records out (saving is paused).
 type TrackerRead =
   | { notModified: true }
-  | { notModified: false; applications: Application[]; revision: string | null; path: string };
+  | { notModified: false; applications: Application[]; revision: string | null; path: string; notice: string };
 
 // GET the tracker. With a known revision the server answers 304 when this tab
 // already holds it, so an unchanged tracker is never downloaded again.
@@ -309,7 +310,10 @@ async function readTracker(knownRevision: string | null): Promise<TrackerRead> {
       ? data.applications.map(canonicalizeApplicationAiUsage)
       : [],
     revision: typeof data.revision === "string" ? data.revision : null,
-    path: typeof data.path === "string" ? data.path : ""
+    path: typeof data.path === "string" ? data.path : "",
+    notice: Array.isArray(data.invalidRecords) && data.invalidRecords.length
+      ? typeof data.invalidRecordsMessage === "string" ? data.invalidRecordsMessage : "Some tracker records could not be read."
+      : ""
   };
 }
 
@@ -359,6 +363,8 @@ export function useApplications() {
   const answerSaveQueue = useRef<Promise<unknown>>(Promise.resolve());
   const establishedDraftIds = useRef(new Set<string>());
   const lastPersistError = useRef("");
+  // The last full read's notice; a 304 refresh keeps it.
+  const trackerNotice = useRef("");
 
   useEffect(() => {
     let cancelled = false;
@@ -381,8 +387,9 @@ export function useApplications() {
         setApplications(loaded);
         setHasLoadedApplications(true);
         setStoragePath(read.path);
+        trackerNotice.current = read.notice;
         conflictMessage.current = "";
-        setError("");
+        setError(read.notice);
         markWorkspaceNewer(false);
       } catch (err) {
         if (!cancelled && readId === readVersion.current) {
@@ -998,12 +1005,13 @@ export function useApplications() {
             confirmedApplications.current = loaded;
             confirmedRevision.current = read.revision;
             setStoragePath(read.path);
+            trackerNotice.current = read.notice;
           }
           applicationsRef.current = loaded;
           setApplications(loaded);
           setHasLoadedApplications(true);
           conflictMessage.current = "";
-          setError("");
+          setError(trackerNotice.current);
           markWorkspaceNewer(false);
           return true;
         }

@@ -33,9 +33,6 @@ D-entries in `docs/decisions.md`.
   main bundle fell 5.8 → 0.5 MB and a two-page resume's first page paints in
   290 ms instead of 715 (production, cold). Open: exercise RoleFit's editor and
   exports in a browser; only its build and offline suite were run.
-- 2026-10-26 [USER] 0.24.0: after the release PR's squash merge and the user's
-  go-ahead, tag `rolefit-preview-v0.24.0-beta.1` and confirm the workflow.
-  Pre-tag: merge the dev-smoke fix (Vite watcher scope, below).
 
 ## Deferred backlog
 
@@ -107,6 +104,16 @@ D-entries in `docs/decisions.md`.
   state labels (user's call); unverified Firefox/Safari, print, forced colors,
   macOS, native window-control rendering, and real unpacked popup installs.
 
+## 2026-11-01
+
+- [USER+CODE+TOOL] **Agent pipeline gaps** (D103, unmerged branch):
+  `update_application`, submission `resumeUsed`, `render_pdf`, Polish `apply`,
+  `providerRun`, `draft_answer` brief, answer `origin`, and a tracker list that
+  names invalid records while writes refuse. Linux, Node 24.22.1: server tsc,
+  build, offline 206/206; stdio server scripted against `dev:rolefit`
+  (synthetic). Not run: desktop probes, an agent client, live providers,
+  browser QA of the tracker notice. Merged branches not deleted (GitHub 403).
+
 ## 2026-10-26
 
 - [USER+CODE+TOOL] **MCP agent tools** (D101, D102, #284) and **0.24.0
@@ -118,15 +125,6 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-24
 
-- [CODE+TOOL] **Companion pairing startup retry**: right after start, the
-  owned dev server stalls requests for up to ~7 s (measured 1.0/3.7/0.9 s,
-  then ~1 ms), tripping main's 1 s pairing fetch. Failures before any success
-  now keep Loading and retry 4x at 1.5 s. This explains the 0.11.1/0.12.0
-  smoke flake. 2026-10-26 [TOOL] Vite then watched the whole app root (~4,400
-  paths incl. workspace, backups, `.forge`); under Electron its first 493
-  `fs.watch` calls blocked 8.1 s (one 139 ms), past the smoke's 750 ms probe.
-  Now only client source: 468 calls, ~160 ms, lag ≤89 ms (3 runs); smoke 3/3.
-  Unfiltered, one smoke still passed: a timing race.
 - [USER+CODE+TOOL] **Agent commit: Drafts, duplicate guard, dry run; MCP
   resume reads** (D100, #283). Verified: server tsc, probes, `npm run check`
   (202/202), read tools over the real handlers. Real MCP clients not re-run.
