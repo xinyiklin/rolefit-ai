@@ -287,7 +287,7 @@ export function createAiTools(client: RoleFitClient): Tool[] {
           if (isToolResult(context)) return context;
           const analyzed = await post("/api/job-analysis", { text, url: link, ...context.fields }, signal);
           if (signal?.aborted) return analyzed;
-          // Reported whenever the route answered for a provider run, even a failed analysis.
+          // Only a run the route reports: its errors do not name the provider today.
           const reported = analyzed.value as { provider?: unknown } | null;
           if (analyzed.ok || typeof reported?.provider === "string") ran = providerRun(analyzed.value, context.fields);
           const fields = analyzed.value as Partial<AiJobAnalysisFields> & { source?: string; error?: string };

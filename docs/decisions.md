@@ -749,7 +749,9 @@ later entry wins.
   so a restarted MCP process cannot strand a proposal; a bad id keeps the
   proposal. Every AI tool reports `providerRun` (the route's provider, model,
   effort, and attempts, falling back to the request's; `analyze_job` reports
-  it whenever the route answered for a run, even a failed analysis; provider and model stay
+  it only on a successful route answer, since `/api/job-analysis` errors do not
+  name the provider (a timed-out or failed run goes unreported, never
+  misreported); provider and model stay
   the stage's saved Settings, never tool inputs). `draft_answer` takes an
   optional `jobDescription` that wins over the record's brief. `get_answers`
   adds each answer's `origin` (`ai-draft` with the drafting provider, model,
