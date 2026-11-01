@@ -33,6 +33,8 @@ D-entries in `docs/decisions.md`.
   main bundle fell 5.8 → 0.5 MB and a two-page resume's first page paints in
   290 ms instead of 715 (production, cold). Open: exercise RoleFit's editor and
   exports in a browser; only its build and offline suite were run.
+- 2026-11-01 [USER] 0.25.0: tag `rolefit-preview-v0.25.0-beta.1` after the
+  release PR merges and confirm the workflow (it runs the native smokes).
 
 ## Deferred backlog
 
@@ -106,13 +108,11 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-11-01
 
-- [USER+CODE+TOOL] **Agent pipeline gaps** (D103, unmerged branch):
-  `update_application`, submission `resumeUsed`, `render_pdf`, Polish `apply`,
-  `providerRun`, `draft_answer` brief, answer `origin`, and a tracker list that
-  names invalid records while writes refuse. Linux, Node 24.22.1: server tsc,
-  build, offline 206/206; stdio server scripted against `dev:rolefit`
-  (synthetic). Not run: desktop probes, an agent client, live providers,
-  browser QA of the tracker notice. Merged branches not deleted (GitHub 403).
+- [USER+CODE+TOOL] **Agent pipeline gaps** (D103, #289) and **0.25.0 prepared**
+  (minor). Linux x64, Node 24.22.1: check (desktop probes, offline 206/206),
+  Electron dev smoke (non-root, Xvfb), release contract 14/14. Not run: native
+  `make` + packaged smoke (only the workflow's; a failure burns beta.1), an
+  agent client, live providers, browser QA of the tracker notice.
 
 ## 2026-10-26
 
@@ -121,7 +121,7 @@ D-entries in `docs/decisions.md`.
   packaged smoke, release contract 14/14; Electron dev smoke 0/4, the same at
   0.23.0's commit (Vite's watcher; fixed, below). [USER] The user's agent used
   the package and cover reads and `draft_answer` live. Open: other AI stages
-  not run live; most tools not through a real client; `render_pdf`.
+  not run live; most tools not through a real client (`render_pdf` added by D103).
 
 ## 2026-10-24
 
