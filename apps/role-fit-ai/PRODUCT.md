@@ -1001,6 +1001,10 @@ commit whose posting matches a saved record is refused until the
 agent names each match as reviewed, as Prepare's duplicate check asks the user;
 a dry run reports the same outcome without saving. A value the tracker would
 drop or alter refuses the whole write with the field named; nothing is guessed.
+An agent may repair a saved record's job brief, posting, Fit Assessment, notes,
+or which resume was sent, and attach a document a submitted record never
+received, under the same rule; a saved document is never replaced and a field
+is never emptied (D103).
 
 The agent may read the saved resumes and cover letters, everything saved for an
 application, the answers saved across applications, and the Profile Background
@@ -1014,4 +1018,7 @@ candidate's (a resume it sends, facts, clarifications, cover-letter details) is
 treated as the user's own evidence, so the agent must take it from the user.
 The agent receives whatever it reads and every AI result, so its own model
 provider sees that personal data; RoleFit itself sends nothing to the agent's
-provider and keeps the server loopback-only.
+provider and keeps the server loopback-only. The agent may also render a resume
+or cover letter to PDF with RoleFit's own engine, written only where the agent
+names and never inside the workspace; that file then holds the document's
+personal data outside RoleFit's workspace and backups (D103).

@@ -33,9 +33,8 @@ D-entries in `docs/decisions.md`.
   main bundle fell 5.8 → 0.5 MB and a two-page resume's first page paints in
   290 ms instead of 715 (production, cold). Open: exercise RoleFit's editor and
   exports in a browser; only its build and offline suite were run.
-- 2026-10-26 [USER] 0.24.0: after the release PR's squash merge and the user's
-  go-ahead, tag `rolefit-preview-v0.24.0-beta.1` and confirm the workflow.
-  The dev-smoke fix (Vite watcher scope, 02c141d) is now in this branch too.
+- 2026-11-01 [USER] 0.25.0: tag `rolefit-preview-v0.25.0-beta.1` after the
+  release PR merges and confirm the workflow (it runs the native smokes).
 
 ## Deferred backlog
 
@@ -127,12 +126,19 @@ D-entries in `docs/decisions.md`.
   Residual: other Unicode spaces (U+2009, U+3000) still keep their own glyph
   in single-line fields; letter style has no undo history.
 
+## 2026-11-01
+
+- [USER+CODE+TOOL] **Agent pipeline gaps** (D103, #289) and **0.25.0 prepared**
+  (minor). Linux x64, Node 24.22.1: check (desktop probes, offline 206/206),
+  Electron dev smoke (non-root, Xvfb), release contract 14/14. Not run: native
+  `make` + packaged smoke (only the workflow's; a failure burns beta.1), an
+  agent client, live providers, browser QA of the tracker notice.
+
 ## 2026-11-02
 
-- [USER+CODE+TOOL] Publication checkpoint: preserve accumulated local fixes on
-  `fix/editor-header-input-formatting`. Header popover edits now diff the stored
-  text, preserving marks, links, punctuation, caret and typing history. Editor
-  check, both app builds, and desktop checks passed; two independent reviewers
-  found no blocking source issues. Browser QA skipped under flag-first policy;
-  original implementation workflow records unavailable. Broad offline checks
-  remain in progress; initial sandbox runs hit file-write permission failures.
+- [USER+CODE+TOOL] **Header popover edits keep formatting** (266c068): a
+  header popover edit diffs the stored text, so marks, links, punctuation,
+  the caret and typing history survive. A review of the whole branch trimmed
+  over-long comments, guide history, dead code and duplicated helpers with no
+  behavior change, and merged main's #289/#290. Browser QA not run
+  (flag-first).

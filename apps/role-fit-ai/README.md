@@ -13,7 +13,7 @@ application-data service.
 
 [Product site and companion downloads](https://rolefit.xinyiklin.com/)
 
-Current desktop source version: **0.24.0** (preview).
+Current desktop source version: **0.25.0** (preview).
 
 [Content and evidence checks](PRODUCT.md#content-and-evidence-warning-policy)
 keep otherwise usable output available with warnings before use. Accept, edit,
@@ -699,7 +699,9 @@ Set `ROLEFIT_URL` (default `http://127.0.0.1:5181`) when the companion uses
 another port; only loopback origins are accepted. Tools:
 
 - `search_applications` — duplicate check with the tracker's own matcher,
-  plus company, text, and stage filters.
+  plus company, text, and stage filters. Records RoleFit cannot read safely
+  are listed in `invalidRecords`; while any exists, RoleFit refuses every
+  tracker write until `applications.json` is repaired or a backup restored.
 - `get_application` — one record in full: notes, answers, Fit snapshot,
   timeline, and saved documents.
 - `commit_application` — one Applied record with its `.resume` (required) and
@@ -716,7 +718,14 @@ another port; only loopback origins are accepted. Tools:
 - `update_application_status` — a stage change, applied by the server with the
   same history entry the tracker row's stage menu adds. A first submission (a
   Draft or a job-only Skip moving to a submitted stage) must send the `.resume`
-  that was sent, plus any `.cover`; the stage and documents save together.
+  that was sent, plus any `.cover` and `resumeUsed`; the stage and documents
+  save together.
+- `update_application` — repair a saved record: set its job brief, posting,
+  Fit snapshot, notes, or `resumeUsed`, and attach a `.resume` or `.cover` a
+  submitted record never received. Values are stored exactly as sent or
+  refused with field-level `issues`; fields cannot be cleared, a saved
+  document is never replaced, and resending an update that is already saved
+  changes nothing.
 - `list_resumes` and `get_resume`, `list_cover_letters` and `get_cover_letter`
   — the saved base resumes and cover letters, each as its `.resume`/`.cover`
   source and the plain text RoleFit reads.
@@ -724,7 +733,9 @@ another port; only loopback origins are accepted. Tools:
   (text and source), newest answers, Fit snapshot, and job brief, with a
   `missing` list.
 - `get_answers` — the newest saved answer to each question across every
-  application, searchable by words and company.
+  application, searchable by words and company, with the application it came
+  from, when it was saved, and its `origin` (an answer saved with RoleFit's
+  drafting record names the provider and model; editing in the app drops it).
 - `get_candidate_profile` — the Profile Background and the candidate facts the
   user declared in Settings.
 
@@ -735,7 +746,8 @@ minutes. Cancelling the tool call stops the run (what the provider already
 processed may still be billed), and each agent connection can have at most
 three running. If your agent app limits how long a tool call may take, raise
 that limit for RoleFit: a call it abandons without cancelling keeps running
-for up to 15 minutes and holds one of the three. Pass the
+for up to 15 minutes and holds one of the three. Each result's `providerRun`
+names the provider, model, and effort that ran. Pass the
 `resumeConcerns` that `apply_resume_edits` returns, and an accepted letter's
 `concerns`, to later stages as `resumeConcerns` and `coverConcerns`, so they
 know that wording is unverified, as the app does. A resume sent as source is
@@ -748,21 +760,32 @@ read as the candidate's own evidence, so it should be a saved resume or
   takes.
 - `polish_resume` and `apply_resume_edits` — a Resume Polish proposal, then
   the `.resume` with only the accepted edits, applied as the editor applies
-  them. Proposals live in the MCP session.
+  them. Proposals live in the MCP process, so pass `apply` ("all" or ids) to
+  `polish_resume` to accept in the same call.
 - `polish_cover_letter` — a whole-letter proposal and the `.cover` with it
   applied, or the details RoleFit needs first.
 - `draft_answer` — an answer revision for a saved record, to save with
-  `add_application_answers`. It carries the call's `explicitFacts` and
-  `clarification` as its saved facts, as the app's Save does, so each call
-  for a question passes every fact the user has given for it.
+  `add_application_answers`; pass `jobDescription` when the record has no
+  brief. It carries the call's `explicitFacts` and `clarification` as its
+  saved facts, as the app's Save does, so each call for a question passes
+  every fact the user has given for it.
 - `review_application` — the Final application review of a record's saved
   documents.
+
+`render_pdf` writes a `.resume` or `.cover` (source text, a saved one, or a
+record's saved document) as the PDF RoleFit itself would export, to an
+absolute `.pdf` path the agent names, and returns its page count. It renders
+the text as written, never replaces an existing file unless asked, and refuses
+a symbolic link or any path inside the RoleFit workspace; it reads the font
+files from the running RoleFit.
 
 The agent receives the tracker, document, and profile data it reads and every
 AI-stage result (briefs, proposals, answers, review findings), so its own model
 provider sees that personal data. Separately, the AI-stage tools send their
 inputs, including saved documents and your Profile, to the provider set in
-RoleFit for that stage, as the app does.
+RoleFit for that stage, as the app does. A PDF from `render_pdf` holds the
+document's personal data wherever the agent writes it, outside the RoleFit
+workspace and its backups.
 
 The MCP server runs from your source checkout, not from the installed app, so
 keep the checkout at the same version as the RoleFit it talks to; after

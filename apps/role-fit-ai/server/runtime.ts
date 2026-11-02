@@ -38,7 +38,8 @@ import {
   handleDeleteApplication,
   handleListApplications,
   handleLogApplicationEvent,
-  handleSaveApplications
+  handleSaveApplications,
+  handleUpdateApplication
 } from "./applications/trackerRoutes.ts";
 import { isApplicationDocumentKind } from "./applications/documents.ts";
 import { handleWorkspacePreferences } from "./workspacePreferences.ts";
@@ -624,6 +625,17 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
         return;
       }
       dispatch(res, handleAppendApplicationAnswers(req, res, id, workspaceDir));
+      return;
+    }
+
+    const updateMatch = pathname.match(/^\/api\/applications\/([^/]+)\/update$/);
+    if (updateMatch) {
+      const id = decodeRouteSegment(updateMatch[1]);
+      if (id === null) {
+        sendJson(res, 400, { error: "Invalid application id." });
+        return;
+      }
+      dispatch(res, handleUpdateApplication(req, res, id, workspaceDir));
       return;
     }
 

@@ -128,7 +128,10 @@ locks.
   Skipped decision dated by its last revision, without sent-document metadata;
   an exactly empty `appliedAt` is absent; a scalar `notApplyingReason` becomes a
   one-item `notApplyingReasons` list; and a Fit result without `status` reads as
-  assessed. A version-1 file holding any of those shapes fails closed. Each
+  assessed. A version-1 file holding any of those shapes fails closed: the
+  tracker list serves only the canonical records and names the others, and
+  every other read and every write refuses until the file is repaired or a
+  backup restored (D103); backup and restore validation refuse it. Each
   shape has a fixture in `server/applications/__evals__/fixtures/`. A versioned
   tracker has no keys other than `schemaVersion`, `applications`, and an
   optional string `savedAt`.

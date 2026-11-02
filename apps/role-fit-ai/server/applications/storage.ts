@@ -11,7 +11,8 @@ import {
   ApplicationsStorageError,
   MAX_APPLICATIONS,
   duplicateApplicationId,
-  sanitizeApplications
+  sanitizeApplications,
+  strictApplicationIssues
 } from "./schema.ts";
 import {
   TRACKER_FILE_NAME,
@@ -64,7 +65,15 @@ type TrackerSnapshot = {
   identity: string;
   applications: StoredApplications;
   revision: string;
+  invalid: InvalidTrackerRecord[];
 };
+
+/** A stored record that is not canonical, named without its content. */
+export type InvalidTrackerRecord = { index: number; id?: string; title?: string; company?: string; issues: string[] };
+
+export const INVALID_TRACKER_RECORDS_MESSAGE =
+  "The tracker holds records RoleFit cannot read safely. Saving is paused until applications.json is repaired " +
+  "or a backup is restored; the readable records are still listed.";
 let snapshot: TrackerSnapshot | null = null;
 // Records that came out of validation (and are frozen), so a write re-sanitizes
 // only the new or edited records it is given.
@@ -92,14 +101,15 @@ function deepFreeze(value: unknown): void {
 function rememberValidated(
   path: string,
   identity: string,
-  applications: StoredApplications
+  applications: StoredApplications,
+  invalid: InvalidTrackerRecord[] = []
 ): TrackerSnapshot {
   for (const application of applications) {
     deepFreeze(application);
     validatedRecords.add(application);
   }
   Object.freeze(applications);
-  snapshot = { path, identity, applications, revision: randomUUID() };
+  snapshot = { path, identity, applications, revision: randomUUID(), invalid };
   return snapshot;
 }
 
@@ -121,10 +131,21 @@ export async function readApplications(workspaceDir: string) {
   return (await readApplicationsSnapshot(workspaceDir)).applications;
 }
 
-/** The validated tracker plus its in-memory revision. */
+/**
+ * The validated tracker plus its in-memory revision. A file with any
+ * non-canonical record throws, so no write can drop it; only the list route
+ * passes `allowInvalid` to serve the readable records and name the rest.
+ */
 export async function readApplicationsSnapshot(
-  workspaceDir: string
-): Promise<{ applications: StoredApplications; revision: string }> {
+  workspaceDir: string,
+  { allowInvalid = false }: { allowInvalid?: boolean } = {}
+): Promise<TrackerSnapshot> {
+  const read = await readTrackerFile(workspaceDir);
+  if (read.invalid.length && !allowInvalid) throw new ApplicationsStorageError(INVALID_TRACKER_RECORDS_MESSAGE);
+  return read;
+}
+
+async function readTrackerFile(workspaceDir: string): Promise<TrackerSnapshot> {
   const path = applicationsFilePath(workspaceDir);
   let identity: string | null;
   try {
@@ -144,21 +165,23 @@ export async function readApplicationsSnapshot(
     throw new ApplicationsStorageError();
   }
 
-  let parsed: ReturnType<typeof parseStoredApplications>;
+  let parsed: ReturnType<typeof inspectStoredApplications>;
   try {
-    parsed = parseStoredApplications(text);
+    parsed = inspectStoredApplications(text);
   } catch (error) {
     if (error instanceof WorkspaceNewerError) throw error;
     throw new ApplicationsStorageError();
   }
   // A failed rewrite (a locked file, say) is not corrupt data: serve the
   // migrated records and let the next tracker write stamp the current version.
-  if (parsed.needsUpgrade && await writeApplications(workspaceDir, parsed.applications).then(() => true, () => false)) {
-    return await readApplicationsSnapshot(workspaceDir);
+  // A file with invalid records is never rewritten.
+  if (parsed.needsUpgrade && !parsed.invalid.length
+    && await writeApplications(workspaceDir, parsed.applications).then(() => true, () => false)) {
+    return await readTrackerFile(workspaceDir);
   }
   // Keyed by the identity taken before the read: a change during the read gets
   // a new identity, so the next read validates the file again.
-  return rememberValidated(path, identity, parsed.applications);
+  return rememberValidated(path, identity, parsed.applications, parsed.invalid);
 }
 
 /**
@@ -169,6 +192,25 @@ export async function readApplicationsSnapshot(
  */
 export function parseStoredApplications(text: string): {
   applications: StoredApplications;
+  needsUpgrade: boolean;
+} {
+  const { applications, invalid, needsUpgrade } = inspectStoredApplications(text);
+  if (invalid.length) throw new Error("Invalid application record.");
+  return { applications, needsUpgrade };
+}
+
+// A readable title or company helps the user find the record; values are
+// clipped so a damaged field never floods the response.
+const recordLabel = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim().slice(0, 200) : undefined);
+const MAX_LISTED_ISSUES = 20;
+
+/**
+ * Parse stored tracker text, separating non-canonical records from the rest.
+ * The file shape, version, record count and id uniqueness still fail closed.
+ */
+function inspectStoredApplications(text: string): {
+  applications: StoredApplications;
+  invalid: InvalidTrackerRecord[];
   needsUpgrade: boolean;
 } {
   const data: unknown = JSON.parse(text);
@@ -188,18 +230,38 @@ export function parseStoredApplications(text: string): {
     throw new Error("Invalid applications file shape.");
   }
   const apps = file.applications;
+  if (apps.length > MAX_APPLICATIONS) throw new Error("Invalid applications file shape.");
   const migrated = migrateTrackerApplications(apps, version);
-  const sane = sanitizeApplications(migrated);
+  if (migrated.length !== apps.length) throw new Error("Invalid application record.");
   // Never silently erase an invalid on-disk record during the next write.
-  if (
-    apps.length > MAX_APPLICATIONS ||
-    sane.length !== apps.length ||
-    duplicateApplicationId(sane) ||
-    !isDeepStrictEqual(migrated, JSON.parse(JSON.stringify(sane)))
-  ) {
-    throw new Error("Invalid application record.");
-  }
-  return { applications: sane, needsUpgrade: version < TRACKER_SCHEMA_VERSION };
+  const sane: StoredApplications = [];
+  const invalid: InvalidTrackerRecord[] = [];
+  migrated.forEach((record, index) => {
+    const [stored] = sanitizeApplications([record]);
+    if (stored && isDeepStrictEqual(record, JSON.parse(JSON.stringify(stored)))) {
+      sane.push(stored);
+      return;
+    }
+    const fields = record && typeof record === "object" && !Array.isArray(record) ? record as Record<string, unknown> : {};
+    const found = strictApplicationIssues(record).issues;
+    const issues = found.length > MAX_LISTED_ISSUES
+      ? [...found.slice(0, MAX_LISTED_ISSUES), `and ${found.length - MAX_LISTED_ISSUES} more`]
+      : found;
+    invalid.push({
+      index,
+      ...(recordLabel(fields.id) ? { id: recordLabel(fields.id) } : {}),
+      ...(recordLabel(fields.title) ? { title: recordLabel(fields.title) } : {}),
+      ...(recordLabel(fields.company) ? { company: recordLabel(fields.company) } : {}),
+      issues: issues.length ? issues : ["not in the stored record shape"]
+    });
+  });
+  // An id shared with an unreadable record is a file-level fault too.
+  const ids = [...sane.map(({ id }) => id), ...migrated.flatMap((record, index) => {
+    const id = invalid.some((entry) => entry.index === index) && record && typeof record === "object" ? (record as { id?: unknown }).id : undefined;
+    return typeof id === "string" ? [id] : [];
+  })];
+  if (new Set(ids).size !== ids.length) throw new Error("Invalid application record.");
+  return { applications: sane, invalid, needsUpgrade: version < TRACKER_SCHEMA_VERSION };
 }
 
 function isValidatedRecord(value: unknown): boolean {

@@ -60,12 +60,15 @@ for provider, prompt, sanitizer, and review work.
   `statusService.ts` the server-side stage change, which shares the row menu's
   `stageMenuMoveAllowed` and `withStatusChange` and saves a first submission's
   documents (validated by the commit's `commitDocuments`, resume required)
-  with the stage, restoring the files if the tracker write fails (D101). A
-  same-stage request changes nothing (the safe retry after a lost reply) but
-  still validates its date and refuses documents on a record with no saved
-  resume, and a stage move never invents `appliedAt`: only a first submission
-  from Draft or a job-only Skip is dated when written;
-  `answerService.ts` owns
+  and optional `resumeUsed` with the stage, restoring the files if the
+  tracker write fails (D101, D103). A same-stage request changes nothing (the
+  safe retry after a lost reply) but still validates its date and refuses
+  documents on a record with no saved resume, and a stage move never invents
+  `appliedAt`: only a first submission from Draft or a job-only Skip is dated
+  when written; `updateService.ts` owns the agent's
+  field-level record repair (job snapshot, notes, `resumeUsed`, and a
+  document a submitted record lacks, never a replacement; exact-as-sent like
+  the commit, and a resent saved update is a no-op, D103); `answerService.ts` owns
   answer stamping for both the commit and the later-answers append, and
   `eventService.ts` logs timeline entries through the Log buttons'
   `withEntrySaved` (D094). The
@@ -198,8 +201,11 @@ for provider, prompt, sanitizer, and review work.
   visible fail-closed errors. Never erase, reseed, or guess over corrupt user
   data. An unreadable saved default resume is an error on the workspace
   snapshot's `baseResume`, never a failed snapshot, so its variants, history,
-  and cover letters stay reachable. Tracker format changes go through
-  `applications/trackerVersion.ts`
+  and cover letters stay reachable. The one lenient read is the tracker list
+  route (D103): `readApplicationsSnapshot(dir, { allowInvalid: true })` serves
+  the canonical records and names the invalid ones without their values; every
+  other read and every write refuses while any record is invalid, so nothing
+  can drop it. Tracker format changes go through `applications/trackerVersion.ts`
   (D095): a file without `schemaVersion` is version 0, each version step has one
   migration with a fixture, a migrated file is validated strictly and rewritten
   once at the current version, and a legacy shape inside a current-version file

@@ -12,16 +12,18 @@ import { createTools } from "./tools.ts";
 
 // Newest first; a client asking for another version is offered the newest.
 const PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
-const SERVER_INFO = { name: "rolefit", title: "RoleFit", version: "1.1.0" };
+const SERVER_INFO = { name: "rolefit", title: "RoleFit", version: "1.2.0" };
 const INSTRUCTIONS =
   "Records job applications in the user's local RoleFit tracker and runs RoleFit's AI stages. Search before " +
   "committing to avoid duplicates; get_application reads one in full and get_submission_package everything saved " +
   "for it; commit_application saves a whole application (with its resume) or a Draft atomically, refuses " +
   "unacknowledged duplicates, and validates without saving on dryRun; update_application_status moves its stage " +
-  "and submits a Draft with its documents; add_application_answers adds answers; log_application_event records " +
-  "interviews, responses and follow-ups. The list_/get_ tools read saved resumes, cover letters, answers and the " +
-  "user's Profile. analyze_job, assess_fit, polish_resume, polish_cover_letter, draft_answer and " +
-  "review_application run the provider set in RoleFit (billed or CLI; minutes; cancel to stop) and save nothing.";
+  "and submits a Draft with its documents; update_application repairs a record's job snapshot, notes or " +
+  "resumeUsed and attaches a missing document; add_application_answers adds answers; log_application_event " +
+  "records interviews, responses and follow-ups. The list_/get_ tools read saved resumes, cover letters, answers " +
+  "and the user's Profile. analyze_job, assess_fit, polish_resume, polish_cover_letter, draft_answer and " +
+  "review_application run the provider set in RoleFit (billed or CLI; minutes; cancel to stop) and save nothing. " +
+  "render_pdf writes a .resume or .cover as the PDF RoleFit itself would export.";
 
 type JsonRpcId = string | number | null;
 type JsonRpcResponse =

@@ -33,7 +33,8 @@ import {
   writeApplicationsSnapshot
 } from "./storage.ts";
 
-const STATUS_REQUEST_KEYS = ["status", "date", "baseUpdatedAt", "documents"];
+const STATUS_REQUEST_KEYS = ["status", "date", "baseUpdatedAt", "documents", "resumeUsed"];
+export const RESUME_USED_VALUES = ["base", "tailored"] as const;
 
 const statusDependencies = { writeApplicationsSnapshot };
 
@@ -43,7 +44,7 @@ export async function changeApplicationStatus(workspaceDir: string, id: string, 
   }
   const request = body as Record<string, unknown>;
   const unknownKey = Object.keys(request).find((key) => !STATUS_REQUEST_KEYS.includes(key));
-  if (unknownKey) throw new ApplicationsStorageError(`${unknownKey}: not a status field (send status, date, baseUpdatedAt, documents).`, 400);
+  if (unknownKey) throw new ApplicationsStorageError(`${unknownKey}: not a status field (send ${STATUS_REQUEST_KEYS.join(", ")}).`, 400);
   const status = request.status;
   if (!(APPLICATION_STATUSES as readonly unknown[]).includes(status)) {
     throw new ApplicationsStorageError(`status: must be one of ${APPLICATION_STATUSES.join(", ")}.`, 400);
@@ -56,6 +57,10 @@ export async function changeApplicationStatus(workspaceDir: string, id: string, 
   const at = typeof date === "string" ? exactDayIso(date) : "";
   if (date !== undefined && !at) {
     throw new ApplicationsStorageError("date: must be a YYYY-MM-DD calendar date when given.", 400);
+  }
+  const { resumeUsed } = request;
+  if (resumeUsed !== undefined && !(RESUME_USED_VALUES as readonly unknown[]).includes(resumeUsed)) {
+    throw new ApplicationsStorageError(`resumeUsed: must be ${RESUME_USED_VALUES.join(" or ")} when given.`, 400);
   }
   const documentIssues: string[] = [];
   const documents = commitDocuments(request.documents, documentIssues);
@@ -116,6 +121,9 @@ export async function changeApplicationStatus(workspaceDir: string, id: string, 
         400
       );
     }
+    if (resumeUsed !== undefined && !submitting) {
+      throw new ApplicationsStorageError("resumeUsed: only a first submission takes it here; use the record update otherwise.", 400);
+    }
     if (submitting && !documents.some((document) => document.kind === "resume")) {
       throw new ApplicationsStorageError("documents.resume: a first submission needs the .resume source that was sent.", 400);
     }
@@ -125,6 +133,7 @@ export async function changeApplicationStatus(workspaceDir: string, id: string, 
     const moved = withStatusChange(current, nextStatus, nextApplicationRevision(current.updatedAt), at || undefined);
     const next = {
       ...moved,
+      ...(resumeUsed !== undefined ? { resumeUsed } : {}),
       ...Object.fromEntries(documents.map((document) => [
         document.kind === "resume" ? "resumeArtifacts" : "coverLetterArtifacts",
         documentArtifacts({ hasPdf: false, sourceText: document.sourceText, fileName: document.fileName, savedAt: moved.updatedAt })
