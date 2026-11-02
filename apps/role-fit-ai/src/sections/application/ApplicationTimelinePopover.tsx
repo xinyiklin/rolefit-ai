@@ -133,9 +133,8 @@ export function ApplicationTimelinePopover({
   });
   const savedEntry = draft && !draft.isNew ? stageHistory.find((entry) => entry.id === draft.entry.id) : undefined;
   const draftChanged = draft ? draft.isNew || JSON.stringify(savedEntry) !== JSON.stringify(draft.entry) : false;
-  // The date input's min and max are advisory; a typed day can pass either.
-  // Only a changed day is checked, so a note edit still saves on an entry the
-  // application date has since moved past.
+  // min/max are advisory, so a typed day is checked here; only a changed day,
+  // so a note edit still saves on an entry the application date moved past.
   const dateChanged = draft ? draft.isNew || toDateInput(draft.entry.at) !== toDateInput(savedEntry?.at) : false;
   const dateProblem = draft && dateChanged ? timelineDateProblem(draft.entry, appliedAt) : null;
 

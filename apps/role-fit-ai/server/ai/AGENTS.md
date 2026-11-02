@@ -263,7 +263,7 @@ application retain blocking technical guards.
     documented API endpoints" counts endpoints; "1 dashboard tracking
     errors" counts dashboards). "evaluations" and "evals" count the same
     thing; "apps" and "applications" do not; a percent keeps its own metric
-    (below: "25 percent lower costs" is not grounded by "25 percent" of latency);
+    ("25 percent lower costs" is not grounded by "25 percent" of latency);
     "30d" and "5yrs" are durations that match "30 days" and "5 years",
     only digits glue ("tend" is not ten days), and "3D" is a name; "who"
     ends a counted phrase. A number word ends at a word
@@ -437,144 +437,92 @@ application retain blocking technical guards.
   "One" followed by a participle counts the noun after it ("one shared lock"
   counts locks), so matching evidence grounds it and an invented one still warns.
   Do not restore warnings on sentence-initial verbs or verb choice alone.
-- Numbers, outcomes, and workplaces keep what they were stated for (2026-10-30;
-  shared by Resume Polish, cover letters, and Answers). A replay of 2,173 saved
-  tailored bullets and 384 saved letter paragraphs on the user's machine showed
-  no warning change after the rules below; two independent reviews drove them.
+- Numbers, outcomes, and workplaces keep what they were stated for (shared by
+  Resume Polish, cover letters, and Answers; a replay of saved bullets and
+  letter paragraphs showed no warning change).
   - Each word of an evidence sentence belongs to its nearest quantity of the
-    same kind (percents, durations, and other quantities compete only among
-    themselves), counting the words between them plus three across a comma,
-    bullet, or conjunction; years, versions, and bare numbers such as "p95"
-    take none, and "from 60% to 85%" shares its words. Sentences end at a line
-    break or ". ! ?" before a space, never inside "e.g." or "U.S.", and a
-    bullet does not end one ("Python • 6 years"). So in "For 6 years I
-    maintained 40 services, mostly in Python" the Python is the 6 years', in
-    "Python (6 years) • Go (2 years)" Go is the 2 years', and "Cut deploy time
-    across 30 services by 50%" keeps "deploy time" for its 50%. Each word
-    compares only the nearest quantity on either side, so the work is linear in
-    the sentence (no slower than the old check on 8–66 KB evidence).
-  - A percent's metric is the noun before it ("cut deploy time by 85%") or
-    else after it ("99% uptime", "40% fewer errors", "40% of tickets"); a
-    generic time, speed, or rate takes the word before it, so "Made deploys 30%
-    faster" grounds "cut deploy time by 30%" but "build time" is not "deploy
-    time". The evidence's same percent must own that word, so "coverage to 85%"
-    never grounds "tickets by 85%". A percent with no readable metric matches
-    by value, as before. A duration's curated terms, and a capitalized skill
-    named beside it ("6 years of Go", "Rust for 6 years"), must belong to the
-    evidence's same duration: "6 years of Java" never grounds "6 years of
-    Python".
-  - Scale words are quantities: "millions of users", "hundreds of thousands
-    of events", "used by millions", "a million users", "saved the company
-    millions", "a million-dollar deal", "a multimillion-dollar budget", "a
-    seven-figure deal". Each
-    needs a counted quantity at least that large of its noun: a count whose own
-    words name it ("2 million+ users", "Users: 3M"), a duration, or a scale;
-    people counted as users, customers, members, or people are one noun.
-    "millions in revenue" and "thousands of dollars" need a currency amount; a
-    scale with no noun takes any counted quantity; a bare number (an id, a ZIP
-    code) grounds none. A plural must quantify ("of"/"in", a lead word such as
-    "by", "serving", "reaching", or the end of its clause); "in thousands" is a
-    unit, and "a hundred percent" and "a thousand-line" size nothing.
-  - In letters and Answers, a scale the posting itself states is the
-    employer's unless its clause speaks of the candidate
-    (`withoutPostingScaleFacts`): a first-person word before it, or within
-    eight words after it and before any comma, "like", or intention ("Millions
-    of users relied on the service I built", but not "…merchants, I see a fit",
-    "…merchants like the ones I supported", or "…a challenge I'd love"), or a
-    resume-style opening verb ("Scaled checkout to millions of users"). A
-    clause ends at a sentence end or semicolon, ", and" before a new subject
-    (", and grew it to millions" continues), ", which", "because"/"although", an
-    intention ("would", "I'd", "eager"), a fit verb ("maps well to"), or a
-    reaction that opens what the candidate noticed ("drawn to", "learned that",
-    "It excites me that", "I noticed Harbor…", "I know it serves…"); never at a
-    restrictive "which" or "that", so "I built tools that serve millions" stays
-    a claim. Accepted gaps: a candidate claim of the posting's own scale in a
-    non-restrictive clause ("I built tools at Beta, which serve millions"), in
-    the next sentence ("I rebuilt Acme's checkout. It now serves millions"),
-    where "it" cannot be told from the employer, in an opening phrase before
-    the candidate's clause ("Serving millions of users, my checkout service
-    never went down"), or by ellipsis ("Harbor serves millions of merchants,
-    and so did the APIs I built").
+    same kind (percents, durations, and other quantities compete separately),
+    counting the words between plus three across a comma, bullet, or
+    conjunction; years, versions, and bare numbers ("p95") take none, and a
+    range ("from 60% to 85%") shares its words. Sentences end at a line break
+    or ". ! ?" before a space, never inside "e.g." or "U.S."; a bullet does not
+    end one. Keep this linear in the sentence: each word compares only the
+    nearest quantity on either side.
+  - A percent's metric is the noun before it, else after it ("99% uptime",
+    "40% of tickets"); a generic time, speed, or rate takes the word before it
+    ("deploy time" is not "build time"). The evidence's same percent must own
+    that word; a percent with no readable metric matches by value. A
+    duration's curated terms, and a capitalized skill beside it ("6 years of
+    Go", "Rust for 6 years"), must belong to the evidence's same duration.
+  - Scale words are quantities ("millions of users", "used by millions", "a
+    million-dollar deal", "multimillion", "seven-figure"). Each needs a counted
+    quantity at least that large of its noun (a count named by its own words,
+    "Users: 3M"), a duration, or a scale; users, customers, members, and people
+    are one noun; money needs a currency amount; a scale with no noun takes any
+    count; a bare number (an id, a ZIP code) grounds none. A plural must
+    quantify ("of"/"in", a lead word such as "by" or "serving", or its clause
+    end); "in thousands", "a hundred percent", and "a thousand-line" size nothing.
+  - In letters and Answers a scale the posting states is the employer's
+    (`withoutPostingScaleFacts`) unless its clause speaks of the candidate: a
+    first-person word before it, or within eight words after it before any
+    comma, "like", or intention, or a resume-style opening verb. A clause ends
+    at a sentence end or semicolon, ", and" before a new subject, ", which",
+    "because"/"although", an intention, a fit verb ("maps well to"), or a
+    reaction ("drawn to", "learned that", "I noticed Harbor…"); never at a
+    restrictive "which"/"that" ("I built tools that serve millions" stays a claim).
   - Outcome verbs include double, triple, quadruple, halve, slash, minimize,
-    and maximize in every form. A multiplier's base form counts only after
-    "to" or "help" ("helped the team double revenue"), never as an adjective
-    ("double precision", "a double major", "double-checked"); "halves" and
-    "slashes" count only before a measure or outcome noun (they are also plural
-    nouns); "to minimize X" is a purpose, not a result. "2x", "2×",
-    "two-fold", "twice as", "100% increase", or "grew (throughput) 100%"
-    grounds doubled (likewise triple and quadruple), but "2x AWS Certified"
-    does not; "in half", "by half", or a 50% cut in any verb form ("reduced
-    build times 50%", "cutting build times by 50%") grounds halved, but
-    "increased signups by 50%" does not. Raise, lift, drop, shrink, and trim
-    count only before a measure ("to 85%", "by 12%", "from 20 to 8") or a
-    result noun in the same clause; for them, risks, incidents, outages,
-    errors, defects, losses, and "<x> concerns/issues/alerts" are what one
-    raises or drops ("halves invoice errors" still claims a result), so "raised
-    performance risks", "dropped usage of the old API",
-    "trimmed whitespace from 20 columns", and "lift and shift" stay clean.
-    Verbs are still not interchangeable: "raised" coverage warns against
-    evidence that says "increased". "want", "wish", "eager", "excited", "ready",
-    "love", or "I'd like" before "to" makes an outcome an offer.
+    and maximize. A multiplier's base form counts only after "to" or "help",
+    never as an adjective ("double precision", "double-checked"); "halves" and
+    "slashes" count only before a measure or outcome noun; "to minimize X" is a
+    purpose. "2x", "two-fold", "twice as", or a 100% rise grounds doubled (not
+    "2x AWS Certified"); "in half" or a 50% cut grounds halved, a 50% increase
+    does not. Raise, lift, drop, shrink, and trim count only before a measure
+    or result noun in the same clause, and a raised or dropped problem (risks,
+    incidents, errors, "<x> concerns/alerts") is none. Verbs stay distinct:
+    "raised" coverage warns against "increased". "want", "eager", "excited",
+    "ready", "love", or "I'd like" before "to" makes an outcome an offer.
   - A workplace or school (`affiliationClaims`) is a claim in an explicit frame
-    even for the target employer ("while/back/previously at", "worked at",
-    "interned at", "my years at", "joined", "co-founded", "attended",
-    "graduated from", a
-    degree such as "a BA … from", "ex-Stripe", "a former Stripe engineer", "a
-    <Name> graduate/alum", "<Name>, where I built", "my former employer,
-    <Name>"); in a role frame ("as a payments engineer at", "engineer at",
-    "working at", "was at", "a Stripe engineer", "As Stripe's first payments
-    engineer"); and after a bare "at"/"for", or "on Stripe's payments team",
-    only in a clause reporting work (a past verb or a first-person present
-    one, "I build payment APIs at Stripe") and when the name is not a modifier
-    ("for Spanish-speaking merchants", "for Medicare and Medicaid billing", "at
-    Stripe headquarters"). The target employer counts in a role or bare frame
-    only when the sentence opens "At Harbor," and reports work; "I was
-    impressed by the culture at Harbor" is clean. Intentions end at the next
-    clause, so "At Stripe I built APIs that can scale" is still a claim. Names
-    coordinated in one frame each count ("at Beta Corp and Stripe"); a
-    possessive counts only before a team noun ("attended Harbor's open house"
-    is none); departments, dates, holidays, events ("for Finance and
-    Operations", "at Thanksgiving", "a talk at PyCon", "the Grace Hopper
-    Celebration"), "a former Harbor customer", and someone else's job ("My
-    sister, an engineer at Stripe") are not the candidate's workplaces.
-  - A name is grounded as a phrase or by each distinctive word when the
-    evidence names no other kind of institution, and no "State" or "Tech" the
-    claim lacks, beside it: "Stanford University" by "Stanford", but "University
-    of Michigan" and "Michigan State University" never ground each other and
-    "Boston College" is not "Boston University". "Beta Corp, Inc." names one
-    company.
-    Letters check against all candidate evidence except the base letter (it
-    usually names the last company it was sent to), not only the cited entry:
-    a letter rarely cites the Education entry it names. The target employer
-    matches exactly once corporate suffixes are dropped ("Harbor, Inc." and
-    "Harbor Labs" are Harbor; "Harbor Freight" is not). Answers have no company
-    field, so the target employer is the name the posting introduces itself
-    with: its title line, a "Company:" field, "At Harbor, we", "Join Harbor",
-    "We are Harbor", "Harbor's mission", or a sentence Harbor opens as subject
-    ("Harbor builds…", "Harbor was founded by…"). Customers, competitors, and
-    schools named elsewhere ("Our customers include Shopify", "former Google
-    engineers", "experience at Plaid is a plus") ground no affiliation frame.
-  - Accepted gaps: affiliations without a frame ("Stripe is where I learned",
-    "My Stripe experience", "for Stripe's merchants", "Before Stripe, I…");
-    a workplace implied through someone else ("My manager at Stripe taught
-    me"); a past role at the target employer outside an "At Harbor," opening
-    ("I was an engineer at Harbor from 2019"); tool-named employers (left to
-    the curated term check); abbreviations the evidence spells out ("UC
-    Berkeley", "MIT", "Amazon Web Services" for AWS); a percent
-    whose metric word sits in another percent's scope ("tickets by 85%"
-    against "coverage to 85% on the tickets service"); duration skills that are
-    neither curated nor capitalized beside the duration; a line's only
-    duration takes every skill on the line, across a bullet ("6 years of Java •
-    Rust hobby projects" grounds "6 years of Rust"); "Golang" is not grounded
-    by "Go" (the curated term check already warned); a job header's
-    duration does not lend itself to the skills listed under it ("Acme, 6
-    years" then "Built Python services" warns "6 years of Python", which the
-    evidence never states); noun synonyms outside
-    the people family ("2M MAU" for users, "hundreds of tests" against "310
-    pytest cases"); multiplier evidence stated as a before-and-after ("from 500
-    to 1,000 rps") or only as speed ("twice as fast" grounds the verb, not
-    "throughput"); and employer-led prose outcomes ("Harbor doubled its
-    merchant base"), which already warned for "grew" and "increased".
+    even for the target employer ("while/back/previously at", "worked/interned
+    at", "my years at", "joined", "co-founded", "attended", "graduated from", "a
+    BA … from", "ex-Stripe", "a former Stripe engineer", "a <Name> graduate",
+    "<Name>, where I built", "my former employer, <Name>"); in a role frame ("as
+    a payments engineer at", "engineer at", "working at", "a Stripe engineer");
+    and after a bare "at"/"for" or "on Stripe's payments team" only in a clause
+    reporting work (a past verb or first-person present one) and when the name
+    is no modifier ("at Stripe headquarters", "for Spanish-speaking merchants").
+    The target employer counts in a role or bare frame only after an opening
+    "At Harbor," that reports work. Intentions end at the next clause.
+    Coordinated names share a frame; a possessive counts only before a team
+    noun. Departments, dates, holidays, events ("a talk at PyCon"), "a former
+    Harbor customer", and someone else's job ("My sister, an engineer at
+    Stripe") are not the candidate's workplaces.
+  - A name is grounded as a phrase, or word by word when the evidence beside it
+    names no other institution kind and no "State"/"Tech" the claim lacks
+    ("Stanford University" by "Stanford"; "University of Michigan" is not
+    "Michigan State University", "Boston College" not "Boston University").
+    Letters check all candidate evidence except the base letter (it usually
+    names the last company it went to), since a letter rarely cites the
+    Education entry it names. The target employer matches once corporate
+    suffixes are dropped ("Harbor Labs", not "Harbor Freight"). Answers have no
+    company field, so it is the name the posting introduces itself with (title
+    line, "Company:", "At Harbor, we", "Join Harbor", "We are Harbor", "Harbor's
+    mission", "Harbor builds…"); customers, competitors, and schools it names
+    elsewhere ground no affiliation frame.
+  - Accepted gaps: affiliations without a frame ("My Stripe experience",
+    "Before Stripe, I…") or through someone else ("My manager at Stripe"); a
+    past role at the target employer outside an "At Harbor," opening;
+    tool-named employers (left to the curated term check); spelled-out
+    abbreviations ("UC Berkeley", "MIT", AWS); a candidate claim of the
+    posting's own scale in a non-restrictive clause, the next sentence ("It now
+    serves millions"), an opening phrase, or by ellipsis; a percent whose metric
+    word sits in another percent's scope; duration skills neither curated nor
+    capitalized beside the duration; a line's only duration takes every skill
+    on the line ("6 years of Java • Rust hobby projects"); "Golang" vs "Go"
+    (the term check already warns); a job header's duration does not lend
+    itself to the skills under it; noun synonyms outside the people family
+    ("2M MAU"); multipliers stated as before-and-after ("from 500 to 1,000
+    rps") or only as speed; and employer-led outcomes ("Harbor doubled its
+    merchant base").
 - A Resume Polish evidence warning names what failed: up to three concerns, one
   per kind of check (term, number, count purpose, ownership, outcome), each echoing the edit's
   own wording. An ownership concern adds a merged-facts hint only when the

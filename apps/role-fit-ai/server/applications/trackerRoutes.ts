@@ -26,19 +26,19 @@ import {
   trashApplicationFiles
 } from "./routeSupport.ts";
 
-// The revision names one validated tracker state. A client that already holds
-// it gets 304 instead of the whole tracker.
 // A refused request answers 4xx; a write the computer could not complete (a
 // locked or full disk) is a server failure, not a bad request.
 function trackerFailureStatus(error: unknown): number {
   if (error instanceof ApplicationsStorageError) return error.status;
   if (error instanceof SyntaxError) return 400;
   if (error instanceof Error && error.message === "Request is too large.") return 413;
-  // Name only: the message is answered to the client, never logged with paths.
+  // Name only: Node's message names absolute paths.
   console.error(`[tracker] write failed: ${error instanceof Error ? error.name : "error"}`);
   return 500;
 }
 
+// The revision names one validated tracker state. A client that already holds
+// it gets 304 instead of the whole tracker.
 export async function handleListApplications(
   req: IncomingMessage,
   res: ServerResponse,

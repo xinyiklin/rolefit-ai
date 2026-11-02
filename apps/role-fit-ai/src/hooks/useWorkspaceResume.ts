@@ -319,9 +319,8 @@ export function useWorkspaceResume({
 
       updateWorkspaceState(workspace);
       if (workspace.baseResume?.error) {
-        // The saved default could not be read. The variant list and history
-        // just published let the user choose or restore; nothing is seeded
-        // except the valid variant this user last had open, as at any startup.
+        // The saved default is unreadable: seed only the variant last open, and
+        // leave the published list and history for the user to choose from.
         const rememberedName = applyBaseResume ? loadLastBaseResumeName() : "";
         if (
           rememberedName &&
@@ -705,8 +704,7 @@ export function useWorkspaceResume({
   // existing guarded load path remains the sole document-replacement owner.
   // Results are cached against the authoritative candidate revision, so
   // resolving and then displaying the same ranking costs one request in total.
-  // A failed read is never cached: the revision only moves on the next
-  // snapshot, so caching it would disable adoption for every Prepare until then.
+  // A failed read is never cached: the revision only moves on the next snapshot.
   const readBaseResumeCandidates = useCallback(
     async (options: BaseResumeOption[]): Promise<VariantCandidate[]> => {
       const fileNames = [...new Set(options.map((option) => option.fileName).filter(Boolean))];

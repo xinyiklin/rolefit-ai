@@ -66,7 +66,7 @@ assert.ok(contradictory.warnings.some(w=>/conflict/i.test(w)), "conflicting evid
 assert.deepEqual(reviewSource("I built Python services.", "Built Python services. I have never used Terraform.").warnings, []);
 assert.deepEqual(reviewSource("I built Kubernetes services.", "Built Kubernetes services.").warnings, []);
 
-// 2026-10-30: an invented workplace or school is caught in any affiliation frame, checked
+// An invented workplace or school is caught in any affiliation frame, checked
 // against all of the candidate's evidence; the target employer stays the application.
 function reviewEmployer(text) {
   return coverLetterParagraphClaims({
@@ -120,7 +120,7 @@ assert.ok(reviewEmployer("I built payment APIs in Java for merchant onboarding, 
 assert.ok(reviewEmployer("I built payment APIs in Java for millions of merchants.").issues.some((issue) => issue.code === "unsupported_number"));
 assert.equal(reviewEmployer("Harbor's platform reaches millions of merchants, and I built payment APIs in Java.").issues.length, 0);
 console.log("Paragraph affiliation, outcome-verb and scale-word probes passed");
-// Second review (2026-10-30): the target employer still counts when a sentence opens
+// The target employer still counts when a sentence opens
 // "At Harbor," and reports work; the base letter, another school, or someone else's
 // job never grounds a workplace; an intention later in the sentence hides nothing.
 assert.match(affiliationIssue("At Harbor, I built payment APIs in Java for merchant onboarding.")?.repairMessage ?? "", /Unsupported affiliation: Harbor\./);
@@ -143,7 +143,7 @@ for (const text of [
   "Last year I attended the Grace Hopper Celebration and built payment APIs in Java."
 ]) assert.equal(affiliationIssue(text), undefined, text);
 console.log("Paragraph second-review affiliation probes passed");
-// Third review (2026-10-30): schools never ground each other in either direction, a
+// Schools never ground each other in either direction, a
 // corporate suffix is part of one company, and co-founding claims a workplace.
 const michigan = (text) => coverLetterParagraphClaims({
   paragraphs: [{ text, evidenceIds: ["r1"], slotIds: [] }],

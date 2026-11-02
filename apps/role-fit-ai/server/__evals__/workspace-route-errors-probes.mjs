@@ -1,11 +1,5 @@
-// Probes for how the resume and cover-letter workspace routes answer a failure.
-//
-// The load-bearing rule: a file-system failure (a locked or unwritable file,
-// here forced by putting a regular file where `.trash/`, `resumes/`, or
-// `cover-letters/` must be created, or a folder where a letter belongs) is
-// the server's failure, so the route answers 500 with fixed user-safe text and
-// never Node's own message, which names absolute workspace paths. A request
-// the route rejects keeps its own 400 validation message.
+// A file-system failure in a resume or cover-letter workspace route answers 500
+// with fixed text, never Node's path-bearing message; validation stays a 400.
 //
 //   node server/__evals__/workspace-route-errors-probes.mjs
 

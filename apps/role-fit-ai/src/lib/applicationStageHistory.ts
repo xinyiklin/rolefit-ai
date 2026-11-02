@@ -180,9 +180,8 @@ export function deriveTimeline(
     anchors.push({ key: "skipped", kind: "skipped", at: application.notApplyingAt });
   }
 
-  // Entries are day-granular (a date input is stored at local noon) while the
-  // Applied anchor keeps its exact instant, so same-day rows order by the day
-  // and then by the order they were recorded, never by the time within it.
+  // Entries are day-granular while the Applied anchor keeps its instant, so
+  // same-day rows order by recording order, never by time of day.
   const byDate = (left: { at: string; order: number }, right: { at: string; order: number }) =>
     localDay(new Date(left.at)) - localDay(new Date(right.at)) || left.order - right.order;
   const interviewRounds = new Map(

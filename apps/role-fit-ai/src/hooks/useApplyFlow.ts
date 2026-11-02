@@ -144,9 +144,8 @@ export function useApplyFlow({
   const applyActionRef = useRef<PreparationPrimaryAction | null>(null);
   const applyUnrelatedApplicationIdRef = useRef<string | null>(null);
   const applyCommitIdentityRef = useRef<string | null>(null);
-  // One record id per preparation until a commit succeeds: a retry after a
-  // lost reply, from the download prompt or a fresh Apply click, resolves to
-  // the record the earlier try may already have created instead of a second row.
+  // One record id per preparation until a commit succeeds, so a retry after a
+  // lost reply resolves to the row the earlier try may have created.
   const applyAttemptRef = useRef<{ preparationId: string; id: string } | null>(null);
   const applyAttemptIdRef = useRef<string | null>(null);
   const applyPreparationIdRef = useRef<string | null>(null);
@@ -462,13 +461,10 @@ export function useApplyFlow({
       saved = commit.operation === "create"
         ? await createApplication(app)
         : await updateApplicationById(app);
-      // A create refused because the id already exists is the earlier attempt
-      // of this same Apply whose reply was lost: update that record instead.
       if (!saved && commit.operation === "create") saved = await confirmCreated(app);
     } catch {
       // The store normally converts request failures to `false`; keep this
       // boundary fail-closed if a future adapter rejects unexpectedly.
-      saved = false;
     }
     if (!saved) {
       const message = `${action.label} could not be saved. Your recovery draft is still available; retry ${action.label}.`;

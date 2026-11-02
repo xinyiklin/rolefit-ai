@@ -334,7 +334,7 @@ const checks = [
       && candidateClaimIssue("Built Kafka pipelines.", "Joined Acme with no Kafka experience.") === "Unsupported technology or skill: kafka"
       && candidateClaimIssue("Built Kafka pipelines.", "Joined with no experience in Kafka.") === "Unsupported technology or skill: kafka";
   })()],
-  // 2026-10-30: a number, scale, outcome verb, or workplace keeps what it was stated for.
+  // A number, scale, outcome verb, or workplace keeps what it was stated for.
   ["a percent keeps its own metric: coverage to 85% never grounds deploy time or tickets by 85%",
     findUngroundedNumericClaim("Cut deploy time by 85% for billing tools.", "Cut deploy time by 30% and raised test coverage to 85% for billing tools.") === "85%"
       && findUngroundedNumericClaim("Cut support tickets by 85%.", "Raised test coverage to 85%.") === "85%"

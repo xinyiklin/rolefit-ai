@@ -15,7 +15,7 @@ export function indentReplacesSelection(
   return dStart > leading;
 }
 
-export type EdgeNavigation = { scope: "line" | "document"; edge: "start" | "end"; extend: boolean };
+type EdgeNavigation = { scope: "line" | "document"; edge: "start" | "end"; extend: boolean };
 
 // Ctrl/Cmd+Home/End reach the document edge; Home/End and Cmd+Left/Right the line edge.
 export function edgeNavigation(event: {

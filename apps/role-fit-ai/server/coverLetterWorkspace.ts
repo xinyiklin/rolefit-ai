@@ -2,7 +2,7 @@
 // only the serialized atomic storage primitives are shared.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { mkdir, readFile, readdir, rename } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 
 import { parseCoverLetterFile } from "@typeset/engine/lib/coverLetter.ts";
@@ -15,9 +15,9 @@ import {
   ensureJobWorkspace,
   isMissingFile,
   listVariantFiles,
-  nextTrashStamp,
   restoreConflictHandled,
   sendWorkspaceRouteError,
+  trashWorkspaceFile,
   withWorkspaceLock,
   type WorkspaceLocations
 } from "./workspace.ts";
@@ -153,21 +153,6 @@ async function readCoverLetterHistory(
   });
 }
 
-// Archive the live letter into history and return how to move it back.
-async function trashCoverLetterFile(name: string, locations: WorkspaceLocations): Promise<(() => Promise<void>) | null> {
-  const dir = coverLetterWorkspaceDir(locations);
-  const trashDir = join(dir, ".trash");
-  await mkdir(trashDir, { recursive: true });
-  const archived = join(trashDir, `${nextTrashStamp()}__${name}`);
-  try {
-    await rename(join(dir, name), archived);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") throw error;
-    return null;
-  }
-  return () => rename(archived, join(dir, name));
-}
-
 async function coverLetterSnapshot(locations: WorkspaceLocations) {
   return {
     coverLetterOptions: await readCoverLetterOptions(locations),
@@ -211,10 +196,8 @@ export async function handleWorkspaceCoverLetter(
 
     const snapshot = await withWorkspaceLock(async () => {
       await ensureJobWorkspace(locations.workspaceDir);
-      // The current letter is archived into history once the replacement is staged.
-      await replaceWorkspaceFile(join(coverLetterWorkspaceDir(locations), targetName), rawText, () =>
-        trashCoverLetterFile(targetName, locations)
-      );
+      const dir = coverLetterWorkspaceDir(locations);
+      await replaceWorkspaceFile(join(dir, targetName), rawText, () => trashWorkspaceFile(dir, targetName));
       return coverLetterSnapshot(locations);
     });
 
@@ -299,9 +282,8 @@ export async function handleCoverLetterCandidates(
       await ensureJobWorkspace(locations.workspaceDir);
       const read: { fileName: string; label: string; text: string }[] = [];
       for (const fileName of fileNames) {
-        // A missing, unreadable, or invalid letter is skipped, never fatal: the
-        // ranker's own completeness rule turns a short candidate list into no
-        // recommendation. Anything but a file error still surfaces.
+        // A missing, unreadable, or invalid letter is skipped: the ranker reads a
+        // short candidate list as no recommendation.
         try {
           const data = await readFile(join(coverLetterWorkspaceDir(locations), fileName));
           read.push({ fileName, label: coverLetterLabel(fileName), text: validateCoverLetterText(data) });
@@ -348,9 +330,8 @@ export async function handleRestoreCoverLetter(
       // Validate the archived bytes before displacing the current good version.
       const data = await readFile(join(coverLetterWorkspaceDir(locations), ".trash", key));
       const text = validateCoverLetterText(data);
-      await replaceWorkspaceFile(join(coverLetterWorkspaceDir(locations), targetName), data, () =>
-        trashCoverLetterFile(targetName, locations)
-      );
+      const dir = coverLetterWorkspaceDir(locations);
+      await replaceWorkspaceFile(join(dir, targetName), data, () => trashWorkspaceFile(dir, targetName));
       return { text, ...(await coverLetterSnapshot(locations)) };
     });
 

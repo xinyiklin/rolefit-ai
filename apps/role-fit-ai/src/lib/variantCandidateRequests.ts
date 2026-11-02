@@ -1,11 +1,8 @@
-// The saved-variant `/candidates` batch reads, shared by both material kinds.
-// Each route reads at most MAX_VARIANT_CANDIDATES_PER_REQUEST documents under
-// one workspace lock; a larger eligible pool is read in consecutive requests of
-// that size, so a big pool still ranks instead of losing its recommendation.
-
+// The saved-variant `/candidates` batch reads for both material kinds. Each
+// route caps one request, so a larger pool is read in consecutive chunks.
 export const MAX_VARIANT_CANDIDATES_PER_REQUEST = 40;
 
-export type VariantCandidateEntry = { fileName?: unknown; label?: unknown; text?: unknown };
+type VariantCandidateEntry = { fileName?: unknown; label?: unknown; text?: unknown };
 
 // Resolves null when any request failed (transport, HTTP, or body shape): a
 // partial pool must never rank as if it were complete.
@@ -25,8 +22,7 @@ export async function postVariantCandidateRequests(
       if (!response.ok || !Array.isArray(body.candidates)) return null;
       read.push(...(body.candidates as VariantCandidateEntry[]));
     } catch {
-      // Ranking is an affordance over the selector, never the document itself.
-      // An unreachable workspace produces no recommendation, not a broken Prepare.
+      // Ranking is an affordance: an unreachable workspace means no recommendation.
       return null;
     }
   }

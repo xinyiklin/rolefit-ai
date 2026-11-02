@@ -250,7 +250,7 @@ function fragmentsFromHtml(html: string): ParsedClipboardHtml {
   };
 
   // Inline content beside a child block is its own paragraph, as a browser's
-  // anonymous block box is; without this it fused onto the block's text.
+  // anonymous block box is.
   const closeAnonymousBlock = (start: number) => {
     endLine();
     if (out.length <= start || out[out.length - 1].endsWith(BLOCK_SEPARATOR)) return;

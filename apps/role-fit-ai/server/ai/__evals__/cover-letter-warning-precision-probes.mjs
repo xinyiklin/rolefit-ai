@@ -292,7 +292,7 @@ assert.equal(harborCheck("I would take the Senior Kafka Engineer role with your 
 assert.equal(harborCheck("The Senior Kafka Engineer role at a growing company suits me.", "Acme", "Senior Kafka Engineer"), "");
 assert.match(harborCheck("In the Senior Kafka Engineer role I held at Harbor, I ran clusters.", "Acme", "Senior Kafka Engineer"), /kafka/i, "\"the <role> role I held\" is a past job");
 
-// 2026-10-30: a workplace the evidence names, the target employer, and a scale the posting
+// A workplace the evidence names, the target employer, and a scale the posting
 // states stay clean; an invented workplace, multiplier outcome, or scale still warns.
 assert.equal(harborCheck("At Harbor I rescheduled berth assignments to clear arrival backlogs."), "", "a workplace in the evidence is grounded");
 const affiliationWarnings = (text, job = jobText) => coverLetterParagraphClaims({ paragraphs: [{ text, evidenceIds: ["h1"], slotIds: [] }], evidence, authoredProse: "", jobText: job, resolved }).issues.map((issue) => issue.repairMessage ?? "").join(" ");

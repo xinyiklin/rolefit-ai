@@ -147,12 +147,11 @@ it truthfully.
   `display` from `segmentsFromInlineMarks`. A link word keeps exactly what was
   typed. A word is a whitespace-free run read ACROSS tags (`<lt>` is text); it
   is a link word when `automaticLinkHref` accepts it whole, and a character
-  inside an explicit `<link>`, suppressed or not, is always as typed.
-  Substitutions stay within one segment. Otherwise the page and the PDF's
-  extracted text showed `sean.o’brien@…` or `xn–bcher…` while the link opened
-  the typed address. Reading words across tags keeps the decision invariant
-  when an edit re-serializes marks (`<b>a--b</b><b>@x.co</b>` becomes one run),
-  so a mark-split address shows as typed in every piece. Runs carry this
+  inside an explicit `<link>`, suppressed or not, is always as typed, so the
+  page and extracted PDF text carry the address the link opens. Substitutions
+  stay within one segment. Reading words across tags keeps the decision
+  invariant when an edit re-serializes marks (`<b>a--b</b><b>@x.co</b>`
+  becomes one run). Runs carry this
   display form, and `measure`, `faceSegments`, `runFamilies` and `inkExtent`
   take it verbatim. The editor's `buildDisplayMap` and RoleFit's
   `inlineMarksToHtml` apply the same rule; any drift moves the caret and lets
@@ -183,8 +182,7 @@ it truthfully.
   Glue setting and alignment use the merged widths; the breaker still chooses
   lines from fragment widths, so a positive cross-boundary kern could overshoot
   a glue-less line by that kern. Measure each merged run once when the line is
-  set, never per absorbed box: that is quadratic, and a valid bullet of
-  thousands of mark boundaries took seconds (`merged-runs.mjs` times it).
+  set, never per absorbed box, which is quadratic (`merged-runs.mjs` times it).
 - Alignment never changes where a line breaks (D082): every alignment breaks
   as a ragged paragraph does, and justify only stretches the spaces of lines
   already chosen. `tall-paragraphs.mjs` lays the same text out in all four.

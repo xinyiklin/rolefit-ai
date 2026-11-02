@@ -394,12 +394,8 @@ const CLAUDE_CLI_RATE_LIMIT_MESSAGE =
 const CLAUDE_CLI_OVERLOADED_MESSAGE =
   "Claude is temporarily overloaded. Wait a moment, then retry or switch providers.";
 
-// Map a claude CLI failure to an actionable, SAFE message: a 401 / auth failure
-// points at sign-in; a rate/usage limit or overload says to wait; a timeout (no
-// CLI stdout to classify) points at a faster model; anything else is the generic
-// "couldn't complete" hint. Routes pass these UserSafeAiErrors through verbatim.
-// `stdout` is claude's JSON result (present on a non-zero exit); `sourceError`
-// is the rejected runCli error (carries the timeout flag).
+// Map a claude CLI failure (its JSON `stdout` and the rejected runCli error) to a
+// UserSafeAiError that routes pass through verbatim.
 export function classifyClaudeFailure(stdout: string, sourceError?: CliError): Error {
   let message = "";
   let authStatus = 0;

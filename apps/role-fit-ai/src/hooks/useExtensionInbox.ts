@@ -133,7 +133,6 @@ export function useExtensionInbox(
         }
         transientRetries = 0;
         if (data === null || typeof data !== "object") {
-          // An import this tab saw "preparing" is gone before delivery.
           if (preparing) onGoneRef.current?.();
           preparing = false;
           if (claimToken) {

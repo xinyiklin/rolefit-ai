@@ -89,11 +89,12 @@ export function jobBoardHeader(url: string, pageTitle: unknown): string {
 // matched, and the whitespace before an anchored body label cannot cross a
 // line, so no anchor rescans later lines; backtracking stays bounded.
 export function extractJobMeta(text: unknown, pageTitle: unknown): { title?: string; company?: string } {
+  // 1. A job board's own title form.
   const meta: { title?: string; company?: string } = { ...jobBoardTitleMeta(pageTitle) };
   const title = typeof pageTitle === "string" ? pageTitle.trim() : "";
   const body = typeof text === "string" ? text : "";
 
-  // Any site: "<Title> - <Company> - <Location> | ..."
+  // 2. Any site: "<Title> - <Company> - <Location> | ..."
   if ((!meta.title || !meta.company) && title) {
     // Only a spaced hyphen separates fields, so "Front-End Developer" stays whole.
     const dashed = title.slice(0, Math.max(0, title.lastIndexOf("|"))).split(/\s-\s/);

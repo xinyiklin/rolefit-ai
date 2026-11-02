@@ -59,17 +59,9 @@ export function texLigatures(text: string): string {
   return text.replace(/---/g, "—").replace(/--/g, "–").replace(/'/g, "’");
 }
 
-// Display form: display punctuation for every word except a link, which shows
-// exactly as typed so the page and the PDF's extracted text carry the address
-// the link opens ("o'brien@…", punycode "xn--…"). A word is a whitespace-free
-// run across tags (<lt> is text), so re-serializing marks can never change it;
-// it is a link when automaticLinkHref accepts the whole word, and a character
-// inside an explicit <link> (suppressed or not) is always shown as typed.
-// Substitutions stay within one segment. The editor's display map and
-// RoleFit's inline-mark HTML apply the same rule, so caret offsets stay in step.
+// Display form: texLigatures for every word except a link word, shown as typed
+// (rule in the typeset guide; the editor and RoleFit mirror it).
 const isLinkWord = (word: string) => automaticLinkHref(word) !== null;
-const ligatedUnlessLink = (text: string, linked: (start: number) => boolean) =>
-  text.replace(/\S+/g, (piece, at: number) => (linked(at) ? piece : texLigatures(piece)));
 
 // Display form of text with no inline-mark tags.
 export function displayText(text: string): string {
@@ -85,15 +77,15 @@ function withDisplay(segments: Omit<StyledSegment, "display">[]): StyledSegment[
   return segments.map((segment) => {
     const base = offset;
     offset += segment.text.length;
-    return { ...segment, display: segment.href ? segment.text : ligatedUnlessLink(segment.text, (at) => linked[base + at] === 1) };
+    const display = segment.href
+      ? segment.text
+      : segment.text.replace(/\S+/g, (piece, at: number) => (linked[base + at] ? piece : texLigatures(piece)));
+    return { ...segment, display };
   });
 }
 
-// An inline-marked value with every segment in display form and every tag
-// kept, for a caller that drops tags before laying it out (small-caps headings
-// strip <b>/<i>/<u>, which would join "-<b>-</b>" into one "--"). Lay the
-// result out with preDisplayed so nothing is transformed twice. A literal "<"
-// is written back as <lt>, so it can never start a tag once others are gone.
+// The value with each segment in display form and every tag kept, for a caller
+// that drops tags before layout; lay the result out with preDisplayed.
 export function displayInlineMarkedText(value: string): string {
   const segments = segmentsFromInlineMarks(value);
   let next = 0;
@@ -119,10 +111,8 @@ export function displayInlineMarkedText(value: string): string {
   return out;
 }
 
-// A single-line field run's painted text from its display form: a tab or no-break space (U+00A0, the
-// figure space U+2007, the narrow U+202F) is set as one space, as paragraph glue
-// sets them, so layout, DOM and PDF draw one width.
-// One character for one, so editor offsets are unchanged.
+// A single-line field run's painted text: a tab or no-break space is one space,
+// as paragraph glue sets it; one character for one keeps editor offsets.
 export function paintedText(display: string): string {
   return display.replace(/[\t\u00a0\u2007\u202f]/g, " ");
 }

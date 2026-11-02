@@ -46,9 +46,8 @@ export type ReadDocument = { fileName: string; savedAt?: string; label?: string;
 
 const REQUEST_TIMEOUT_MS = 60_000;
 
-// Node's fetch gives up waiting for response headers after five minutes, which
-// an AI stage can outlast. Over node:http the request's own signal is the only
-// limit. The loopback origin check below means plain http is all it needs.
+// Node's fetch stops waiting for response headers after five minutes, which an AI
+// stage can outlast; over node:http (loopback only) the request's signal is the only limit.
 export const loopbackFetch: typeof fetch = (input, init = {}) => new Promise((resolve, reject) => {
   const { signal } = init;
   if (typeof input !== "string" && !(input instanceof URL)) return reject(new TypeError("loopbackFetch takes a URL."));

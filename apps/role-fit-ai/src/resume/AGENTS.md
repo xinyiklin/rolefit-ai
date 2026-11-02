@@ -37,11 +37,9 @@ file/layout contracts remain in `@typeset/engine`.
   Not placed finding, or consumed structure (a bullet marker, a spaced
   separator or a dingbat icon of at most two glyphs between items, a skills
   label's colon). A dingbat run of three or more glyphs past a line's start
-  (rating dots) is Not placed. Private-use glyphs are never separators: an
-  exporter may paint unmapped text one glyph per run. Icon-prefixed headings
-  are not recognized (an icon marker excludes a heading): dingbat and
-  private-use bullets look the same, and a list of section words must stay a
-  list. Never edit words; never place text that
+  (rating dots) is Not placed. Private-use glyphs are never separators (they
+  may be unmapped text), and an icon-prefixed line is never a heading, so a
+  list of section words stays a list. Never edit words; never place text that
   matches the inline-mark grammar. A change that makes the audit fail must fix
   the placement, not the audit.
 - Only dingbat faces (`PdfSpan.dingbat`) are glyph artifacts; Symbol-font text

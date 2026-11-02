@@ -173,7 +173,7 @@ for provider, prompt, sanitizer, and review work.
   candidates, and removal (DELETE) and cover-letter save, select, and
   candidates answer it through `sendWorkspaceRouteError` (500, fixed text,
   code-only log) and keep their validation messages as 400s. Base-resume save
-  and both history-restore routes still answer with their own fixed-text 400.
+  and both history-restore routes answer with their own fixed-text 400.
 - Keep file operations inside the configured RoleFit workspace. Defend against
   traversal, unsafe names, malformed JSON, and oversized data.
 - Never log keys, prompts, raw resumes/jobs, provider bodies, or broad envs.

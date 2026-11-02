@@ -8,8 +8,8 @@ import {
   type ResumeImportLine,
   type ResumeImportStructure
 } from "../../shared/resumeImportContract.ts";
-import { FetchTimeoutError, isRequestAborted, requestAbortSignal, sendJson } from "../http.ts";
-import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
+import { isRequestAborted, requestAbortSignal, sendJson } from "../http.ts";
+import { UserSafeAiError, isProviderTimeout, safeConfigErrorMessage } from "./errors.ts";
 import { readAiJsonBody } from "./json.ts";
 import { callConfiguredProvider } from "./clients.ts";
 import { RESUME_IMPORT_FENCE_NAMES, fenceUntrusted, inputFirewallRule } from "./prompts.ts";
@@ -99,9 +99,7 @@ export async function handleResumeImport(req: IncomingMessage, res: ServerRespon
     sendJson(res, 200, { structure, promptVersion: RESUME_IMPORT_PROMPT_VERSION });
   } catch (error) {
     if (isRequestAborted(error, req, res)) return;
-    // A provider timeout needs a retry, not an AI-settings change.
-    const timedOut = error instanceof FetchTimeoutError || (error instanceof Error && /timed out|timeout/i.test(error.message));
-    if (timedOut && !(error instanceof UserSafeAiError)) {
+    if (isProviderTimeout(error) && !(error instanceof UserSafeAiError)) {
       sendJson(res, 504, { error: `${providerLabel(provider)} timed out. Try again or switch providers.` });
       return;
     }

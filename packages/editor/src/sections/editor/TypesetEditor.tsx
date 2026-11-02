@@ -813,8 +813,8 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   // keeps the selected text visible while the command commits.
   const lastRangeRef = useRef<TypesetSelection | null>(null);
   const lastRangesRef = useRef<FieldRange[] | null>(null);
-  // The document generation those ranges were read in. A replacement (New,
-  // Open, seed) leaves them behind even while its pages wait on fonts.
+  // The document generation those ranges were read in: a replacement (New,
+  // Open, seed) must never inherit them as a command target.
   const savedRangeGenerationRef = useRef(-1);
   const savedRangeIsCurrent = () => savedRangeGenerationRef.current === actions.getDocumentGeneration();
   const typingFormatRef = useRef<TypingFormat | null>(null);
@@ -3291,10 +3291,6 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     const generation = actions.getDocumentGeneration();
     if (inputGenerationRef.current !== generation) {
       inputGenerationRef.current = generation;
-      // A selection saved from the previous document must never become a
-      // toolbar command target in the replacement.
-      lastRangeRef.current = null;
-      lastRangesRef.current = null;
       replayQueueRef.current = [];
       pendingCaretRef.current = null;
       typingFormatRef.current = null;

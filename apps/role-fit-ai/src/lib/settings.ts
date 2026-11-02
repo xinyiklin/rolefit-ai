@@ -391,13 +391,12 @@ export function saveSettings(settings: PersistedSettings): void {
       localStorage.setItem(KEY, JSON.stringify(normalized));
     }
   } catch {
-    // The canonical workspace write below does not depend on this cache, but
-    // the value it still holds is now stale: loadSettings would read it back
-    // as current and the next push would send it over the workspace copy.
+    // The workspace write below does not need this cache, but a stale cached
+    // value would be read back as current and pushed over the workspace copy.
     try {
       if (typeof localStorage !== "undefined") localStorage.removeItem(KEY);
     } catch {
-      // Nothing left to clear; memorySettings stays authoritative.
+      // memorySettings stays authoritative.
     }
   }
   settingsSaveListener?.(normalized);

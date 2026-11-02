@@ -299,8 +299,7 @@ try {
     const retried = await changeStatus(saved.id, { status: "applied", documents: resumeOnly });
     assert.equal(retried.json.changed, false, "a retried submission changes nothing");
     assert.match((await changeStatus(saved.id, { status: "interviewing", documents: resumeOnly })).json.error, /^documents: only a first submission/);
-    // A same-stage request is still checked: a date outside the range and
-    // documents for a record that holds no resume are refused, not ignored.
+    // A same-stage request still validates its date.
     const badDate = await changeStatus(saved.id, { status: "applied", date: "1999-01-01" });
     assert.equal(badDate.status, 400, badDate.chunk);
     assert.match(badDate.json.error, /^date: must fall between/);

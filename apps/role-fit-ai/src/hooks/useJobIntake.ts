@@ -1497,9 +1497,8 @@ export function useJobIntake({
     },
     extensionImportsReady,
     () => {
-      // The prepared posting vanished before delivery (for example, a server
-      // restart): always leave the receiving phase, but a run already in flight
-      // (a link or paste preparation) keeps its own card.
+      // The posting vanished before delivery (e.g. a server restart); a link or
+      // paste run already in flight keeps its own card.
       setExtensionImportPhase((phase) => (phase === "receiving" ? null : phase));
       if (jobAnalysisBusyRef.current) return;
       setJobAnalysisRetrySource(null);

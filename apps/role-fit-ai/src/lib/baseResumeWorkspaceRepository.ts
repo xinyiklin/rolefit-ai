@@ -15,8 +15,7 @@ import type { VariantCandidate } from "./variantRecommendation.ts";
 
 type CandidateOption = { fileName: string; label: string };
 
-// Resolves null when the read itself failed (transport, HTTP, or body shape),
-// so a caller can tell a transient failure from a real answer and not cache it.
+// Resolves null when the read failed, so the caller does not cache it.
 export async function fetchBaseResumeCandidates(
   options: CandidateOption[]
 ): Promise<VariantCandidate[] | null> {

@@ -105,9 +105,8 @@ const CONJUNCTIONS = new Set(["and", "or", "but"]);
 const UNSCALED_MAGNITUDES = String.raw`[kmb]|bn|mm|x|hundred|trillion|dozen`;
 const MAGNITUDE_PREFIX = new RegExp(String.raw`^(${UNSCALED_MAGNITUDES})\b`, "i");
 const MAGNITUDE_VALUES: Record<string, number> = { k: 1e3, m: 1e6, mm: 1e6, b: 1e9, bn: 1e9, hundred: 100, trillion: 1e12, dozen: 12 };
-// "millions of users", "used by millions", or "a million users" claims at least a
-// million: a plural must quantify something ("of", "in", a lead verb, or the end of
-// its clause: "saved the company millions"), so "a thousands separator" is not a claim.
+// "millions of users" or "a million users" claims at least a million; a plural scale must
+// quantify something ("of", "in", a lead verb, or its clause end), unlike "a thousands separator".
 const SCALE_VALUES: Record<string, number> = { tens: 10, dozens: 12, hundreds: 100, thousands: 1e3, millions: 1e6, billions: 1e9, dozen: 12, hundred: 100, thousand: 1e3, million: 1e6, billion: 1e9 };
 const SCALE_CLAIM = /\b(?:(tens|dozens|hundreds)\s+of\s+|(an?|half\s+a)\s+(?=(?:dozen|hundred|thousand|million|billion)\b))?(dozens|hundreds|thousands|millions|billions|dozen|hundred|thousand|million|billion)\b/gi;
 const SCALE_LEAD = /\b(?:by|to|for|across|among|over|reach(?:ed|es|ing)?|serv(?:e|ed|es|ing)|impact(?:ed|s|ing)?|affect(?:ed|s|ing)?|handl(?:e|ed|es|ing)|process(?:ed|es|ing)?|sav(?:e|ed|es|ing)|generat(?:e|ed|es|ing))\s+$/i;
@@ -117,15 +116,13 @@ const IRREGULAR_PLURALS = /^(?:people|staff|personnel|children|men|women)$/;
 const PEOPLE_NOUNS = new Set(["user", "customer", "member", "patient", "student", "consumer", "shopper", "visitor", "player", "subscriber", "people", "person", "client", "learner", "reader", "viewer", "listener"]);
 const sameCountedNoun = (a: string, b: string) => a === b || (PEOPLE_NOUNS.has(a) && PEOPLE_NOUNS.has(b));
 
-// A percent's metric is the noun it measures: before it ("cut deploy time by 85%"),
-// else after it ("99% uptime", "40% fewer errors", "40% of tickets").
+// A percent's metric: the noun before it ("deploy time by 85%"), else after it ("99% uptime").
 const METRIC_STOP_WORDS = new Set(["a", "an", "the", "our", "my", "its", "their", "his", "her", "this", "that", "these", "those", "with", "while", "as", "for", "at", "on", "in", "into", "across", "per", "of", "from", "to", "by", "and", "or", "but", "than", "i", "we", "it", "is", "was", "were", "are", "be", "been", "year", "years", "month", "months", "quarter", "week", "day", "yoy", "mom", "qoq"]);
 const METRIC_LEAD_WORDS = new Set(["by", "to", "of", "at", "from", "around", "about", "nearly", "almost", "over", "under", "roughly", "approximately", "an", "a", "the", "estimated", "just", "only", "up", "down", "than", "more", "less", "some", "above", "below", "within", "~"]);
 const CHANGE_WORDS = new Set(["faster", "slower", "lower", "higher", "fewer", "more", "less", "better", "smaller", "larger", "bigger", "cheaper", "quicker", "shorter", "longer", "reduction", "drop", "decrease", "increase", "improvement", "gain", "boost", "lift", "decline", "growth", "cut", "rise", "jump", "fall", "uplift", "saving", "savings", "raise", "raised", "rose", "fell", "grew", "hit", "reached", "achieved", "maintained", "kept", "held", "sustained", "brought", "pushed", "drove", "improve", "reduce", "increase"]);
 const verbLike = (word: string) => CHANGE_WORDS.has(word) || /^[a-z]{3,}(?<!e)ed$/.test(word);
 const stem = (word: string) => word.toLowerCase().replace(/['’]s$/, "").replace(/(?<=[a-z]{2})ies$/, "y").replace(/(?<=[a-z]{3}[^su])s$/, "");
-// A generic measure names its metric by the word before it: "deploy time" is the
-// deploys' metric, so "Made deploys 30% faster" grounds "cut deploy time by 30%".
+// A generic measure takes the word before it: "deploy time" is the deploys' metric.
 const GENERIC_METRICS = new Set(["time", "times", "speed", "speeds", "rate", "rates", "duration", "durations"]);
 
 function percentMetric(before: string, after: string): string {
@@ -145,17 +142,12 @@ function percentMetric(before: string, after: string): string {
   return stem((GENERIC_METRICS.has(metric.at(-1) ?? "") ? metric.at(-2) : undefined) ?? metric.at(-1) ?? "");
 }
 
-// A sentence ends at a line break or ". ! ?" before a space, but not inside an
-// abbreviation ("e.g.", "U.S.", "Inc."); a bullet does not split "Python • 6 years".
-export const SENTENCE_END = /\n|(?<!\.[A-Za-z]|\b(?:etc|vs|approx|incl|Inc|Ltd|Co|Corp|Jr|Sr|Dr|Mr|Ms|Mrs|St|No))[.!?](?=\s|$)/g;
+// A line break or ". ! ?" before a space, never inside "e.g.", "U.S.", or "Inc.".
+const SENTENCE_END = /\n|(?<!\.[A-Za-z]|\b(?:etc|vs|approx|incl|Inc|Ltd|Co|Corp|Jr|Sr|Dr|Mr|Ms|Mrs|St|No))[.!?](?=\s|$)/g;
 const CONJUNCTION_WORD = /^(?:and|or|but|while|whereas)$/i;
 
-// Each word of a sentence speaks for its nearest quantity of the same kind, counting
-// the words between them, plus three across a comma or conjunction: "6 years of Java
-// and 1 year of Python" gives Python to the 1 year, and in "For 6 years I maintained
-// 40 services, mostly in Python" the Python is the 6 years'. Percents, durations,
-// and other quantities each compete only among themselves. A range ("from 60% to
-// 85%") shares its words.
+// Each word speaks for the nearest quantity of its kind in the sentence (words between,
+// plus three across a comma, bullet, or conjunction); a range ("from 60% to 85%") shares.
 function attributeScopes(text: string, claims: NumericClaim[]): void {
   // Years, versions, and bare numbers ("p95") name things; they take no words.
   const attractors = claims.filter((claim) => !/^(?:year|version|number)[:/]/.test(claim.key));
@@ -402,8 +394,7 @@ export function numericClaims(value: unknown): NumericClaim[] {
   return claims;
 }
 
-// The evidence repeats across a document's checks, so its claims and words are kept
-// for the last few corpora (FIFO), as grounding.ts keeps its tokens.
+// The same evidence is checked repeatedly, so keep the last few parses (FIFO).
 const GROUNDING_CACHE_MAX = 4;
 const groundingCache = new Map<string, { grounded: NumericClaim[]; groundingWords: Set<string> }>();
 function groundingQuantities(grounding: string) {
@@ -430,10 +421,8 @@ export function findUngroundedNumericClaim(value: unknown, grounding: unknown): 
 
 function supportsClaim(source: NumericClaim, claim: NumericClaim): boolean {
   if (claim.key.startsWith("scale:")) {
-    // A scale word needs a counted quantity at least that large of its own noun (never
-    // a bare number such as an id or ZIP code); money takes a currency amount, and
-    // "used by millions" names no noun. A count without a noun of its own ("2 million+
-    // users", "Users: 3M") is named by its words.
+    // At least as large a count of the same noun, never a bare number (an id or ZIP code);
+    // a count with no noun of its own ("Users: 3M") is named by its scope's words.
     const { noun, value } = claim.quantity!;
     if (!source.quantity || source.quantity.value < value || /^number[:/]/.test(source.key)) return false;
     if (!noun) return true;
@@ -462,24 +451,16 @@ function durationNames(claim: NumericClaim): string[] {
     .map((name) => name.replace(/[.]+$/, ""));
 }
 
-// A clause ends at a sentence end or semicolon, ", and" before a new subject, ",
-// which", a reason or contrast, an intention, a fit verb ("my background maps well to
-// a platform handling…"), or where the candidate's reaction opens what they noticed
-// ("I was drawn to Harbor because it serves…", "I learned that…", "I noticed Harbor
-// serves…"); never at a restrictive "which" or "that", so "I built tools that serve
-// millions" is one clause, and "I joined Acme, and grew it to millions" is one too.
+// Where a posting-scale clause ends (rules in AGENTS.md); never at a restrictive "which"
+// or "that", so "I built tools that serve millions" stays one clause.
 const SCALE_CLAUSE_BREAK = /[\n;•▪]|(?<!\.[A-Za-z]|\b(?:etc|vs|Inc|Ltd|Co|Corp))[.!?](?=\s|$)|,\s*(?=(?:which|who)\b)|\b(?:because|since|although|though|whereas|while)\b|\b(?:struck|impressed|excited|glad|amazed|surprised|thrilled|drawn|inspired|eager|hope|hoping|want|wants|would|could|['’]d|['’]ll|maps?|mapped|aligns?|aligned|fits?|translates?|transfers?|prepares?|prepared|suits?|suited|relevant|applicable)\b|\b(?:me|us)\s+(?:that|how)\b/giu;
 // Case-sensitive: ", and Harbor's tooling…" and "I noticed Harbor serves…" open a clause;
 // ", and grew it to…" and "I found bugs affecting…" do not.
 const COORDINATION_BREAK = /,\s*(?=(?:and|but|so|while|whereas)\s+(?:(?:I|[Ww]e|[Ii]t|[Tt]hey|[Hh]e|[Ss]he|[Tt]his|[Tt]hat|[Tt]hese|[Tt]hose|[Tt]he|[Yy]our|[Ii]ts|[Tt]heir|[Oo]ur|[Mm]y)\b|\p{Lu}))|\b(?:noticed|learned|saw|see|read|know|knew|heard|found|realized|admire|appreciate|love|like|believe|think)\s+(?:that|how|what|why|(?=(?:your|its|it|they|this|their)\b|\p{Lu}))/gu;
 const FIRST_PERSON = /\b(?:I|[Mm]e|[Mm]y|[Mm]ine|[Ww]e|us|[Oo]ur)\b/;
 
-// "The platform handles billions of transactions" restates the posting: a scale word
-// the posting itself states describes the employer unless its clause speaks of the
-// candidate (a first-person word anywhere in it, or a resume-style opening verb:
-// "Scaled checkout to millions of users"), so prose checks blank it out. Intentions
-// and reactions end a clause, so "I'm excited to build tools used by millions" is not
-// a claim either.
+// Blanks a scale the posting itself states ("The platform handles billions of transactions")
+// unless its clause speaks of the candidate: first person, or a resume-style opening verb.
 export function withoutPostingScaleFacts(text: string, postingText: string): string {
   const plain = text.replace(/<\/?(?:b|i|u)>/gi, "");
   const breaks = [...plain.matchAll(SCALE_CLAUSE_BREAK), ...plain.matchAll(COORDINATION_BREAK)].map((match) => ({ start: match.index!, end: match.index! + match[0].length }));
@@ -490,9 +471,8 @@ export function withoutPostingScaleFacts(text: string, postingText: string): str
     const opening = plain.slice(start).match(/^\W*([A-Za-z]+)/)?.[1] ?? "";
     const resumeVerb = sentenceStarts.some((sentence) => plain.slice(sentence, start).trim() === "")
       && /^[A-Z]/.test(opening) && (actionVerbPast(opening.toLowerCase()) === opening.toLowerCase() || /^[A-Z][a-z]{2,}(?<!e)ed$/.test(opening));
-    // A first-person word after the scale counts only nearby and before any comma, likeness,
-    // or intention: "Millions of users relied on the service I built", not "…merchants,
-    // I see a fit", "…merchants like the ones I supported", or "…is a challenge I'd love".
+    // First person after the scale counts only nearby, before a comma, likeness, or intention:
+    // "Millions of users relied on the service I built", not "…merchants, I see a fit".
     const nearby = (to: number) => plain.slice(claim.end, to).split(/\s+/).slice(0, 9).join(" ").split(",")[0].split(/\b(?:like|such as|similar to)\b/i)[0];
     const keptByFollowing = FIRST_PERSON.test(nearby(end)) && !/\b(?:would|could|will|want|hope|love|eager)\b|['’](?:d|ll)\b/i.test(nearby(plain.length));
     return resumeVerb || FIRST_PERSON.test(plain.slice(start, claim.index)) || keptByFollowing;

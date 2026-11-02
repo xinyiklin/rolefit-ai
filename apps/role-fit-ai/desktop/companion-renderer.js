@@ -722,8 +722,7 @@ function localSitePortErrorMessage(error) {
 
 function providerMutationErrorMessage(error, fallback) {
   const message = error instanceof Error ? error.message : String(error);
-  // A reused listener names its fix: RoleFit's own sentence, without the
-  // "Error invoking remote method" prefix Electron wraps around it.
+  // A reused listener names its fix; Electron prefixes the message, so match the sentence.
   const reused = message.match(/Restart RoleFit and let this companion start the local service[^.]*\./);
   return reused ? reused[0] : fallback;
 }
@@ -835,14 +834,10 @@ function renderCliActions(provider, record, actions) {
 function renderProviders() {
   const fragment = document.createDocumentFragment();
   const isInitialRender = elements.providerList.dataset.rendered !== "true";
-  let configuredCount = 0;
-  let readyCount = 0;
 
   SUPPORTED_PROVIDERS.forEach((provider) => {
     const record = providerRecords.get(provider.id);
     const status = connectionStatus(provider, record);
-    if (record?.configured) configuredCount += 1;
-    if (record?.ready) readyCount += 1;
 
     const item = document.createElement("li");
     item.className = `provider-card${isInitialRender ? " is-entering" : ""}`;
@@ -907,11 +902,18 @@ function renderProviders() {
   }
   elements.providerList.dataset.rendered = "true";
   elements.providerList.setAttribute("aria-busy", "false");
-  renderProviderSummary(configuredCount, readyCount);
+  renderProviderSummary();
   return false;
 }
 
-function renderProviderSummary(configuredCount, readyCount) {
+function renderProviderSummary() {
+  let configuredCount = 0;
+  let readyCount = 0;
+  for (const provider of SUPPORTED_PROVIDERS) {
+    const record = providerRecords.get(provider.id);
+    if (record?.configured) configuredCount += 1;
+    if (record?.ready) readyCount += 1;
+  }
   // No records yet means the first status check is still running (a
   // completed check holds every supported provider), not an empty setup.
   const checking = providerRecords.size === 0;
@@ -946,17 +948,6 @@ function renderProviderSummary(configuredCount, readyCount) {
   const providerAttention = Boolean(notUsed) || (configuredCount > 0 && readyCount === 0);
   elements.navProvidersAttention.hidden = !providerAttention;
   setCardTone(elements.overviewProvidersCard, providerAttention);
-}
-
-function countProviderRecords() {
-  let configuredCount = 0;
-  let readyCount = 0;
-  for (const provider of SUPPORTED_PROVIDERS) {
-    const record = providerRecords.get(provider.id);
-    if (record?.configured) configuredCount += 1;
-    if (record?.ready) readyCount += 1;
-  }
-  return { configuredCount, readyCount };
 }
 
 function renderCheckingProviders() {
@@ -1229,10 +1220,7 @@ function renderConnectionStatus() {
   renderServiceIndicators(status);
   // Which service is open decides whether the provider summary holds; a
   // provider-status error keeps its own message until the next refresh.
-  if (elements.companionRoot.dataset.status !== "error") {
-    const { configuredCount, readyCount } = countProviderRecords();
-    renderProviderSummary(configuredCount, readyCount);
-  }
+  if (elements.companionRoot.dataset.status !== "error") renderProviderSummary();
   if (!status) {
     renderActiveExtensionPort();
     elements.connectionState.dataset.state = connectionStatusLoaded ? "error" : "unknown";

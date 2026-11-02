@@ -61,7 +61,7 @@ function uniqueItems(values: string[], limit = Number.POSITIVE_INFINITY): string
   return result;
 }
 
-export function parseTailoringSections(tailoringText: string, listLimit = Number.POSITIVE_INFINITY): Omit<PreparedJobBrief, "benefits"> {
+export function parseTailoringSections(tailoringText: string): Omit<PreparedJobBrief, "benefits"> {
   const lists: Record<Exclude<PreparedJobBriefField, "companyContext" | "benefits">, string[]> = {
     responsibilities: [],
     requiredQualifications: [],
@@ -105,12 +105,12 @@ export function parseTailoringSections(tailoringText: string, listLimit = Number
 
   return {
     companyContext,
-    responsibilities: uniqueItems(lists.responsibilities, listLimit),
-    requiredQualifications: uniqueItems(lists.requiredQualifications, listLimit),
-    preferredQualifications: uniqueItems(lists.preferredQualifications, listLimit),
-    techKeywords: uniqueItems(lists.techKeywords, listLimit),
-    senioritySignals: uniqueItems(lists.senioritySignals, listLimit),
-    domainSignals: uniqueItems(lists.domainSignals, listLimit)
+    responsibilities: uniqueItems(lists.responsibilities),
+    requiredQualifications: uniqueItems(lists.requiredQualifications),
+    preferredQualifications: uniqueItems(lists.preferredQualifications),
+    techKeywords: uniqueItems(lists.techKeywords),
+    senioritySignals: uniqueItems(lists.senioritySignals),
+    domainSignals: uniqueItems(lists.domainSignals)
   };
 }
 
@@ -199,8 +199,7 @@ export function preparedJobBriefFieldFromText(
   value: string
 ): PreparedJobBrief[PreparedJobBriefField] {
   if (field === "companyContext") return value.replace(/\s+/g, " ").trim();
-  // What the user typed is never cut by count; the brief budget decides.
-  return uniqueItems(value.split("\n"), Number.POSITIVE_INFINITY);
+  return uniqueItems(value.split("\n"));
 }
 
 export function preparedJobBriefFieldToText(value: PreparedJobBrief[PreparedJobBriefField]): string {
@@ -247,18 +246,13 @@ export function assemblePreparedJobTailoringText(tracking: ExtractedJobTracking,
 const BRIEF_LISTS = ["responsibilities", "requiredQualifications", "preferredQualifications", "techKeywords", "senioritySignals", "domainSignals"] as const;
 
 // The renderer straightens quotes and spaces; an item is compared the same way.
-const CURLY_SINGLE = new RegExp(`[${String.fromCharCode(0x2018, 0x2019)}]`, "g");
-const CURLY_DOUBLE = new RegExp(`[${String.fromCharCode(0x201c, 0x201d)}]`, "g");
-const NBSP = new RegExp(String.fromCharCode(0xa0), "g");
 function renderedKey(item: string): string {
-  return item.replace(NBSP, " ").replace(CURLY_SINGLE, "'").replace(CURLY_DOUBLE, '"').replace(/\s+/g, " ").trim()
+  return item.replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/\s+/g, " ").trim()
     .replace(/\s+page is loaded$/i, "").toLowerCase();
 }
 
 // Brief items the 9,000-character budget leaves out of what Polish and the
-// saved application read, so the editor can say so instead of losing them.
-// An item counts as sent only when it arrived whole, so a cut fragment never
-// passes for the item it came from.
+// saved application read; only an item that arrived whole counts as sent.
 export function preparedJobBriefOmittedItems(tracking: ExtractedJobTracking, brief: PreparedJobBrief): number {
   const kept = parseTailoringSections(assemblePreparedJobTailoringText(tracking, brief));
   return BRIEF_LISTS.reduce((sum, key) => {

@@ -89,8 +89,7 @@ export function useSkipFlow({
   const unrelatedApplicationIdRef = useRef<string | null>(null);
   const skipCommitIdentityRef = useRef<string | null>(null);
   // One record id per preparation until a Skip is saved, so a retry after a
-  // lost reply, from the prompt or a fresh Skip, resolves to the record the
-  // earlier try may already have created.
+  // lost reply resolves to the row the earlier try may have created.
   const skipAttemptRef = useRef<{ preparationId: string; id: string } | null>(null);
   const skipAttemptIdRef = useRef<string | null>(null);
   const skipPreparationIdRef = useRef<string | null>(null);
@@ -268,8 +267,6 @@ export function useSkipFlow({
       let saved = commit.operation === "create"
         ? await createApplication(commit.application).catch(() => false)
         : await updateApplicationById(commit.application).catch(() => false);
-      // A create refused because the id already exists is this decision's
-      // earlier attempt whose reply was lost: update that record instead.
       if (!saved && commit.operation === "create") saved = await confirmCreated(commit.application).catch(() => false);
       if (!saved) {
         const message = "This decision could not be saved. The prepared job and your reasons are still here; retry Save as skipped.";

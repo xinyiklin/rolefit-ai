@@ -170,10 +170,8 @@ function breakSoftParagraph(items: SoftParaItem[], target: number, align: Paragr
   return lines;
 }
 
-// Materialize one line: merge same-style neighbors into runs, then distribute
-// glue (justify) or offset (center/right). A merged run is measured whole, so
-// its width carries the kern or ligature across a hyphen, space or mark
-// boundary that the DOM and PDF shape over its text.
+// Materialize one line: merge same-style neighbors into runs measured whole (as
+// the DOM and PDF shape them), then distribute glue or offset the line.
 function setLine(
   items: SoftParaItem[],
   m: { natural: number; stretch: number; shrink: number; start: number; end: number },
@@ -222,8 +220,7 @@ function setLine(
     };
     parts.push(last);
   }
-  // Measured once per run when the line is set: re-measuring on every merge
-  // made a run of k boxes cost k² (a 5,000-mark bullet took seconds).
+  // Measured once per run here; re-measuring on every merge is quadratic.
   for (const run of merged) {
     const width = measure(run.text, run.style);
     natural += width - run.width;

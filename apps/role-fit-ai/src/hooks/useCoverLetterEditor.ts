@@ -183,11 +183,8 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     () => (editor.editedResume ? coverLetterPlainText(editor.editedResume) : ""),
     [editor.editedResume]
   );
-  // The strict .cover codec bounds a letter (paragraphs, header lengths, size),
-  // and a long paste can pass them. Render must not throw. While the letter is
-  // over a limit, it compares as changed with a key no saved copy can equal (so
-  // dirty, replace prompts and Update application still see the edit), the
-  // recovery draft keeps the last valid letter, and the codec's message shows.
+  // A paste can exceed the strict .cover limits; render must not throw. Over a
+  // limit, the key equals no saved copy and recovery keeps the last valid letter.
   const serialized = useMemo((): { fingerprint: string | null; limitProblem: string } => {
     if (!editor.editedResume) return { fingerprint: null, limitProblem: "" };
     try {
@@ -197,8 +194,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
       return { fingerprint: `over-limit:${JSON.stringify([editor.editedResume, toDocumentStyle(style)])}`, limitProblem: error.message };
     }
   }, [editor.editedResume, style]);
-  const limitProblem = serialized.limitProblem;
-  const currentFingerprint = serialized.fingerprint;
+  const { limitProblem, fingerprint: currentFingerprint } = serialized;
   const lastValidFingerprintRef = useRef<string | null>(null);
   if (!limitProblem) lastValidFingerprintRef.current = currentFingerprint;
   const recoveryPayload = limitProblem ? lastValidFingerprintRef.current : currentFingerprint;
@@ -1066,12 +1062,9 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     openApplicationSource,
     getArtifacts,
     markApplicationSaved,
-    // The serialized `.cover` recovery draft: the current letter, or its last
-    // valid version while it is over the .cover limits.
     draftPayload: recoveryPayload,
     // The letter as a saved copy would hold it; null while it cannot be saved.
     sourcePayload: limitProblem ? null : currentFingerprint,
-    // Over the .cover limits, a saved recovery draft holds an older letter.
     overLimit: Boolean(limitProblem)
   };
 }

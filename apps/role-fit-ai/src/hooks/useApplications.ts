@@ -706,9 +706,8 @@ export function useApplications() {
     []
   );
 
-  // A create refused because its id already exists is an earlier attempt of
-  // the same Apply or Skip whose reply was lost: the refusal's banner must not
-  // outlive that answer, and this attempt's content is written over that row.
+  // A create refused because its id exists is an earlier Apply/Skip attempt
+  // whose reply was lost: clear the refusal's banner and write over that row.
   const confirmCreated = useCallback((retried: Application) => {
     const earlier = applicationsRef.current.find((application) => application.id === retried.id);
     if (!earlier) return Promise.resolve(false);

@@ -56,8 +56,7 @@ export function noResponseCandidate(
   const silentDays = Math.round((localMidnight(today).getTime() - start.getTime()) / DAY_MS);
   if (silentDays < afterDays) return null;
   const silentDue = new Date(start.getFullYear(), start.getMonth(), start.getDate() + afterDays);
-  // A planned follow-up held the record through its day, so the silence is
-  // never dated before the day after it (already past: today at the latest).
+  // A planned follow-up held the record through its day, so silence starts after it.
   const holdEnd = followup ? new Date(followup.getFullYear(), followup.getMonth(), followup.getDate() + 1) : null;
   const due = holdEnd && holdEnd > silentDue ? holdEnd : silentDue;
   return { application, lastActivityAt: last, silentDays, dueAt: toIso(dayInput(due)) };

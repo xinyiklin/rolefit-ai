@@ -1,10 +1,10 @@
 // Pure editing math for the typeset editor (no DOM, no React): the mapping
 // between a field's VALUE (inline-marks string, ASCII ligatures, real
 // whitespace) and its DISPLAY form (what the engine paints: tags stripped,
-// --- → — / -- → – / ' → ’ outside links, authored horizontal whitespace preserved, and
-// literal hard breaks preserved as "\n"). Every edit is expressed in display coordinates
-// (where the caret lives) and applied to the value without losing marks,
-// ligature sources, or preserved outer whitespace.
+// --- → — / -- → – / ' → ’ outside links, authored horizontal whitespace
+// preserved, and literal hard breaks preserved as "\n"). Every edit is expressed
+// in display coordinates (where the caret lives) and applied to the value
+// without losing marks, ligature sources, or preserved outer whitespace.
 //
 // The display model mirrors measure.ts exactly: segmentsFromInlineMarks's tag
 // grammar (<b>/<i>/<u>, unclosed tolerated) and displayText: texLigatures's
@@ -99,11 +99,8 @@ const TAG_RE = new RegExp(
 
 // ---- value → display ----
 
-// The engine's display form leaves a link word as typed: a whitespace-free run
-// read across tags (<lt> is text), so re-serializing marks never changes it,
-// that automaticLinkHref accepts whole. A character inside an explicit <link>
-// is always as typed. Painted text and this map must agree character for
-// character, or caret offsets and diff-based edits drift.
+// The whitespace-free word read across tags (<lt> is text) that the engine
+// tests with automaticLinkHref; a link word keeps its typed punctuation.
 function wordAt(value: string, start: number): { text: string; end: number } {
   let text = "";
   let j = start;
@@ -467,13 +464,8 @@ export function setEmptyFieldTypingFormat(
 
 const PARAGRAPH_FORMAT_TAG = /<\/?(?:align|indent|space-before|space-after)\b/i;
 
-// Merging two paragraphs gives the result the UPPER paragraph's paragraph
-// format (alignment, before/after spacing, block indent), as a word processor
-// does. The engine reads those marks first-match, so the lower paragraph's
-// would otherwise govern an unmarked upper one. Line height is per visual line
-// and character formatting is per run, so the merged text keeps both. An upper
-// paragraph with no visible text defers to the lower one: a textless one is
-// simply removed, and a whitespace-only one keeps its characters.
+// The merged paragraph takes the UPPER one's alignment, spacing, and indent
+// (the engine reads them first-match); a blank upper defers to the lower.
 export function mergeParagraphValues(upper: string, lower: string): { value: string; index: number } {
   const upperMap = buildDisplayMap(upper, { preserveWhitespace: true });
   if (!upperMap.chars.length) return joinInlineMarkText("", lower);
@@ -525,10 +517,8 @@ export function applyEdit(
 const charsText = (chars: readonly DisplayChar[]): string =>
   chars.map((char) => (isInlineLiteralLessThan(char.raw) ? "<" : char.raw)).join("");
 
-// applyEdit before serialization: the old map's characters with [dStart, dEnd)
-// replaced, and `boundary` the CHARACTER index right after the insertion. An
-// index here is character identity; a display index is not, because an edit can
-// change how many display positions another word's characters occupy.
+// applyEdit before serialization; `boundary` is the CHARACTER index after the
+// insertion (a display index is not stable across an edit).
 function editChars(
   map: DisplayMap,
   dStart: number,
@@ -603,12 +593,8 @@ export function applyPlainTextInputEdit(
   historyIntent?: "insert" | "deleteBackward";
   historyText?: string;
 } {
-  // The header popover's <input> shows the STORED text, `stripInlineMarks`
-  // (typed `'` and `--`, `<lt>` as "<"), not the display's `’` and `–`.
-  // Diffing against the display stopped the common prefix at the first such
-  // character and rewrote everything after it, spreading marks and links. So
-  // the diff runs on that same stored text, over one char per stored unit, and
-  // a text offset is a character index.
+  // The header popover's <input> shows the stored text (`stripInlineMarks`),
+  // so diff that, over one map char per stored unit, never the display.
   const display = buildDisplayMap(value, { preserveWhitespace: true });
   const map: DisplayMap = {
     ...display,
@@ -673,10 +659,8 @@ export function applyPlainTextInputEdit(
     }
   }
 
-  // Link edges and the caret ride on the edited CHARACTERS, never on a
-  // re-read display: the edit can flip another word into or out of link shape
-  // (`–` ⇄ `--`), which changes its display length, so a display offset from
-  // the old map slid the link start and the caret by a character.
+  // Link edges and the caret ride on the edited characters: the edit can flip
+  // another word into or out of link shape (`–` ⇄ `--`) and shift the display.
   const edit = editChars(map, prefix, dEnd, insert);
   const shift = edit.chars.length - map.chars.length;
   const moved = (index: number, edge: "start" | "end"): number => {

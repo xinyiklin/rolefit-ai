@@ -18,8 +18,7 @@ type DiffToken = { key: string; text: string };
 // Split text into word and newline tokens, folding each non-newline whitespace
 // run onto the following token's rendered text. `key` is the bare word (or "\n")
 // so reindentation alone never misaligns words, while `text` preserves the
-// spacing needed to rebuild the document; a spacing difference renders as a
-// removed and an added space, so each view rebuilds its own side exactly.
+// spacing; a spacing difference renders as a removed and an added space.
 function tokenizeForDiff(text: string): DiffToken[] {
   const raw = text.match(/\n|[^\S\n]+|\S+/g) ?? [];
   const tokens: DiffToken[] = [];

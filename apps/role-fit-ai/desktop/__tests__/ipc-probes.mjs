@@ -1763,25 +1763,24 @@ assert.deepEqual(invocations, [
     liveConnectionStatus: { serverState: "owned" },
     setCardTone: () => {}
   };
-  const summary = vm.runInNewContext(`${summarySource}; ({ renderProviderSummary, countProviderRecords });`, context);
-  const counts = summary.countProviderRecords();
-  assert.deepEqual({ ...counts }, { configuredCount: 1, readyCount: 1 });
-  summary.renderProviderSummary(counts.configuredCount, counts.readyCount);
+  const summary = vm.runInNewContext(`${summarySource}; ({ renderProviderSummary });`, context);
+  summary.renderProviderSummary();
   assert.equal(elements.providerSummary.textContent, "1 added · 1 ready for RoleFit.", "an owned service uses the companion's providers");
   context.liveConnectionStatus = { serverState: "reused-standalone" };
-  summary.renderProviderSummary(counts.configuredCount, counts.readyCount);
+  summary.renderProviderSummary();
   assert.match(elements.providerSummary.textContent, /development server, which does not use the providers added here/, "a dev server is never described as using them");
   assert.equal(elements.overviewProviderSummary.textContent, "Not used by the dev server");
   assert.equal(elements.navProvidersAttention.hidden, false, "and the Providers section asks for attention");
   context.liveConnectionStatus = { serverState: "reused-companion" };
-  summary.renderProviderSummary(counts.configuredCount, counts.readyCount);
+  summary.renderProviderSummary();
   assert.match(elements.providerSummary.textContent, /another companion session started, which does not use the providers added here. Stop that service/, "another session's service is not described as using them either");
   assert.equal(elements.overviewProviderSummary.textContent, "Not used by this service");
-  summary.renderProviderSummary(0, 0);
+  context.providerRecords.set("claude-cli", { configured: false, ready: false });
+  summary.renderProviderSummary();
   assert.equal(elements.providerSummary.textContent, "No providers added yet. Add a CLI or API provider to begin.", "with nothing added there is nothing to call unused");
   assert.match(
     companionRendererSource,
-    /function renderConnectionStatus\(\) \{[\s\S]{0,400}?if \(elements\.companionRoot\.dataset\.status !== "error"\) \{[\s\S]{0,160}?renderProviderSummary\(configuredCount, readyCount\);/,
+    /function renderConnectionStatus\(\) \{[\s\S]{0,400}?if \(elements\.companionRoot\.dataset\.status !== "error"\) renderProviderSummary\(\);/,
     "a change of service ownership re-renders the summary without hiding a provider-status error"
   );
 }

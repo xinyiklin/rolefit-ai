@@ -58,10 +58,8 @@ export function appliedApplicationForSession({
   };
 }
 
-// A create refused because its id already exists is an earlier attempt of the
-// same Apply or Skip whose reply was lost. The retry is a complete create, so it
-// wins, including what it clears; the saved row keeps its stage and dates and
-// what no create writes (later tracker edits, saved documents, posting links).
+// The retried create wins, including what it clears; the earlier row keeps its
+// stage, dates, and what no create writes (tracker edits, documents, links).
 const EARLIER_ATTEMPT_FIELDS = [
   "appliedAt",
   "notApplyingAt",

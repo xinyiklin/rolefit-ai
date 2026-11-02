@@ -23,29 +23,22 @@ typesetting guide when a change affects painted output or layout provenance.
   disagree on which characters an outer size covers. The display map reads
   `<lt>` as one literal `<`, and `serializeChars` writes `<lt>` back only
   where a raw `<` would start a tag, so typed and pasted tag-shaped text stays
-  text. Display punctuation follows the engine's rule (typeset guide): a word
-  read across tags and accepted whole by `automaticLinkHref`, or a character
-  inside an explicit `<link>`, keeps its typed `--`/`'`, including while its
-  auto-link is deferred, so the map holds the painted text character for
-  character and re-serializing marks never changes it (`link-display.mjs`).
-  Because one edit can flip ANOTHER word into or out of link shape (`–` ⇄
-  `--`), a display index from the pre-edit map is not a stable position.
-  `applyPlainTextInputEdit` (the header popover's name/contact inputs) diffs
-  against the STORED text those inputs show, `stripInlineMarks`, never the
-  display: the input holds typed `'` and `--`, so a display diff stopped at the
-  first `’` or `–` and rewrote everything after it. It splits the map into one
-  character per stored unit, carries link edges and the caret on the edited
-  character array (`editChars`), and serializes once; re-applying a link run's
-  href leaves each character's `<nolink>` state alone. HTML and plain-text paste encode clipboard text with
-  `escapeInlineMarkText` before it reaches the grammar. Paragraph merges join
-  through `mergeParagraphValues` and cross-field folds with
-  `joinInlineMarkText`, and header or document paste stores blocks through
-  `canonicalInlineMarkText`; never join stored values with `+`. A merged
-  paragraph keeps the UPPER paragraph's alignment, before/after spacing, and
-  block indent: the engine reads those marks first-match, so the lower
-  paragraph's would otherwise govern an unmarked upper one. An upper paragraph
-  with no visible text defers to the lower one's format: a textless one is
-  simply deleted, and a whitespace-only one keeps its characters.
+  text. Display punctuation follows the engine's link-word rule (typeset
+  guide), including while an auto-link is deferred, so the map holds the
+  painted text character for character (`link-display.mjs`). One edit can flip
+  ANOTHER word into or out of link shape (`–` ⇄ `--`), so a pre-edit display
+  index is not a stable position: `applyPlainTextInputEdit` (the header
+  popover's inputs) diffs the stored text those inputs show
+  (`stripInlineMarks`), never the display, and carries link edges and the
+  caret on the edited character array (`editChars`); re-applying a link run's
+  href leaves each character's `<nolink>` state alone. HTML and plain-text
+  paste encode clipboard text with `escapeInlineMarkText` before it reaches the
+  grammar. Paragraph merges join through `mergeParagraphValues` and cross-field
+  folds with `joinInlineMarkText`, and header or document paste stores blocks
+  through `canonicalInlineMarkText`; never join stored values with `+`. A
+  merged paragraph keeps the UPPER paragraph's alignment, before/after
+  spacing, and block indent (the engine reads those marks first-match); an
+  upper paragraph with no visible text defers to the lower one's format.
 - `clipboardPrivateCodec.ts` owns the versioned same-editor payload.
   `clipboardHtmlImport.ts` owns the allowlisted HTML-to-inline-mark sanitizer,
   while `clipboardHtmlExport.ts` owns model-derived external HTML/plain copy.
@@ -417,9 +410,9 @@ typesetting guide when a change affects painted output or layout provenance.
   the first.
 - The link popover trims its Text field, but a double-click selection keeps its
   trailing space. Apply with that text otherwise unchanged links the trimmed run
-  in place (`inPlaceLinkRange`); replacing the range deleted the space and the
-  run's own formatting. An existing link run is re-pointed whole instead, edge
-  spaces included, so no edge keeps the old URL as a second link.
+  in place (`inPlaceLinkRange`), keeping the space and the run's formatting. An
+  existing link run is re-pointed whole instead, edge spaces included, so no
+  edge keeps the old URL as a second link.
 - Only an AUTOMATIC link is ever deferred. An explicit `<link=…>` is a hyperlink
   the user asked for; deferring it made a real link visibly lose its anchor while
   the caret rested at its end.

@@ -70,11 +70,8 @@ export function markedField(pieces: readonly LinePiece[]): FieldDraft {
   return { lines: [[...pieces]], marks: true };
 }
 
-// Splits pieces wherever a spaced separator glyph (" | ", " • ", " · ") or a
-// dingbat icon of at most two glyphs stands between items: a dingbat face is
-// never content. Private-use glyphs are not separators, since they may be
-// unmapped text. Separators come back separately so the caller can account
-// for every consumed character.
+// Splits pieces at a spaced separator glyph (" | ", " • ") or a dingbat icon of
+// at most two glyphs; separators come back so every character is accounted for.
 const SEPARATOR_CHARS = "|•·◦▪∙";
 const SEPARATOR_RE = new RegExp(`(^|\\s)[${SEPARATOR_CHARS}](?=\\s|$)`, "gu");
 

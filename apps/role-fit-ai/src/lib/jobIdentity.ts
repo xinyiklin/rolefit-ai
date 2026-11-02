@@ -266,10 +266,8 @@ export function atsPostingKey(url: string | undefined | null): AtsPostingKey | n
     // The trailing _<REQID> (e.g. _JR-90210, _R123456) is the requisition id.
     if (/(^|\.)myworkdayjobs\.com$/.test(host)) {
       const tenant = host.split(".")[0];
-      // The slug may be followed by /apply or an application step, so the
-      // last posting segment carrying a requisition id wins. Only segments
-      // after the job (or details) marker are posting segments: a site name
-      // such as Intern_2025 must not become every posting's key.
+      // The last segment after the job/details marker with a requisition id
+      // wins (/apply may follow); a site name like Intern_2025 never does.
       const marker = Math.max(segments.lastIndexOf("job"), segments.lastIndexOf("details"));
       const first = marker >= 0 ? marker + 1 : segments.length - 1;
       let reqId = "";
@@ -344,11 +342,8 @@ export function requisitionIdFromText(text: string | undefined | null): string {
   return postingIdentityFromText(text)?.id ?? "";
 }
 
-// Letters and digits of any script compare, with Latin accents folded so
-// "Nestlé" and "Nestle" are one employer; everything else separates words.
-// Marks are dropped only after a Latin base letter and otherwise stay inside
-// the word: a Devanagari vowel sign or a kana voicing mark is part of it.
-// No lookbehind: Safari before 16.4 throws on it at module load.
+// Any script's letters and digits compare; only marks after a Latin letter
+// fold ("Nestlé" = "Nestle"). No lookbehind: Safari before 16.4 throws on it.
 const WORD_SEPARATORS = /[^\p{L}\p{N}\p{M}]+/gu;
 const TITLE_SEPARATORS = /[^\p{L}\p{N}\p{M}+#]+/gu;
 function foldedWords(value: string | undefined | null, separators = WORD_SEPARATORS): string {
@@ -433,9 +428,8 @@ const CONFLICTING_ID_REVIEW_MIN_SIMILARITY = 0.96;
 const CONFLICTING_ID_REVIEW_MIN_SEQUENCE_OVERLAP = 0.94;
 const CONFLICTING_ID_REVIEW_MIN_LENGTH_RATIO = 0.9;
 
-// Any script counts, so a non-English posting is still comparable; plain
-// ASCII text tokenizes exactly as the a-z0-9+#. split always did. Unspaced
-// scripts (CJK, Thai) yield clause tokens: exact reposts match, edits miss.
+// Any script counts. Unspaced scripts (CJK, Thai) yield clause tokens, so
+// exact reposts match and edits miss.
 const DESCRIPTION_SEPARATORS = /[^\p{L}\p{N}\p{M}+#.]+/gu;
 // NFKD would spell ™/℠ as letters and keep emoji variation selectors as marks.
 const DESCRIPTION_SYMBOLS = /[\u2120\u2122\uFE00-\uFE0F]/g;

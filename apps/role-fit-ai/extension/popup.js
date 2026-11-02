@@ -959,10 +959,8 @@ async function main() {
     rerenderQuietly();
   });
 
-  // Extraction can start immediately, but the result is not sent anywhere
-  // until the same-port status handshake identifies an approved RoleFit service.
-  // It starts before the settings read so a port saved to recover from
-  // unreadable settings still has a page to send.
+  // Extraction starts before the settings read so a port saved to recover from
+  // unreadable settings still has a page; nothing is sent until the handshake.
   beginPageLoad();
   try {
     const settings = await loadExtensionSettings();
