@@ -30,10 +30,13 @@ typesetting guide when a change affects painted output or layout provenance.
   character and re-serializing marks never changes it (`link-display.mjs`).
   Because one edit can flip ANOTHER word into or out of link shape (`–` ⇄
   `--`), a display index from the pre-edit map is not a stable position.
-  `applyPlainTextInputEdit` carries link edges and the caret on the edited
-  character array (`editChars`) and serializes once, never through a re-read
-  display; re-applying a link run's href leaves each character's `<nolink>`
-  state alone. HTML and plain-text paste encode clipboard text with
+  `applyPlainTextInputEdit` (the header popover's name/contact inputs) diffs
+  against the STORED text those inputs show, `stripInlineMarks`, never the
+  display: the input holds typed `'` and `--`, so a display diff stopped at the
+  first `’` or `–` and rewrote everything after it. It splits the map into one
+  character per stored unit, carries link edges and the caret on the edited
+  character array (`editChars`), and serializes once; re-applying a link run's
+  href leaves each character's `<nolink>` state alone. HTML and plain-text paste encode clipboard text with
   `escapeInlineMarkText` before it reaches the grammar. Paragraph merges join
   through `mergeParagraphValues` and cross-field folds with
   `joinInlineMarkText`, and header or document paste stores blocks through

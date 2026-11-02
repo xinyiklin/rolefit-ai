@@ -67,7 +67,8 @@ import {
   inlineMarkTagStartsAt,
   joinInlineMarkText,
   paragraphIndentFromInlineMarks,
-  paragraphSpacingFromInlineMarks
+  paragraphSpacingFromInlineMarks,
+  stripInlineMarks
 } from "@typeset/engine/lib/inlineMarksText.ts";
 import { automaticLinkHref } from "@typeset/engine/lib/links.ts";
 
@@ -2134,9 +2135,10 @@ assert.match(editorSource, /const saved = savedRangeIsCurrent\(\);\s*const range
 // characters, so neither slides: only the typed or deleted text changes.
 {
   const L = "<link=https%3A%2F%2Fe.test%2F>";
+  // The header popover's input holds the stored text, so edits start there.
   const plainEdit = (value, edit) => {
     const before = dm(value);
-    const result = applyPlainTextInputEdit(value, edit(before.display));
+    const result = applyPlainTextInputEdit(value, edit(stripInlineMarks(value)));
     const after = dm(result.value);
     return {
       before: before.display,
@@ -2147,11 +2149,11 @@ assert.match(editorSource, /const saved = savedRangeIsCurrent\(\);\s*const range
   // "q--r@x.orb@x" is no address, so its "--" shows as "–"; a space after "b"
   // makes "q--r@x.orb" one, and its "--" shows as typed.
   const straddle = "q--r@x.or" + L + "b@x</link>";
-  const spaced = plainEdit(straddle, (text) => text.slice(0, 9) + " " + text.slice(9));
+  const spaced = plainEdit(straddle, (text) => text.slice(0, 10) + " " + text.slice(10));
   assert.equal(spaced.before, "q–r@x.orb@x");
   assert.equal(spaced.value, "q--r@x.or" + L + "b @x</link>", "the link start stays on \"b\"");
   assert.equal(spaced.caret, 11, "the caret lands right after the typed space");
-  const deleted = plainEdit(straddle, (text) => text.slice(0, 9) + text.slice(10));
+  const deleted = plainEdit(straddle, (text) => text.slice(0, 10) + text.slice(11));
   assert.equal(deleted.value, "q--r@x.or" + L + "bx</link>", "deleting \"@\" keeps \"r\" unlinked");
   assert.equal(deleted.caret, 10, "the caret stays at the deletion point");
 
@@ -2177,6 +2179,30 @@ assert.match(editorSource, /const saved = savedRangeIsCurrent\(\);\s*const range
     suppressed.value,
     "<nolink>" + L + "dzon't </link></nolink><nolink> </nolink>",
     "a link inside <nolink> stays suppressed after an edit"
+  );
+
+  // The popover input shows typed "'" and "--" where the page shows "’" and
+  // "–". Diffing against the page text stopped at the first of them and
+  // rewrote everything after it: marks spread and links swallowed text.
+  const typedAtEnd = (value) => applyPlainTextInputEdit(value, `${stripInlineMarks(value)}Z`);
+  assert.deepEqual(
+    typedAtEnd("<b>Jo's</b> site"),
+    { value: "<b>Jo's</b> siteZ", caretValueIndex: 17, historyIntent: "insert", historyText: "Z" },
+    "typing after an apostrophe word adds only Z, as one typing step"
+  );
+  assert.equal(typedAtEnd("<b>a--b</b> site").value, "<b>a--b</b> siteZ", "bold stays on a--b");
+  assert.equal(
+    typedAtEnd("Jo's " + L + "site</link> x").value,
+    "Jo's " + L + "site</link> xZ",
+    "the link keeps exactly its own text"
+  );
+  const trimmed = applyPlainTextInputEdit("<b>Jo's</b> site--x", "Jo's site-x");
+  assert.equal(trimmed.value, "<b>Jo's</b> site-x", "deleting one typed dash removes only it");
+  assert.equal(trimmed.historyIntent, "deleteBackward");
+  assert.equal(
+    applyPlainTextInputEdit("<b>it's</b>", "it''s").value,
+    "<b>it''s</b>",
+    "typed punctuation stays as typed"
   );
 }
 

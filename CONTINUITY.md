@@ -116,41 +116,23 @@ D-entries in `docs/decisions.md`.
   paste, quoted copied fonts (editor, two reviewers); Typeset warns on another
   tab's rename and blocked storage; RoleFit restores pre-Interested-migration
   backups, reads past 40 variants, hides fs errno text, and keeps closed
-  records out of next actions/Upcoming. Full check passed. Open: linked
-  emails/URLs with "--" or "'" display rewritten punctuation (needs engine and
-  editor together); a .resume summary with no bullets (codec change, needs
-  [USER]); a "-" pair split by a mark or paragraph tag shows an en dash.
+  records out of next actions/Upcoming. Full check passed. Linked emails/URLs
+  now preserve typed punctuation (cdc2f68). Open: a .resume summary with no
+  bullets (codec change, needs [USER]); a "-" pair split by a mark or paragraph
+  tag shows an en dash.
 - [TOOL] **Bug-hunt round thirteen**: a vanished extension posting no longer
   leaves Prepare on "Receiving"; narrow-window toolbar undo/redo follows the
   editor's history rule (grouped steps move together); U+202F and U+2007 act
   like U+00A0 (engine, two reviewers). Each reviewed; full checks 216/216.
   Residual: other Unicode spaces (U+2009, U+3000) still keep their own glyph
   in single-line fields; letter style has no undo history.
-- [USER+TOOL] **Merged fix/rolefit-claim-grounding** ([USER] approved): its
-  4b4034e closes the five AI evidence-check gaps (a percent keeps its metric
-  and a duration its skills; multiplier verbs are outcomes; scale words are
-  quantity claims; workplaces and schools need candidate evidence), two
-  reviewers, and it brought main's 02c141d (dev Vite watcher scoped to client
-  source). grounding-probes kept both sides (151 checks).
-- [TOOL] **Bug-hunt round twelve** (desktop, providers, Prepare/Polish, engine;
-  13 confirmed): Windows shows a missing CLI as not installed and offers another
-  port when the saved one is reserved; CLI rate-limit, overload, sign-in and
-  model errors get their own messages; typed cover-letter details survive brief
-  edits but never override the brief or resume; date ranges are not phone links,
-  one-sided head rows align, and no-break spaces and tabs hold (engine, two
-  reviewers). [USER] asked for and approved: extension imports send the page
-  title so LinkedIn/Indeed/Handshake records keep role and employer; one
-  alignment or reset gesture is one undo step (editor, two reviewers). Residual:
-  letter style has no undo history; the emergency line breaker may break at a
-  no-break space; some date-range shapes still link (round thirteen fixed the
-  rest of this list).
-- [TOOL] **Bug-hunt round eleven** (five-area sweep, 16 confirmed): outside
-  writers cannot store a "ready" answer with a placeholder or a blank pair; an
-  MCP correction replaces the earlier answer; follow-ups sort by date; Indeed
-  search-pane captures match their job page; the popup keeps hyphenated
-  titles and names stages; "No-" evidence lines stay affirmative; a typed page
-  margin survives an outside-click close (Escape still cancels). Each
-  reviewed. Reverted after two failed reviews: five AI evidence-check gaps
-  (percent/duration subject, multiplier verbs, scale words, employer/school
-  phrasings), proposed as their own task, closed in 4b4034e and merged here.
-  A hyphenated LinkedIn employer now stays whole.
+
+## 2026-11-02
+
+- [USER+CODE+TOOL] Publication checkpoint: preserve accumulated local fixes on
+  `fix/editor-header-input-formatting`. Header popover edits now diff the stored
+  text, preserving marks, links, punctuation, caret and typing history. Editor
+  check, both app builds, and desktop checks passed; two independent reviewers
+  found no blocking source issues. Browser QA skipped under flag-first policy;
+  original implementation workflow records unavailable. Broad offline checks
+  remain in progress; initial sandbox runs hit file-write permission failures.

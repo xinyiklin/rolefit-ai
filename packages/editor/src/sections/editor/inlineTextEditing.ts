@@ -29,6 +29,7 @@ import {
   paragraphLineHeight,
   paragraphSpacingFromInlineMarks,
   paragraphSpacePt,
+  stripInlineMarks,
   type FieldAlignment
 } from "@typeset/engine/lib/inlineMarksText.ts";
 import {
@@ -602,26 +603,43 @@ export function applyPlainTextInputEdit(
   historyIntent?: "insert" | "deleteBackward";
   historyText?: string;
 } {
-  const map = buildDisplayMap(value, { preserveWhitespace: true });
-  if (map.display === nextText) {
+  // The header popover's <input> shows the STORED text, `stripInlineMarks`
+  // (typed `'` and `--`, `<lt>` as "<"), not the display's `’` and `–`.
+  // Diffing against the display stopped the common prefix at the first such
+  // character and rewrote everything after it, spreading marks and links. So
+  // the diff runs on that same stored text, over one char per stored unit, and
+  // a text offset is a character index.
+  const display = buildDisplayMap(value, { preserveWhitespace: true });
+  const map: DisplayMap = {
+    ...display,
+    chars: display.chars.flatMap((char) =>
+      isInlineLiteralLessThan(char.raw)
+        ? [char]
+        : Array.from(char.raw, (_, index) => ({ ...char, raw: char.raw[index] }))
+    )
+  };
+  const text = stripInlineMarks(value);
+  if (map.prefix + charsText(map.chars) + map.suffix !== text) {
+    throw new Error("applyPlainTextInputEdit: the display map and stripInlineMarks disagree on the stored text");
+  }
+  if (text === nextText) {
     return { value, caretValueIndex: value.length };
   }
-  const commonLength = Math.min(map.display.length, nextText.length);
+  const commonLength = Math.min(text.length, nextText.length);
   let prefix = 0;
-  while (prefix < commonLength && map.display[prefix] === nextText[prefix]) {
+  while (prefix < commonLength && text[prefix] === nextText[prefix]) {
     prefix += 1;
   }
   let suffix = 0;
   while (
     suffix < commonLength - prefix &&
-    map.display[map.display.length - 1 - suffix] ===
-      nextText[nextText.length - 1 - suffix]
+    text[text.length - 1 - suffix] === nextText[nextText.length - 1 - suffix]
   ) {
     suffix += 1;
   }
-  const dEnd = map.display.length - suffix;
+  const dEnd = text.length - suffix;
   const insert = nextText.slice(prefix, nextText.length - suffix);
-  const removed = map.display.slice(prefix, dEnd);
+  const removed = text.slice(prefix, dEnd);
   const affectedLinks: Array<{
     start: number;
     end: number;
