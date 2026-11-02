@@ -186,4 +186,3 @@ assert.match(
 }
 
 console.log("Preparation application commit paths passed");
-
