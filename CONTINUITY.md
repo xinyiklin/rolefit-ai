@@ -7,10 +7,10 @@ operational detail belongs in the affected app documentation.
 
 ## Current state
 
-Current: extension 1.5.2, desktop bridge API 13. The published RoleFit release
-is the newest `rolefit-*` entry in `gh release list` (not recorded here;
-see `docs/git-workflow.md`). Release history: `docs/continuity/2026-10.md` and
-D-entries in `docs/decisions.md`.
+Current: extension 1.5.3 (since 0.25.0), desktop bridge API 13. The published
+RoleFit release is the newest `rolefit-*` entry in `gh release list` (not
+recorded here; see `docs/git-workflow.md`). Release history:
+`docs/continuity/2026-10.md` and D-entries in `docs/decisions.md`.
 
 ## Next actions
 
@@ -33,8 +33,10 @@ D-entries in `docs/decisions.md`.
   main bundle fell 5.8 → 0.5 MB and a two-page resume's first page paints in
   290 ms instead of 715 (production, cold). Open: exercise RoleFit's editor and
   exports in a browser; only its build and offline suite were run.
-- 2026-11-01 [USER] 0.25.0: tag `rolefit-preview-v0.25.0-beta.1` after the
-  release PR merges and confirm the workflow (it runs the native smokes).
+- 2026-11-02 [USER] 0.25.0: tag `rolefit-preview-v0.25.0-beta.1` once the
+  release-notes PR merges (it lists #292's fixes and the live agent use, and
+  moves the extension to 1.5.3 for #292's changes) and confirm the workflow
+  (it runs the native smokes).
 
 ## Deferred backlog
 

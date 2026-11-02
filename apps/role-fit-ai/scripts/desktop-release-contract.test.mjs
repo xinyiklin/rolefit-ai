@@ -30,7 +30,7 @@ import {
 
 const VERSION = "0.1.0";
 const RELEASE_VERSION = "0.25.0";
-const EXTENSION_VERSION = "1.5.2";
+const EXTENSION_VERSION = "1.5.3";
 // 0.25.0 keeps the desktop API 0.7.0 introduced; a released/current split must be deliberate.
 const RELEASED_DESKTOP_API_VERSION = 13;
 const CURRENT_DESKTOP_API_VERSION = 13;
