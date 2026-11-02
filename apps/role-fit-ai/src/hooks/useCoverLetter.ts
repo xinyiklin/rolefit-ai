@@ -155,6 +155,18 @@ export function useCoverLetter({
       ),
     [preflight.template.userInputSlots],
   );
+  // Send only answers to slots the letter still has: stale keys would be sent
+  // unseen and could crowd current answers out of the server's 20-answer cap.
+  const currentSlotAnswers = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(slotAnswers).filter(
+          ([slotId, answer]) =>
+            Object.prototype.hasOwnProperty.call(slotLabels, slotId) && answer.trim(),
+        ),
+      ),
+    [slotAnswers, slotLabels],
+  );
   const evidenceItems = useMemo(
     () =>
       buildCoverLetterEvidence({
@@ -167,24 +179,29 @@ export function useCoverLetter({
   );
   // Only evidence concerns about the accepted wording carry forward; this
   // draft's length, phrasing, and structure notes are recomputed each run.
+  const acceptedConcernWarnings = lastAppliedResult?.concerns.length
+    ? [COVER_ACCEPTED_CONCERNS_WARNING, ...lastAppliedResult.concerns]
+    : [];
   const inputSourceWarnings = sanitizeContentWarnings([
     ...(sourceWarnings ?? []),
-    ...(lastAppliedResult?.concerns.length ? [COVER_ACCEPTED_CONCERNS_WARNING, ...lastAppliedResult.concerns] : [])
+    ...acceptedConcernWarnings,
   ]) ?? [];
   const proposalContentFingerprint = workflowInputFingerprint({
     sourceRevision,
     currentCoverLetterText,
     jobText,
     customInstructions,
-    sourceWarnings: inputSourceWarnings,
+    acceptedConcernWarnings,
     resolved: preflight.resolved,
     evidenceItems: evidenceItems.filter((item) => item.source !== "resume"),
   });
   // The resume content in use, not the saved baseline: saving the resume as it
-  // stands must not cancel a run or mark a proposal stale.
+  // stands must not cancel a run or mark a proposal stale. Resume-derived
+  // warnings follow resume acceptance, so they only flag the proposal for review.
   const proposalResumeFingerprint = workflowInputFingerprint({
     resumeText: currentResumeText || resumeText,
     evidenceItems: evidenceItems.filter((item) => item.source === "resume"),
+    sourceWarnings: sourceWarnings ?? [],
   });
   const requestInputFingerprint = workflowInputFingerprint({
     proposalContentFingerprint,
@@ -216,10 +233,12 @@ export function useCoverLetter({
     setIsGeneratingCover(false);
   }, []);
 
+  // Brief edits rewrite jobText on every keystroke, so only a new source letter
+  // (here) or a new job (resetCoverWorkflow) clears the user's typed facts.
   useEffect(() => {
     setDetailValues({});
     setSlotAnswers({});
-  }, [jobText, sourceRevision]);
+  }, [sourceRevision]);
 
   // Editing does not certify the accepted wording. Clear its receipt only when
   // another source document replaces this one.
@@ -261,6 +280,7 @@ export function useCoverLetter({
 
   const resetCoverWorkflow = useCallback(() => {
     invalidateCoverRequest();
+    setDetailValues({});
     setSlotAnswers({});
     setPendingProposal(null);
     setFailure(null);
@@ -385,7 +405,7 @@ export function useCoverLetter({
           detailValues,
           resolvedContext: preflight.resolved,
           evidenceItems,
-          slotAnswers,
+          slotAnswers: currentSlotAnswers,
         }),
         signal: controller.signal,
       });

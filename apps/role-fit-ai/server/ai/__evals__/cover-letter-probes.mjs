@@ -858,10 +858,20 @@ assert.match(
 );
 assert.match(
   clientHook,
-  /lastAppliedResult\?\.concerns\.length \? \[/,
+  /lastAppliedResult\?\.concerns\.length\s*\? \[/,
   "only the accepted letter's evidence concerns are carried into the next request",
 );
 assert.doesNotMatch(clientHook, /lastAppliedResult\?\.warnings/, "draft-only warnings are never carried forward");
+assert.match(
+  clientHook,
+  /const currentSlotAnswers = useMemo\([\s\S]{0,200}?Object\.entries\(slotAnswers\)\.filter\([\s\S]{0,200}?hasOwnProperty\.call\(slotLabels, slotId\)/,
+  "only answers to slots the letter still has are kept for the request",
+);
+assert.match(
+  clientHook,
+  /evidenceItems,\s*slotAnswers: currentSlotAnswers,\s*\}\)/,
+  "the polish request sends only the current slots' answers",
+);
 assert.match(
   coverReview,
   /items=\{\[\.\.\.new Set\(\[\.\.\.proposal\.result\.concerns, \.\.\.proposal\.result\.warnings\]\)\]\}/,

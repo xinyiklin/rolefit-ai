@@ -1,5 +1,5 @@
 import { ChevronDown, FileText } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { Popover } from "../Popover";
 import type { DocStyleControls } from "../../hooks/useDocStyle";
@@ -40,10 +40,27 @@ function MarginInput({
 }) {
   const inputId = `custom-margin-${useId()}`;
   const [draft, setDraft] = useState(formatMarginInches(valuePt));
+  const commitRef = useRef<() => void>(() => undefined);
+  const cancelledRef = useRef(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => setDraft(formatMarginInches(valuePt)), [valuePt]);
+  // An outside click unmounts the input before its blur reaches React, so a typed
+  // margin commits here. The menu closes on Escape in a document capture listener,
+  // so a window capture listener marks the draft cancelled before that runs.
+  useEffect(() => {
+    const cancelOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && event.target === inputRef.current) cancelledRef.current = true;
+    };
+    window.addEventListener("keydown", cancelOnEscape, true);
+    return () => {
+      window.removeEventListener("keydown", cancelOnEscape, true);
+      commitRef.current();
+    };
+  }, []);
 
   const commit = () => {
+    if (cancelledRef.current) return;
     const nextPt = numericDraftCommit(draft, formatMarginInches(valuePt), valuePt, (inches) => {
       const clampedPt = Math.min(PAGE_MARGIN_BOUNDS_PT.max, Math.max(PAGE_MARGIN_BOUNDS_PT.min, inches * 72));
       return Math.round(clampedPt * 10) / 10;
@@ -55,11 +72,13 @@ function MarginInput({
     setDraft(formatMarginInches(nextPt));
     onChange(nextPt);
   };
+  commitRef.current = commit;
 
   return (
     <label className="style-popover__margin-field" htmlFor={inputId}>
       <span>{label}</span>
       <input
+        ref={inputRef}
         id={inputId}
         className="style-popover__margin-input"
         type="number"
@@ -68,7 +87,13 @@ function MarginInput({
         max={PAGE_MARGIN_BOUNDS_PT.max / 72}
         step={0.05}
         value={draft}
-        onChange={(event) => setDraft(event.target.value)}
+        onChange={(event) => {
+          cancelledRef.current = false;
+          setDraft(event.target.value);
+        }}
+        onFocus={() => {
+          cancelledRef.current = false;
+        }}
         onBlur={commit}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
@@ -76,6 +101,7 @@ function MarginInput({
             commit();
             event.currentTarget.select();
           } else if (event.key === "Escape") {
+            cancelledRef.current = true;
             setDraft(formatMarginInches(valuePt));
             event.currentTarget.blur();
           }

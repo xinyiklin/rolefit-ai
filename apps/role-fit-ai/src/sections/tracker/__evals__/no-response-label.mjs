@@ -9,6 +9,8 @@ import {
   ACTIVITY_STATUS_GROUPS,
   STATUS_LABEL,
   activityCount,
+  isInactiveApplication,
+  isOpenApplication,
   matchesActivityFilter,
   nextAction,
   noResponseLabel
@@ -49,6 +51,20 @@ assert.equal(
   "the user's own follow-up date outranks the derived flag"
 );
 assert.equal(nextAction(application({ status: "ghosted" })), "No action", "a Ghosted record has nothing left to do");
+for (const status of ["ghosted", "rejected", "withdrawn", "not_applying"]) {
+  assert.equal(
+    nextAction(application({ status, followupAt: "2026-09-15" }), stale),
+    "No action",
+    `a ${status} record's leftover follow-up date is not a next action`
+  );
+}
+assert.equal(isInactiveApplication({ status: "draft" }), false, "a Draft's next step stays an upcoming Calendar to-do");
+for (const status of ["applied", "interviewing", "offer"]) {
+  assert.equal(isOpenApplication({ status }), true, `${status} is open`);
+}
+for (const status of ["draft", ...ACTIVITY_STATUS_GROUPS.inactive]) {
+  assert.equal(isOpenApplication({ status }), false, `${status} is left out of Analytics' Coming up`);
+}
 assert.equal(nextAction(application({ status: "draft" }), stale), "Finish application", "a draft is never flagged");
 assert.equal(nextAction(application({ status: "offer" })), "Review offer", "an offer is not flagged");
 
@@ -82,6 +98,8 @@ const tracker = read("../../tabs/TrackerTab.tsx");
 const table = read("../TrackerTableView.tsx");
 const inspector = read("../TrackerInspector.tsx");
 const modal = read("../../ApplicationModal.tsx");
+const calendar = read("../TrackerCalendarView.tsx");
+const analytics = read("../../../lib/applicationAnalytics.ts");
 
 assert.match(tracker, /ghostedAfterDays: number;/, "the tab takes the threshold from Settings");
 assert.match(
@@ -98,6 +116,13 @@ assert.match(
   /noResponse && !actionIsNoResponse[\s\S]{0,260}?<dt>No response<\/dt>/,
   "a follow-up that hides the flag still leaves the silence visible"
 );
+assert.match(
+  calendar,
+  /const upcoming = events\s*\.filter\(\(event\) => event\.type !== "applied" && !isInactiveApplication\(event\.app\)\)/,
+  "the Calendar's Upcoming list leaves closed and Skipped records out"
+);
+assert.doesNotMatch(calendar, /isOpenApplication/, "the Calendar's Upcoming list keeps a Draft's planned next step");
+assert.match(analytics, /if \(!isOpenApplication\(application\)\) continue;/, "Analytics' Coming up keeps only open records");
 assert.match(modal, /ghostedAfterDays: number;/, "Application Detail takes the threshold too");
 assert.match(
   modal,

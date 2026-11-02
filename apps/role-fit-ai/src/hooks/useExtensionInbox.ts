@@ -33,7 +33,9 @@ function clearExtensionImportParam(): void {
  * The server prepares an import's text in the BACKGROUND (resolving the raw
  * capture, no AI call), so the inbox reports `{status:"preparing"}` first; this
  * hook keeps polling (and calls `onPreparing` for a progress affordance) until
- * the text is ready, then calls `onImport({text, url})`. The receiving tab runs
+ * the text is ready, then calls `onImport({text, url})`; if a "preparing" import
+ * then disappears (a server restart drops the in-memory inbox), it calls
+ * `onGone` so the tab can leave its receiving state. The receiving tab runs
  * provider-backed job analysis. The background prepare is independent of the
  * popup, so closing it or switching tabs never strands an import.
  *
@@ -43,12 +45,15 @@ function clearExtensionImportParam(): void {
 export function useExtensionInbox(
   onImport: (item: ExtensionImport) => void | Promise<void>,
   onPreparing?: () => void,
-  enabled = true
+  enabled = true,
+  onGone?: () => void
 ): void {
   const onImportRef = useRef(onImport);
   onImportRef.current = onImport;
   const onPreparingRef = useRef(onPreparing);
   onPreparingRef.current = onPreparing;
+  const onGoneRef = useRef(onGone);
+  onGoneRef.current = onGone;
 
   useEffect(() => {
     // A successful poll drains this one-shot import. Wait until local preflights
@@ -120,11 +125,15 @@ export function useExtensionInbox(
           // poll is not a delivery and must never clear the token or reservation.
           if (res.status === 408 || res.status === 425 || res.status === 429 || res.status >= 500) {
             scheduleTransientRetry();
+          } else if (preparing) {
+            preparing = false;
+            onGoneRef.current?.();
           }
           return;
         }
         transientRetries = 0;
         if (data === null || typeof data !== "object") {
+          if (preparing) onGoneRef.current?.();
           preparing = false;
           if (claimToken) {
             claimActive = false;

@@ -19,15 +19,19 @@ import {
 
 // --- Legacy regex oracles ----------------------------------------------------
 
+// The tag rules match the current converter on purpose: only an <li> element
+// is a bullet (never <link> or <line>), and a "<" before anything but a tag
+// name, "/", "!" or "?" is prose. The oracle keeps the prior backtracking
+// regex shapes, which is what the parity and timing probes are about.
 function legacyHtmlToText(html) {
   return decodeEntities(
     String(html || "")
       .replace(/<script[\s\S]*?<\/script>/gi, " ")
       .replace(/<style[\s\S]*?<\/style>/gi, " ")
-      .replace(/<li[^>]*>/gi, "\n• ")
+      .replace(/<li\b[^>]*>/gi, "\n• ")
       .replace(/<br\s*\/?>/gi, "\n")
       .replace(/<\/(p|div|li|h[1-6]|ul|ol|tr|section|header|footer|article)>/gi, "\n")
-      .replace(/<[^>]+>/g, " ")
+      .replace(/<[A-Za-z/!?][^>]*>/g, " ")
   )
     .replace(/[ \t]+/g, " ")
     .split("\n")

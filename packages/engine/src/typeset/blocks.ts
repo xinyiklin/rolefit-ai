@@ -21,9 +21,11 @@ import {
   faceForOverride,
   inkExtent,
   measure,
+  displayInlineMarkedText,
+  displayText,
+  paintedText,
   paragraphItems,
   segmentsFromInlineMarks,
-  texLigatures,
   underlineRule,
   underlineSpans,
   type FaceOverride
@@ -247,12 +249,13 @@ function styledRun(
   x: number,
   family: DocumentFontFamily,
   tracking: number,
-  src?: FieldSrc
+  src?: FieldSrc,
+  preDisplayed = false
 ): GlyphRun {
   const style: FontStyle = { family, face: faceFor(bold, italic), size, tracking };
-  // Same display-form contract as pushWord: punctuation transforms (– — ’) are
-  // already applied and consistent with measured width.
-  const display = texLigatures(text);
+  // Same painted-text contract as pushWord: punctuation transforms (– — ’) and
+  // one-space tabs and no-break spaces are applied and match the measured width.
+  const display = paintedText(preDisplayed ? text : displayText(text));
   return { text: display, style, x, width: measure(display, style), src };
 }
 
@@ -269,10 +272,11 @@ function styledFieldRuns(
   family: DocumentFontFamily,
   tracking: number,
   src?: FieldSrc,
-  faceOverride?: FaceOverride
+  faceOverride?: FaceOverride,
+  preDisplayed = false
 ): GlyphRun[] {
   if (!hasInlineMarkTags(value)) {
-    const run = styledRun(value, size, flagBold, flagItalic, x, family, tracking, src);
+    const run = styledRun(value, size, flagBold, flagItalic, x, family, tracking, src, preDisplayed);
     run.href = automaticLinkHref(value) ?? undefined;
     if (faceOverride) {
       run.style = { ...run.style, face: faceForOverride(flagBold, flagItalic, faceOverride) };
@@ -290,7 +294,7 @@ function styledFieldRuns(
       size: seg.fontSizePt ?? size,
       tracking
     };
-    const display = texLigatures(seg.text);
+    const display = paintedText(preDisplayed ? seg.text : seg.display);
     const width = measure(display, style);
     runs.push({
       text: display,
@@ -448,6 +452,16 @@ function alignRuns(runs: GlyphRun[], width: number, mode: string, origin = 0): G
   return runs.map((run) => ({ ...run, x: run.x + dx }));
 }
 
+// A title/subtitle row aligns the fields that have text: an empty side is a
+// zero-width caret anchor pinned to its edge, which would otherwise span the row.
+function alignHeadRow(runs: GlyphRun[], width: number, mode: string, origin: number): GlyphRun[] {
+  const filled = runs.filter((run) => run.text);
+  if (!filled.length) return alignRuns(runs, width, mode, origin);
+  const aligned = alignRuns(filled, width, mode, origin);
+  let next = 0;
+  return runs.map((run) => run.text ? aligned[next++] : run);
+}
+
 /** The one shared name/contact stream used by resume and cover-letter pages. */
 export function buildHeaderVerticalStream(
   schema: TypesetSchema,
@@ -505,7 +519,7 @@ export function buildHeaderVerticalStream(
     // Horizontal slot the separator is centred in. Unlike the vertical gaps this
     // one contains a glyph, so it floors at that glyph's width: 0 is the
     // tightest legal setting rather than a separator overlapping its neighbours.
-    const dividerWidth = measure(divider, { family, face: "regular", size, tracking });
+    const dividerWidth = measure(paintedText(displayText(divider)), { family, face: "regular", size, tracking });
     const dividerBox = Math.max(gap("contactGapPt"), dividerWidth);
     const rows: GlyphRun[][] = [];
     let runs: GlyphRun[] = [];
@@ -591,8 +605,11 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
     // continue to communicate that the section still exists.
     if (section.heading || section.id) {
       const caseMode = style.headingCase === "uppercase" ? "uppercase" : style.headingCase === "none" ? "none" : "smallcaps";
-      const rawHeading = caseMode === "smallcaps"
-        ? section.heading.replace(/<\/?(?:b|i|u)>/gi, "")
+      // Small caps drop <b>/<i>/<u>, after display punctuation is decided per
+      // authored segment, as the editor's display map decides it.
+      const smallCaps = caseMode === "smallcaps";
+      const rawHeading = smallCaps
+        ? displayInlineMarkedText(section.heading).replace(/<\/?(?:b|i|u)>/gi, "")
         : section.heading;
       const headingText = caseMode === "uppercase" ? uppercaseInlineMarkedText(rawHeading) : rawHeading;
       // Small-caps headings use the dedicated caps face with true lowercase
@@ -609,10 +626,11 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         family,
         tracking,
         { kind: "heading", sectionId: section.id },
-        caseMode === "smallcaps" ? "caps" : undefined
+        smallCaps ? "caps" : undefined,
+        smallCaps
       );
       const headingRows = wrapSingleField(paintedHeading, headingRuns, geo.textWidth, sizes.sectionHeading, family, tracking,
-        caseMode === "smallcaps" ? "caps" : undefined);
+        smallCaps ? "caps" : undefined, smallCaps);
       // Header→first-heading depends only on headerSectionGap. The sectionGap
       // slider must not move the first heading.
       const beforeGap =
@@ -759,7 +777,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         const titleRows = wrapHeadRow(rawTitleRuns, f.titleLeft, f.titleRight, geo.entryIndent, geo.headRowWidth, sizes.titleLeft, sizes.titleRight, family, tracking);
         for (const [rowIndex, rawRuns] of titleRows.entries()) {
           const titleRuns = titleAlignment && titleAlignment !== "justify"
-            ? alignRuns(rawRuns, geo.headRowWidth, titleAlignment, geo.entryIndent)
+            ? alignHeadRow(rawRuns, geo.headRowWidth, titleAlignment, geo.entryIndent)
             : rawRuns;
           const inkT = inkOfRuns(titleRuns);
           const titleFootprint = rowFootprint(titleRuns, titleSize);
@@ -813,7 +831,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         const subRows = wrapHeadRow(rawSubRuns, f.subtitleLeft, f.subtitleRight, geo.entryIndent, geo.headRowWidth, sizes.subtitleLeft, sizes.subtitleRight, family, tracking);
         for (const [rowIndex, rawRuns] of subRows.entries()) {
           const subRuns = subAlignment && subAlignment !== "justify"
-            ? alignRuns(rawRuns, geo.headRowWidth, subAlignment, geo.entryIndent)
+            ? alignHeadRow(rawRuns, geo.headRowWidth, subAlignment, geo.entryIndent)
             : rawRuns;
           const inkS = inkOfRuns(subRuns);
           const subFootprint = rowFootprint(subRuns, subSize);

@@ -188,5 +188,82 @@ await expectOk("a public 200 returns the body and pins the validated address", a
   assert.equal(happy.capture.pinnedAddress, "93.184.216.34", "connection pinned to the validated resolved IP");
 });
 
+// 6b) A dual-stack host: Node's happy-eyeballs lookup receives every validated
+// address, so an unreachable IPv6 route can still fall back to IPv4, and the
+// single-address form honors the requested family.
+await expectOk("a dual-stack host offers every validated address to the connection", async () => {
+  const seen = { all: null, v4: null, v6: null, any: null };
+  const request = (url, options, onResponse) => {
+    options.lookup("pinned", { all: true }, (_err, addrs) => { seen.all = addrs; });
+    options.lookup("pinned", { family: 4, hints: 0 }, (_err, address, family) => { seen.v4 = [address, family]; });
+    options.lookup("pinned", { family: 6, hints: 0 }, (_err, address, family) => { seen.v6 = [address, family]; });
+    options.lookup("pinned", { hints: 0 }, (_err, address, family) => { seen.any = [address, family]; });
+    return fakeRequest({ status: 200, body: "<html>ok</html>" }).request(url, options, onResponse);
+  };
+  await fetchPublicHtml(new URL("https://jobs.example.com/ok"), {}, {
+    lookup: lookupTo(["2606:2800:220:1:248:1893:25c8:1946", 6], ["93.184.216.34", 4]),
+    request
+  });
+  assert.deepEqual(seen.all, [
+    { address: "2606:2800:220:1:248:1893:25c8:1946", family: 6 },
+    { address: "93.184.216.34", family: 4 }
+  ]);
+  assert.deepEqual(seen.v4, ["93.184.216.34", 4]);
+  assert.deepEqual(seen.v6, ["2606:2800:220:1:248:1893:25c8:1946", 6]);
+  assert.deepEqual(seen.any, ["2606:2800:220:1:248:1893:25c8:1946", 6], "no requested family takes the first validated address");
+});
+await expectOk("a requested family the host lacks falls back to its first validated address", async () => {
+  let v6 = null;
+  const request = (url, options, onResponse) => {
+    options.lookup("pinned", { family: 6, hints: 0 }, (_err, address, family) => { v6 = [address, family]; });
+    return fakeRequest({ status: 200, body: "<html>ok</html>" }).request(url, options, onResponse);
+  };
+  await fetchPublicHtml(new URL("https://jobs.example.com/ok"), {}, { lookup: lookupTo(["93.184.216.34", 4]), request });
+  assert.deepEqual(v6, ["93.184.216.34", 4]);
+});
+await expectRejects(
+  "a dual-stack host with one private address is still refused",
+  () => fetchPublicHtml(new URL("https://jobs.example.com/ok"), {}, {
+    lookup: lookupTo(["2606:2800:220:1:248:1893:25c8:1946", 6], ["10.0.0.5", 4]),
+    request: fakeRequest({ status: 200 }).request
+  }),
+  (error) => /private or local address/.test(error.message)
+);
+
+// 7) A compression header over an empty body is an empty page, not a broken
+// stream: some CDNs answer that way, and zlib otherwise reports an unexpected
+// end of file.
+const emptyGzip = fakeRequest({ status: 200, headers: { "content-encoding": "gzip" }, body: "" });
+await expectOk("an empty compressed body reads as an empty page", async () => {
+  const response = await fetchPublicHtml(new URL("http://jobs.example.com/empty"), {}, {
+    lookup: PUBLIC_LOOKUP,
+    request: emptyGzip.request
+  });
+  assert.equal(response.status, 200);
+  assert.equal(await response.text(), "");
+});
+
+// 8) The declared charset is honored and a byte-order mark is dropped.
+const latin1 = fakeRequest({
+  status: 200,
+  headers: { "content-type": "text/html; charset=windows-1252" },
+  body: Buffer.from([0x63, 0x61, 0x66, 0xe9])
+});
+await expectOk("a windows-1252 page decodes by its declared charset", async () => {
+  const response = await fetchPublicHtml(new URL("http://jobs.example.com/latin1"), {}, {
+    lookup: PUBLIC_LOOKUP,
+    request: latin1.request
+  });
+  assert.equal(await response.text(), "café");
+});
+const bom = fakeRequest({ status: 200, headers: { "content-type": "application/json" }, body: Buffer.from("﻿{\"ok\":true}") });
+await expectOk("a UTF-8 byte-order mark is dropped", async () => {
+  const response = await fetchPublicHtml(new URL("http://jobs.example.com/bom"), {}, {
+    lookup: PUBLIC_LOOKUP,
+    request: bom.request
+  });
+  assert.equal(await response.text(), "{\"ok\":true}");
+});
+
 console.log(`\n${failures ? "FAILED" : "PASS"} network fetch/SSRF probes (${failures} failing)`);
 process.exit(failures ? 1 : 0);

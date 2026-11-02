@@ -732,7 +732,9 @@ export function createCliProviderManager(
         spec.versionArgs,
         childEnvironment
       );
-      const installed = versionProbe.kind === "completed";
+      // Windows probes run through cmd.exe, which exits 1 for a missing command
+      // instead of failing to spawn, so only a successful version probe proves installation.
+      const installed = versionProbe.kind === "completed" && versionProbe.exitCode === 0;
       let authState: RoleFitCliAuthState = "unknown";
       if (installed) {
         authState = authStateFor(

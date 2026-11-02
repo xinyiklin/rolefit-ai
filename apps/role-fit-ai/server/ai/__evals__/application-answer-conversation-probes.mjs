@@ -101,6 +101,114 @@ check("decimal numbers count as words", () => assert.equal(countAnswerText("I us
 check("multiple units", () => assert.equal(extractAnswerConstraints("Use 3–4 sentences, max 150 words and under 900 characters.").length, 3));
 check("approximate constraints advisory", () => assert.equal(validateAnswerConstraints("Short answer.", extractAnswerConstraints("About 150 words")).compliant, true));
 check("inclusive ceiling", () => assert.equal(validateAnswerConstraints("one two", extractAnswerConstraints("Maximum 2 words")).compliant, true));
+// A labelled range caps at its second number, never its first, and sets no minimum.
+for (const question of ["Why us? Word count: 250-300", "Word limit: 250 to 300", "Why us? (Word count: 250–300)", "Word count - 250-300", "Word count – 250–300"]) {
+  check(`labelled word range: ${question}`, () => {
+    const constraints = extractAnswerConstraints(question);
+    assert.deepEqual(constraints.map(({ unit, min, max, hard }) => ({ unit, min, max, hard })), [{ unit: "words", min: undefined, max: 300, hard: true }]);
+    assert.equal(validateAnswerConstraints("word ".repeat(280), constraints).compliant, true, "an answer inside the range is accepted");
+    assert.equal(validateAnswerConstraints("word ".repeat(120), constraints).compliant, true, "a shorter answer is not pushed longer");
+    assert.equal(validateAnswerConstraints("word ".repeat(320), constraints).compliant, false, "an answer over the range is not");
+  });
+}
+check("labelled character range", () => assert.deepEqual(extractAnswerConstraints("Character limit: 1,000-1,500").map(({ unit, min, max }) => ({ unit, min, max })), [{ unit: "characters", min: undefined, max: 1500 }]));
+check("a labelled range never spans a line or another noun", () => {
+  assert.deepEqual(extractAnswerConstraints("Sentence limit: 3" + String.fromCharCode(10) + "- 5 bullets maximum").map(({ unit, min, max }) => ({ unit, min, max })), [{ unit: "sentences", min: undefined, max: 3 }]);
+  assert.deepEqual(extractAnswerConstraints("Word limit: 2 to 3 paragraphs"), [], "a paragraph range is no word cap at its first number");
+});
+check("a labelled range keeps trailing qualifiers and advice", () => {
+  const bounds = (question) => extractAnswerConstraints(question).map(({ unit, min, max, hard }) => ({ unit, min, max, hard }));
+  assert.deepEqual(bounds("Character limit: 1,000-1,500 including spaces"), [{ unit: "characters", min: undefined, max: 1500, hard: true }]);
+  assert.deepEqual(bounds("Word count: 250-300 per answer"), [{ unit: "words", min: undefined, max: 300, hard: true }]);
+  assert.deepEqual(bounds("Word limit: 250-300 or so"), [{ unit: "words", min: undefined, max: 300, hard: false }]);
+  assert.deepEqual(bounds("Word count: 250-300 or fewer"), [{ unit: "words", min: undefined, max: 300, hard: true }]);
+});
+check("a dash after a labelled cap is a separator, so the cap stands", () => {
+  for (const [question, cap] of [["Word limit: 300 - 2 paragraphs", 300], ["Word limit: 300 max - 2 paragraphs", 300], ["Word limit: 500 - 1 page max", 500], ["Word limit: 300 - 2025 intake", 300], ["Word limit: 300 to 250", 300]]) {
+    const [first] = extractAnswerConstraints(question).filter((constraint) => constraint.unit === "words");
+    assert.equal(first?.min, undefined, question);
+    assert.equal(first?.max, cap, question);
+    assert.equal(first.hard, true, question);
+  }
+});
+check("a range end in another unit, a remark after punctuation, or an unspaced to keeps the first-number cap", () => {
+  const caps = (question) => extractAnswerConstraints(question).map(({ unit, min, max, hard }) => `${unit}:${min ?? ""}-${max ?? ""}:${hard}`);
+  for (const [question, expected] of [
+    ["Word limit: 300 - 1,500 (characters)", ["words:-300:true"]], ["Word limit: 300-1000 max characters", ["words:-300:true"]],
+    ["Character limit: 200 - 600 (words)", ["characters:-200:true"]], ["Word limit: 300 to 600 max applicants", ["words:-300:true"]],
+    ["Word limit: 300 - 1500, for MBA applicants", ["words:-300:true"]], ["Word limit: 300 - 1500: MBA only", ["words:-300:true"]],
+    ["Word limit: 300 - 1,500, including spaces", ["words:-300:true"]], ["Word limit: 300-1500 for MBA, no minimum", ["words:-300:true"]],
+    ["Word limit: 300 - 1000 for PhD applicants is usually enough", ["words:-300:true"]], ["Minimum: Word count 250-300", ["words:-250:true"]],
+    ["Word count: 250to300; 900 characters", ["characters:-900:true"]], ["Word limit: 500,000 - 2,000,000", ["words:-500000:true"]]
+  ]) assert.deepEqual(caps(question), expected, question);
+  for (const dash of [8208, 8209, 8722]) assert.deepEqual(caps(`Word limit: 250${String.fromCharCode(dash)}300`), ["words:-300:true"], `dash ${dash}`);
+});
+check("minimum wording, a period inside the tail, and stricter ranges keep their old reading", () => {
+  const caps = (question) => extractAnswerConstraints(question).map(({ unit, min, max, hard }) => `${unit}:${min ?? ""}-${max ?? ""}:${hard}`);
+  for (const [question, expected] of [
+    ["At least word count: 250-300", ["words:250-:true"]], ["Minimum required word count: 250-300", ["words:-250:true"]],
+    ["Min.: word count 250-300", ["words:-250:true"]], ["Word limit: 1 - 2.5 pages", ["words:-1:true"]],
+    ["Word count: 250-300 max. for MBA applicants", ["words:-250:true"]], ["Word limit: 450 - 2040", ["words:-450:true"]],
+    ["Character limit: 1,000-1,500 incl. spaces", ["characters:-1500:true"]], ["Word count: 250-300 max.", ["words:-300:true"]],
+    ["Minimum word count: 2 to 3 paragraphs", ["words:2-:true"]], ["Word limit: 300 - 400 years of history", ["words:-300:true"]],
+    ["Word count: 250-300 or so. Keep it to 200 words.", ["words:-250:true", "words:-200:false"]]
+  ]) assert.deepEqual(caps(question), expected, question);
+  // Other limits are demoted exactly as the old first-number cap demoted them.
+  for (const [question, expected] of [
+    ["Recommended word count: 250-300. Keep your answer to 200 words.", ["words:-250:false", "words:-200:true"]],
+    ["Word limit: 300 to 500 pages. In 200-250 words, describe your goals.", ["words:200-250:false"]],
+    ["Word limit: 2 to 3 paragraphs. You don't need to go below 200 words.", ["words:200-:false"]],
+    ["Word count: 250-300 max. Tell us why.", ["words:-250:true"]], ["Word limit: 300 - 1,000 total", ["words:-300:true"]],
+    // A unit or count noun past a line or sentence break still belongs to the range.
+    ["Word limit: 300 - 1500" + String.fromCharCode(10) + "(characters)", ["words:-300:true"]], ["Word limit: 300 - 1500; characters including spaces", ["words:-300:true"]],
+    ["Word limit: 300 - 1500. Characters, not words.", ["words:-300:true"]], ["Word count: 250-300 MAXIMUM. for MBA applicants", ["words:-250:true"]],
+    // A hyphenated number word is one number, and a "Max" ending the previous count stays with it.
+    ["Word limit: twenty-one hundred. Write 200-240 words.", ["words:200-240:false", "words:-2100:true"]],
+    ["Character limit: 900" + String.fromCharCode(10) + "Max words: 250-300", ["characters:-900:true"]],
+    // A remark or another unit later in the question part keeps the first-number cap; a waiver does not.
+    ["Word limit: 300 - 1500; for MBA applicants", ["words:-300:true"]], ["Word limit: 300 - 1500; 1,500 characters", ["words:-300:true", "characters:-1500:false"]],
+    ["Word limit: 300 - 1500. In characters.", ["words:-300:true"]], ["Word count: 250-300; no minimum", ["words:-300:true"]],
+    ["Word count: 300 - 1,500." + String.fromCharCode(10) + "Characters, not words.", ["words:-300:true"]],
+    ["Describe at least one project. Word count: 250-300", ["words:-250:true"]],
+    // Only blank space, a minimum waiver or the next question may follow the range in its part.
+    ["Word count: 250-300 maximum.", ["words:-300:true"]], ["Why us? (Word count: 250-300 maximum.)", ["words:-300:true"]],
+    ["Word count: 250-300. No minimum.", ["words:-300:true"]], ["Word limit: 300 - 1500. For MBA applicants.", ["words:-300:true"]],
+    ["Word limit: 300 - 1,500. Including spaces.", ["words:-300:true"]], ["Including spaces, word limit: 300 - 1500", ["words:-300:true"]],
+    ["Word limit: 250 - 300. Over 250 words? They will be cut off.", ["words:-250:true"]], ["Word limit: 250 - 300. 2.5 is not a range; 250 is the cap.", ["words:-250:true"]],
+    // A new line opens the next question only when it holds no number or limit word.
+    ["Word count: 250-300" + String.fromCharCode(10) + "2.0: the hard cap is 250 for MBA applicants.", ["words:-250:true"]], ["Word limit: 300 - 1500" + String.fromCharCode(10) + "In characters?", ["words:-300:true"]],
+    ["Word count: 250-300" + String.fromCharCode(10) + "2) for MBA applicants", ["words:-250:true"]], ["Why us? (Word count: 250-300)" + String.fromCharCode(10) + "2. Describe your goals.", ["words:-300:true"]], ["Word limit: 300 - 1500... characters", ["words:-300:true"]],
+    ["Word limit: 300 - 1,500" + String.fromCharCode(10) + "Please answer below." + String.fromCharCode(10) + "(1,500 characters including spaces)", ["words:-300:true", "characters:-1500:false"]],
+    ["Minimum:" + String.fromCharCode(10) + "Word count 250-300", ["words:-250:true"]], ["Word limit: 2020 - 2100", ["words:-2020:true"]],
+    // Other limits keep exactly the hardness they had beside the first-number cap.
+    ["Word count: 250" + String.fromCharCode(8208) + "300 words max. Write 200-280 words.", ["words:200-280:false", "words:-250:true", "words:-300:true"]]
+  ]) assert.deepEqual(caps(question), expected, question);
+  const stricter = extractAnswerConstraints("Character limit: 1,000-1,500. Write 800-1,200 characters.");
+  assert.equal(validateAnswerConstraints("x".repeat(1400), stricter).compliant, false, "an instructed range below the labelled cap stays hard");
+});
+check("max- and cap-labelled ranges and 2,000 ceilings are ranges too", () => {
+  const bounds = (question) => extractAnswerConstraints(question).map(({ unit, min, max }) => ({ unit, min, max }));
+  assert.deepEqual(bounds("Max characters: 1000-1500"), [{ unit: "characters", min: undefined, max: 1500 }]);
+  assert.deepEqual(bounds("Maximum words: 250-300"), [{ unit: "words", min: undefined, max: 300 }]);
+  assert.deepEqual(bounds("Word cap: 250-300"), [{ unit: "words", min: undefined, max: 300 }]);
+  assert.deepEqual(bounds("Character limit: 500-2000"), [{ unit: "characters", min: undefined, max: 2000 }]);
+  assert.deepEqual(bounds("Character limit: 500-2,000"), [{ unit: "characters", min: undefined, max: 2000 }]);
+});
+check("a labelled range keeps the first-number cap unless its end is plain", () => {
+  const caps = (question) => extractAnswerConstraints(question).map(({ unit, min, max, hard }) => `${unit}:${min ?? ""}-${max ?? ""}:${hard}`);
+  for (const [question, expected] of [
+    ["Word limit: 300 - 2025", ["words:-300:true"]], ["Word limit: 300 - 2025/26 cycle", ["words:-300:true"]],
+    ["Character limit: 1,500 - 2026 cohort", ["characters:-1500:true"]], ["Word limit: 300 - 1800 for MBA", ["words:-300:true"]],
+    ["Word limit: 250 - 1500 total characters", ["words:-250:true"]], ["Word limit: 300 - 2,000 including spaces", ["words:-300:true"]],
+    ["Minimum words: 250-300", ["words:250-:true"]], ["Word range: 250-300; 900 characters.", ["characters:-900:true"]],
+    ["Word count: 250-300 (no minimum)", ["words:-300:true"]], ["Word count: 250-300 (shorter is fine)", ["words:-300:true"]],
+    ["Word count: 250-300 approx", ["words:-300:false"]], ["Character limit: 500-2000 for each answer", ["characters:-2000:true"]]
+  ]) assert.deepEqual(caps(question), expected, question);
+  const fields = extractAnswerConstraints("Why us? Word limit: 400-500. Why you? Word limit: 100");
+  assert.equal(validateAnswerConstraints("word ".repeat(80), fields).compliant, true, "one field's range sets no minimum for another");
+});
+check("a raised range names the whole range as its source", () => assert.equal(extractAnswerConstraints("Why us? (Word count: 250-300)")[0].source, "Word count: 250-300"));
+check("a labelled single limit is unchanged", () => assert.deepEqual(extractAnswerConstraints("Character limit: 1,500").map(({ min, max }) => ({ min, max })), [{ min: undefined, max: 1500 }]));
 check("strict under", () => assert.equal(validateAnswerConstraints("one two", extractAnswerConstraints("Under 2 words")).compliant, false));
 check("range floor", () => assert.equal(validateAnswerConstraints("one", extractAnswerConstraints("2–4 words")).compliant, false));
 check("exact count", () => assert.equal(validateAnswerConstraints("one two", extractAnswerConstraints("Exactly 3 words")).compliant, false));

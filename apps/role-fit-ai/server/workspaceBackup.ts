@@ -24,6 +24,7 @@ import {
   withApplicationsLock
 } from "./applications/storage.ts";
 import { ApplicationsStorageError } from "./applications/schema.ts";
+import { retiredDocumentApplicationIds } from "./applications/trackerVersion.ts";
 import { ensureJobWorkspace, validateBaseResumeText, withWorkspaceLock } from "./workspace.ts";
 import { validateCoverLetterText } from "./coverLetterWorkspace.ts";
 import {
@@ -323,12 +324,37 @@ function invalidRestoredFileMessage(path: string): string {
   return "The backup contains an invalid base-resume file.";
 }
 
+// The bundled files of records the tracker migration strips of documents. A
+// build from before that migration exported them; they are checked but not
+// restored, since the migrated record no longer names them.
+function retiredDocumentPaths(envelope: WorkspaceBackupEnvelope): Set<string> {
+  const tracker = envelope.files.find((file) => file.path === "applications.json");
+  if (!tracker) return new Set();
+  let data: unknown;
+  try {
+    data = JSON.parse(decodeBackupFile(tracker).toString("utf8"));
+  } catch (error) {
+    if (error instanceof WorkspaceBackupError) throw error;
+    // Unparseable tracker text: the staged tracker read below refuses it.
+    return new Set();
+  }
+  const prefixes = [...retiredDocumentApplicationIds(data)].map((id) => `applications/${id}/`);
+  return new Set(
+    envelope.files
+      .map((file) => file.path)
+      .filter((path) => prefixes.some((prefix) => path.startsWith(prefix)))
+  );
+}
+
 // Returns how many files were staged; history that no longer validates is left out.
 async function writeStagedBackup(stageDir: string, envelope: WorkspaceBackupEnvelope): Promise<number> {
   await mkdir(stageDir, { recursive: true, mode: 0o700 });
+  const retiredPaths = retiredDocumentPaths(envelope);
+  const files = envelope.files.filter((file) => !retiredPaths.has(file.path));
   let staged = 0;
   for (const file of envelope.files) {
     const data = decodeBackupFile(file);
+    if (retiredPaths.has(file.path)) continue;
     if (isHistoryPath(file.path)) {
       // Integrity stays strict, but history today's validators reject could
       // not be opened anyway, so it must not block restoring live documents.
@@ -347,7 +373,7 @@ async function writeStagedBackup(stageDir: string, envelope: WorkspaceBackupEnve
   // Re-run domain validators against the complete staged tree. Nothing in the
   // active workspace has changed at this point.
   let stagedApplications: Awaited<ReturnType<typeof readApplications>> = [];
-  if (envelope.files.some((file) => file.path === "applications.json")) {
+  if (files.some((file) => file.path === "applications.json")) {
     try {
       stagedApplications = await readApplications(stageDir);
     } catch (error) {
@@ -360,7 +386,7 @@ async function writeStagedBackup(stageDir: string, envelope: WorkspaceBackupEnve
   }
   const expectedPaths = expectedApplicationPaths(stagedApplications);
   const bundledPaths = new Set(
-    envelope.files
+    files
       .map((file) => file.path)
       .filter((path) => path.startsWith("applications/"))
   );
@@ -371,7 +397,7 @@ async function writeStagedBackup(stageDir: string, envelope: WorkspaceBackupEnve
       "The backup's application tracker and saved document files do not match."
     );
   }
-  for (const file of envelope.files) {
+  for (const file of files) {
     // The tracker was validated above; history was validated before staging.
     if (file.path === "applications.json" || isHistoryPath(file.path)) continue;
     const data = await readFile(join(stageDir, ...file.path.split("/")));

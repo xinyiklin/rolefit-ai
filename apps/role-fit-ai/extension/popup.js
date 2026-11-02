@@ -339,6 +339,8 @@ function renderNotice(className, title, copy, actions = []) {
 function trackerStatus(app) {
   if (!app) return { tone: "idle", label: "Not tracked" };
   switch (app.status) {
+    case "draft": return { tone: "ended", label: "Draft" };
+    case "not_applying": return { tone: "ended", label: "Skipped" };
     case "applied": {
       const on = formatDate(app.appliedAt);
       return { tone: "filed", label: on ? `Applied · ${on}` : "Applied" };
@@ -662,7 +664,10 @@ function leaveSettings() {
   controller.shortcutHint = "";
   controller.shortcutError = "";
   if (controller.previousState === STATES.loading) {
-    void connectAndAnalyze({ requestPairing: true });
+    // Opening Settings mid-load abandoned main() before it read the saved
+    // settings; without a port to connect to, the load starts over instead.
+    if (controller.apiBase) void connectAndAnalyze({ requestPairing: true });
+    else void main();
     return;
   }
   controller.state = controller.previousState || STATES.job;
@@ -872,20 +877,29 @@ async function handleImport() {
     return;
   }
 
-  try {
+  // The server reserves the entry for this token, so a failed tab open is
+  // retried with the same hand-off; a plain RoleFit tab could never claim it.
+  const openTab = async () => {
     await openImportTab(controller.apiBase, claimToken, controller.sourceTab?.cookieStoreId);
     controller.busy = false;
     controller.importState = "opened";
+    controller.requestMessage = "";
+    controller.requestRetry = null;
+    controller.state = STATES.job;
     render();
-  } catch {
-    // Queued server-side but unreachable without its tab. Staying idle lets the
-    // user import again; the reserved entry expires on its own.
+  };
+  const tabOpenFailed = () => {
     controller.busy = false;
     controller.importState = "idle";
     controller.requestMessage = "The posting was captured, but the new RoleFit tab could not be opened.";
-    controller.requestRetry = () => { void openRoleFit(); };
+    controller.requestRetry = () => openTab().catch(tabOpenFailed);
     controller.state = STATES.requestError;
     render();
+  };
+  try {
+    await openTab();
+  } catch {
+    tabOpenFailed();
   }
 }
 
@@ -945,6 +959,9 @@ async function main() {
     rerenderQuietly();
   });
 
+  // Extraction starts before the settings read so a port saved to recover from
+  // unreadable settings still has a page; nothing is sent until the handshake.
+  beginPageLoad();
   try {
     const settings = await loadExtensionSettings();
     if (generation !== controller.flowGeneration) return;
@@ -964,9 +981,6 @@ async function main() {
     return;
   }
 
-  // Extraction can start immediately, but the result is not sent anywhere
-  // until the same-port status handshake identifies an approved RoleFit service.
-  beginPageLoad();
   await connectAndAnalyze({ requestPairing: true });
 }
 

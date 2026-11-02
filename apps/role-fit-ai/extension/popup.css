@@ -166,8 +166,8 @@ button:focus-visible {
 .dot-unavailable, .dot-closed { background: var(--danger); }
 .dot-filed { background: var(--cool); }
 .dot-offer { background: var(--gold); }
-/* Tracker stage colors: Withdrawn is a filled faint dot, Ghosted and untracked
-   the hollow ring (application-pages.css .stage-dot--*). */
+/* Tracker stage colors: Draft, Skipped and Withdrawn are a filled faint dot,
+   Ghosted and untracked the hollow ring (application-pages.css .stage-dot--*). */
 .dot-ended { background: var(--ink-faint); }
 .dot-idle { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-faint); }
 

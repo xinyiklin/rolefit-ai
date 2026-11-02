@@ -4,7 +4,9 @@ import type { FitGapDisplayStatus } from "../../shared/polishFitFindings.ts";
 import type { PolishedResume, ResumeProposalSuggestion } from "../resume/types.ts";
 
 export type ResumeProposalDecision =
-  | { kind: "accepted"; text: string }
+  // `replaced` is the exact live text the accept overwrote, set only when it
+  // differs from the proposal's flattened original (collapsed whitespace).
+  | { kind: "accepted"; text: string; replaced?: string }
   | { kind: "discarded" };
 
 export type ResumeProposalDecisionState = {
@@ -27,6 +29,18 @@ function normalize(value: string): string {
 // What a row compares with the live document: its text, or a reorder's bullet ids.
 export function proposalBaseline(suggestion: ResumeProposalSuggestion): string {
   return suggestion.kind === "reorder" ? (suggestion.originalOrder ?? []).join("\n") : suggestion.currentText;
+}
+
+// An accepted decision that remembers what it replaced, so Undo restores that
+// text byte for byte; a reorder's baseline is already exact.
+export function acceptedProposalDecision(
+  suggestion: ResumeProposalSuggestion,
+  text: string,
+  replaced: string | null
+): ResumeProposalDecision {
+  return replaced === null || suggestion.kind === "reorder" || replaced === proposalBaseline(suggestion)
+    ? { kind: "accepted", text }
+    : { kind: "accepted", text, replaced };
 }
 
 export function proposalValue(suggestion: ResumeProposalSuggestion): string {

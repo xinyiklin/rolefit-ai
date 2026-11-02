@@ -120,7 +120,8 @@ browser-side effects; components render them and App composes them.
   Prepare's deterministic recommendation, but that decision stays session-only;
   its only persisted input is the Settings eligibility pool. It reads every variant through one
   batch request (`lib/baseResumeWorkspaceRepository.ts`), caches the result
-  against a candidate revision, and exposes a settled signal callers await
+  against a candidate revision (a failed read resolves no candidates and is
+  never cached), and exposes a settled signal callers await
   instead of sampling `isWorkspaceBootstrapping` mid-flight. Metadata-only
   refreshes wait behind that one-shot settlement before claiming a load
   generation, so they cannot supersede startup document hydration. Authoritative
@@ -250,7 +251,10 @@ browser-side effects; components render them and App composes them.
   delegating file transport to `coverLetterWorkspaceRepository`, export and
   application-artifact construction to `coverLetterExport`, title/baseline
   state to `useCoverLetterDocumentIdentity`, and the exact one-snapshot
-  lifecycle to `useCoverLetterPreTailorSnapshot`. Saved opens and history
+  lifecycle to `useCoverLetterPreTailorSnapshot`. Letter style keeps no undo
+  history (`groupHistory` is a pass-through), so undoing a letter alignment
+  gesture restores paragraph overrides but keeps the new default, a known gap.
+  Saved opens and history
   restores claim one shared replacement generation after confirmation and may
   adopt only while the exact serialized document + title is unchanged. A
   workspace save captures its payload, title, baseline revision, source revision,

@@ -1,8 +1,10 @@
 import type { Application } from "../hooks/useApplications";
 
 /** Display identity shared by tracker UI and provenance-safe analytics. */
+// Without a company, the title's lead segment stands in; only a spaced hyphen
+// separates, so "Front-End" is never cut.
 export function displayCompany(app: Application) {
-  return app.company?.trim() || app.title.split(/[|·-]/)[0]?.trim() || "Unknown company";
+  return app.company?.trim() || app.title.split(/[|·]|\s+-\s+/)[0]?.trim() || "Unknown company";
 }
 
 export function parseDate(value?: string) {

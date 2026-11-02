@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {
   appFitVerdict,
   applicationActivityDate,
+  displayCompany,
+  compareNextAction,
   isJobOnlySkippedApplication,
   applicationSearchRank,
   fitAssessmentRank,
@@ -212,6 +214,35 @@ assert.equal(
   null,
   "identity search excludes descriptions and notes"
 );
+const roleless = application({ company: "Acme", role: "", title: "Acme" });
+for (const query of ["not", "set", "role", "role not set"]) {
+  assert.equal(
+    applicationSearchRank(roleless, query, ""),
+    null,
+    `search never matches the "Role not set" placeholder (${query})`
+  );
+}
+assert.equal(
+  applicationSearchRank(application({ company: "Acme", role: "  Notion Specialist " }), "notion", ""),
+  2,
+  "a stored role still ranks as a role match"
+);
+
+// A company-less record's title is its role ("role at company" without one).
+assert.equal(
+  displayCompany(application({ company: "", title: "Front-End Developer" })),
+  "Front-End Developer",
+  "a hyphen inside a word never cuts the title"
+);
+assert.equal(
+  displayCompany(application({ company: "", title: "Full-Stack Engineer - Platform" })),
+  "Full-Stack Engineer",
+  "a spaced hyphen still separates the lead segment"
+);
+assert.equal(displayCompany(application({ company: "", title: "Acme · Engineer" })), "Acme");
+assert.equal(displayCompany(application({ company: "", title: "Acme|Engineer" })), "Acme");
+assert.equal(displayCompany(application({ company: " Real-Co ", title: "Front-End Developer" })), "Real-Co");
+assert.equal(displayCompany(application({ company: "", title: "" })), "Unknown company");
 
 const fitWarnings = [
   "Match 1: this requirement is repeated.",
@@ -255,5 +286,46 @@ assert.deepEqual(
   { general: fitWarnings, matches: [], gaps: [], eligibility: [] },
   "insufficient job information shows no findings, so every warning stays general"
 );
+
+// Month dividers group by the same local calendar day each row shows.
+{
+  const { execFileSync } = await import("node:child_process");
+  const moduleUrl = new URL("../applicationDisplay.ts", import.meta.url).href;
+  const script = `const m = await import(${JSON.stringify(moduleUrl)});
+const iso = "2026-07-01T03:00:00.000Z";
+process.stdout.write(JSON.stringify([m.formatMonthLabel(iso), m.formatCompactDate(iso), m.formatMonthLabel("2026-07-01"), m.formatMonthLabel("not a date")]));`;
+  const [month, day, dateOnly, invalid] = JSON.parse(execFileSync(process.execPath, ["--input-type=module", "-e", script], {
+    env: { ...process.env, TZ: "America/Los_Angeles", LANG: "en_US.UTF-8", LC_ALL: "en_US.UTF-8" },
+    encoding: "utf8"
+  }));
+  assert.equal(day, "Jun 30", "the row shows the local day");
+  assert.equal(month, "June 2026", "its divider is that local day's month, not the UTC one");
+  assert.equal(dateOnly, "July 2026", "a date-only value stays on its calendar day");
+  assert.equal(invalid, "not a d", "an unparseable value shows its raw year-month text");
+  const table = (await import("node:fs")).readFileSync(new URL("../../sections/tracker/TrackerTableView.tsx", import.meta.url), "utf8");
+  assert.match(table, /const label = formatMonthLabel\(applicationActivityDate\(app\)\);/, "the table's dividers use the local-day month label");
+  assert.doesNotMatch(table, /iso\.slice\(0, 10\)/, "and never slice a UTC date");
+}
+
+// Next action sorts follow-ups by date, not by their yearless month-name label.
+{
+  const followup = (id, followupAt) => application({ id, followupAt });
+  const dates = ["2026-10-28", "2026-11-02T12:00:00.000Z", "2026-12-01", "2027-01-05", "2026-08-03"];
+  const order = dates.map((at, i) => followup(`f${i}`, at)).sort((a, b) => compareNextAction(a, b)).map((app) => app.followupAt);
+  assert.deepEqual(order, ["2026-08-03", "2026-10-28", "2026-11-02T12:00:00.000Z", "2026-12-01", "2027-01-05"], "follow-ups sort by date across months and years");
+  const others = [
+    [application({ id: "draft", status: "draft" }), null],
+    [application({ id: "quiet100" }), { silentDays: 100 }],
+    [followup("due", "2026-12-01"), null],
+    [application({ id: "waiting" }), null],
+    [application({ id: "quiet34" }), { silentDays: 34 }],
+    [followup("soon", "2026-11-02"), null]
+  ];
+  const ids = others.slice().sort(([a, na], [b, nb]) => compareNextAction(a, b, na, nb)).map(([app]) => app.id);
+  assert.deepEqual(ids, ["waiting", "draft", "soon", "due", "quiet34", "quiet100"], "other labels keep their label order and no-response days stay numeric");
+  assert.ok(compareNextAction(followup("bad", "someday"), followup("ok", "2026-11-02")) !== 0, "an unparseable follow-up still compares by its label");
+  const tracker = (await import("node:fs")).readFileSync(new URL("../../sections/tabs/TrackerTab.tsx", import.meta.url), "utf8");
+  assert.match(tracker, /case "nextAction":\s*return compareNextAction\(a, b, noResponse\.get\(a\.id\), noResponse\.get\(b\.id\)\);/, "the tracker's Next action sort uses the date-aware comparator");
+}
 
 console.log("application display probes: passed");

@@ -223,8 +223,9 @@ bounds without source matching, condition replacement, or evidence warnings.
 Fit Assessment retains its independent evidence checks. Historical job-warning
 metadata remains readable in saved records, without display or drafting context.
 Cover-letter factual guards use paragraph-cited sources and explicitly named entry
-identity in one typed factual pass; employer facts use the posting. Explicit prior
-affiliations need candidate evidence, while generic acronyms are not employer names.
+identity in one typed factual pass; employer facts use the posting. A workplace or
+school in an affiliation frame needs candidate evidence (any entry, not only the
+cited one, and never the base letter), while generic acronyms are not employer names.
 Neither letters nor Resume Polish require hidden sentence bindings or literal
 proof of paraphrases. Explicit factual conflicts and safe cover-letter
 placeholders produce warnings; Resume Polish withholds placeholder edits. Only technical structure, identity, markup, and resource failures

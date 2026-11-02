@@ -12,7 +12,11 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { handleListApplications, handleSaveApplications } from "../trackerRoutes.ts";
 import { sanitizeApplications } from "../schema.ts";
-import { APPLICATION_NOTES_MAX_LENGTH } from "../../../shared/applicationNotesContract.ts";
+import {
+  APPLICATION_CONTACT_FIELD_MAX_LENGTH,
+  APPLICATION_CONTACTS_MAX,
+  APPLICATION_NOTES_MAX_LENGTH
+} from "../../../shared/applicationNotesContract.ts";
 import {
   applicationsFilePath,
   invalidateApplicationsSnapshot,
@@ -260,6 +264,22 @@ try {
       "the refused record is not stored"
     );
     assert.equal(sanitizeApplications([newOver]).length, 0, "the schema never clips an over-limit note to fit");
+  }
+
+  // Contacts are refused whole, never dropped past the cap or clipped.
+  {
+    const contact = (index, overrides = {}) => ({ name: `Person ${index}`, title: "Recruiter", email: `p${index}@example.test`, phone: "", ...overrides });
+    const atCap = Array.from({ length: APPLICATION_CONTACTS_MAX }, (_, index) => contact(index));
+    const [kept] = sanitizeApplications([record("contacts-cap", { contacts: [...atCap, { name: "", title: "", email: "", phone: "" }] })]);
+    assert.equal(kept.contacts.length, APPLICATION_CONTACTS_MAX, "a full contact list, blank rows aside, is kept whole");
+    const tooMany = record("contacts-over", { contacts: [...atCap, contact(APPLICATION_CONTACTS_MAX)] });
+    assert.equal(sanitizeApplications([tooMany]).length, 0, "one contact past the cap refuses the record instead of dropping it");
+    const longEmail = record("contacts-long", { contacts: [contact(0, { email: `${"e".repeat(APPLICATION_CONTACT_FIELD_MAX_LENGTH)}@x` })] });
+    assert.equal(sanitizeApplications([longEmail]).length, 0, "an over-limit contact field refuses the record instead of clipping it");
+    const created = await save([tooMany], [{ id: "contacts-over", operation: "upsert", baseUpdatedAt: null }]);
+    assert.equal(created.status, 400, "an over-limit contact list is refused by the tracker route");
+    invalidateApplicationsSnapshot();
+    assert.ok(!(await readApplications(workspaceDir)).some((entry) => entry.id === "contacts-over"), "and nothing is stored");
   }
 
   console.log("tracker revision probes passed");

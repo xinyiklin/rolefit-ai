@@ -68,6 +68,7 @@ const bundled = await esbuild.build({
         canTailor: true,
         resolved: { role: "Engineer", company: "Example" },
         missingFields: [],
+        detailFields: [],
         blockers: [],
         privateSlots: [],
         values: {}

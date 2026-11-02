@@ -83,6 +83,22 @@ assert.equal(
   true,
   "a typed value resolves the only blocking field",
 );
+{
+  // A value typed while Company was missing never outlives a later brief correction.
+  const corrected = buildCoverLetterPreflight({ text: starter, ...target, company: "Acme Payments", values: { company: "A", role: "Typo" } });
+  assert.equal(corrected.resolved.company, "Acme Payments", "the brief's company wins over a stale typed detail");
+  assert.equal(corrected.resolved.greeting, "Dear Acme Payments Hiring Team,");
+  assert.equal(corrected.resolved.role, target.role, "the brief's role wins too");
+  // The input stays shown while a typed value fills it, and comes back with that
+  // value when the brief is emptied again.
+  const typing = buildCoverLetterPreflight({ text: starter, ...target, company: "", values: { company: "A" } });
+  assert.deepEqual(typing.detailFields.map((item) => item.key), ["company"], "the Company input stays shown after the first keystroke");
+  assert.deepEqual(typing.missingFields, [], "a typed value still resolves the field");
+  assert.deepEqual(corrected.detailFields, [], "a brief value hides the input");
+  // The resume's own name wins over a name typed while the resume had none.
+  const named = buildCoverLetterPreflight({ text: starter, ...target, candidateName: "Jordan Lee", values: { candidate_name: "Jordn Le" } });
+  assert.equal(named.resolved.candidateName, "Jordan Lee");
+}
 
 const authoredParagraph =
   "I build dependable product software by listening closely to users, reducing ambiguity with teammates, and carrying implementation details through release. My strongest work connects careful backend decisions with accessible interfaces, pragmatic testing, and clear follow-through after launch. I value direct communication, small reviewable changes, and evidence that a system actually helps the people relying on it.";

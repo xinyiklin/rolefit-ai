@@ -8,12 +8,11 @@
 import { sanitizeContentWarnings } from "../../shared/contentWarnings.ts";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
-  FetchTimeoutError,
   isRequestAborted,
   requestAbortSignal,
   sendJson
 } from "../http.ts";
-import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
+import { UserSafeAiError, isProviderTimeout, safeConfigErrorMessage } from "./errors.ts";
 import { readAiJsonBody } from "./json.ts";
 import { resolveProviderRequest } from "./providers.ts";
 import {
@@ -313,10 +312,7 @@ export async function handleCoverPolish(
       sendJson(res, error.status, { error: error.message });
       return;
     }
-    if (
-      error instanceof FetchTimeoutError ||
-      (error instanceof Error && /timed out|timeout/i.test(error.message))
-    ) {
+    if (isProviderTimeout(error)) {
       sendJson(res, 504, {
         error: "The AI provider timed out. Try again or switch providers."
       });

@@ -11,6 +11,7 @@ import { auditImport } from "../importAudit.ts";
 import { familyForFont } from "../importStyle.ts";
 import { renderField, splitOnSeparators } from "../fieldText.ts";
 import { layoutLines, slicePiece } from "../layoutLines.ts";
+import { buildResumeDraft } from "../resumeFromLayout.ts";
 import { hasDate, isDateLike } from "../rowDates.ts";
 import { readPdfLayout } from "../pdfLayout.ts";
 
@@ -252,6 +253,48 @@ test("a missing font record falls back to no font facts rather than throwing", a
   const layout = await readPdfLayout(new TextEncoder().encode("%PDF-1.7\n"), pdfjs);
   assert.equal(layout.spans[0].font, "");
   assert.equal(layout.spans[0].text, "Plenty of readable resume text here");
+});
+
+// Icons drawn from an icon font come through as private-use glyphs.
+const WORD_BULLET = String.fromCharCode(0xf0b7);
+const UNMAPPED = [0xe041, 0xe042, 0xe043, 0xe044].map((code) => String.fromCharCode(code)).join("");
+const draftOf = (spans) => {
+  const source = layoutLines({ pages: [page], spans, rules: [] });
+  const draft = buildResumeDraft(source, []);
+  return { draft, audit: auditImport(spans, draft.data, draft.findings, draft.consumed) };
+};
+test("a private-use bulleted list of section words stays a list under its heading", () => {
+  const { draft, audit } = draftOf([
+    span("Jane Doe", 54, 60, { size: 18, bold: true, width: 90 }),
+    span("jane@example.test", 54, 80, { width: 85 }),
+    span("ACTIVITIES", 54, 110, { size: 12, bold: true, width: 70 }),
+    span(WORD_BULLET, 57, 126, { width: 4 }), span("LEADERSHIP", 68, 126, { bold: true, width: 60 }),
+    span(WORD_BULLET, 57, 140, { width: 4 }), span("PROJECTS", 68, 140, { bold: true, width: 50 }),
+    span(WORD_BULLET, 57, 154, { width: 4 }), span("VOLUNTEERING", 68, 154, { bold: true, width: 70 })
+  ]);
+  assert.ok(audit.ok, JSON.stringify(audit));
+  assert.deepEqual(draft.data.sections.map((section) => section.heading), ["ACTIVITIES"]);
+});
+test("private-use glyphs between contact details are never consumed as separators", () => {
+  const run = draftOf([
+    span("Jane Doe", 54, 60, { size: 18, bold: true, width: 90 }),
+    span("jane@example.test", 54, 80, { width: 85 }), span(UNMAPPED, 145, 80, { width: 24 }), span("555-0100", 175, 80, { width: 40 }),
+    span("EXPERIENCE", 54, 110, { size: 12, bold: true, width: 70 }),
+    span("Acme Corp", 54, 126, { bold: true, width: 50 })
+  ]);
+  const placed = JSON.stringify(run.draft.data) + JSON.stringify(run.draft.findings);
+  assert.ok(placed.includes(UNMAPPED), "a multi-glyph private-use run is placed or listed, never consumed as a separator");
+  // One glyph per run, as some exporters paint unmapped text.
+  const perGlyph = draftOf([
+    span("Jane Doe", 54, 60, { size: 18, bold: true, width: 90 }),
+    span("jane@example.test", 54, 80, { width: 85 }),
+    ...[...UNMAPPED].map((glyph, index) => span(glyph, 145 + index * 8, 80, { width: 6 })),
+    span("555-0100", 182, 80, { width: 40 }),
+    span("EXPERIENCE", 54, 110, { size: 12, bold: true, width: 70 }),
+    span("Acme Corp", 54, 126, { bold: true, width: 50 })
+  ]);
+  assert.ok(perGlyph.draft.consumed.every((piece) => !UNMAPPED.includes(piece.text)), "no single private-use glyph is consumed as structure");
+  assert.ok(perGlyph.audit.ok, JSON.stringify(perGlyph.audit));
 });
 
 for (const [name, fn] of cases) {

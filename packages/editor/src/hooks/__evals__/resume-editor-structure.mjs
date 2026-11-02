@@ -3,6 +3,7 @@
 // Run: node --experimental-strip-types src/hooks/__evals__/resume-editor-structure.mjs
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import { reduceResumeData, rootReducer } from "../useResumeEditor.ts";
 import { documentStyleIsDirty, styleReducer } from "../useDocStyle.ts";
@@ -754,6 +755,49 @@ assert.strictEqual(
   branchStyle,
   "a new content edit invalidates style redo from the abandoned branch"
 );
+
+// Content edit -> content undo -> style edit: the style reducer moves the
+// branch after the content hook has rendered, so the hook must be told.
+{
+  const clock = createHistoryClock();
+  let notified = 0;
+  clock.subscribe(() => {
+    notified += 1;
+  });
+  const reduceContent = (state, action) => rootReducer(state, action, clock);
+  let content = reduceContent(
+    { data: null, dirty: false, past: [], future: [], coalesceKey: null, coalesceAt: 0 },
+    { type: "seed", data: historyBase }
+  );
+  await Promise.resolve();
+  notified = 0;
+  content = reduceContent(content, {
+    type: "updateBullet",
+    sectionId: "sec-1",
+    entryId: "entry-1",
+    bulletId: "b-1",
+    value: "edited"
+  });
+  content = reduceContent(content, { type: "undo" });
+  await Promise.resolve();
+  assert.equal(notified, 0, "an edit or undo that keeps the branch notifies nobody");
+  styleReducer(
+    { style: { ...DOC_STYLE_DEFAULTS }, past: [], future: [], coalesceKey: null, coalesceAt: 0 },
+    { type: "set", key: "lineHeight", value: 1.35 },
+    clock
+  );
+  assert.equal(notified, 0, "the branch notification waits until the reducer's render is over");
+  await Promise.resolve();
+  assert.equal(notified, 1, "a style edit after a content undo notifies the content hook");
+  assert.strictEqual(reduceContent(content, { type: "redo" }), content, "and content redo is gone");
+  for (const hook of ["useResumeEditor.ts", "useDocStyle.ts"]) {
+    assert.match(
+      readFileSync(new URL(`../${hook}`, import.meta.url), "utf8"),
+      /useSyncExternalStore\(\s*documentHistoryClock\.subscribe,\s*documentHistoryClock\.currentBranch\s*\)/,
+      `${hook} re-derives redo when the shared branch moves`
+    );
+  }
+}
 
 const loadClock = createHistoryClock();
 const reduceLoadRoot = (state, action) => rootReducer(state, action, loadClock);

@@ -206,10 +206,11 @@ function createHarness({
       return refs[index];
     },
     useEffect() {},
-    captureExtension(onItem, onStart, enabled) {
+    captureExtension(onItem, onStart, enabled, onGone) {
       extension.onItem = onItem;
       extension.onStart = onStart;
       extension.enabled = enabled;
+      extension.onGone = onGone;
     }
   };
 
@@ -1034,4 +1035,65 @@ for (const fitProvider of ["codex-cli", "anthropic"]) {
   assert.equal(stoppedBefore.state[7], null, "a duplicate stop commits no preparation");
   assert.equal(committedRelationship(stoppedBefore), undefined, "the retained raw posting carries no relationship");
 }
+// A failed re-fetch of the already prepared link (Replace with the URL unchanged)
+// keeps the prepared job and its brief edits, as a failed paste does. A URL edit
+// is what releases it, through handleJobUrlChange.
+{
+  const importFailures = [
+    ["a blocked import", async () => ({ ok: false, status: 400, json: async () => ({ error: "This site blocked direct import." }) })],
+    ["a network error", async () => { throw new TypeError("fetch failed"); }],
+    ["a page with no job text", async () => ({ ok: true, status: 200, json: async () => ({ text: "" }) })]
+  ];
+  for (const [label, importResponse] of importFailures) {
+    const harness = createHarness({ jobRawText: POSTING, readiness: { ready: false, message: "No provider configured." } });
+    const analysisFetch = globalThis.fetch;
+    globalThis.fetch = (url, init) => url === "/api/import-job" ? importResponse() : analysisFetch(url, init);
+    await runUrl(harness);
+    assert.equal(harness.render().jobAnalysisProgress.status, "failed", `${label} settles the card as failed`);
+    assert.equal(
+      harness.log.some(({ event }) => event === "setImportedJob"),
+      false,
+      `${label} on a re-fetch keeps the prepared job`
+    );
+  }
+  const edited = createHarness();
+  edited.render().handleJobUrlChange(`${JOB_URL}?edited=1`);
+  assert.deepEqual(
+    edited.log.filter(({ event }) => event === "setImportedJob").map(({ value }) => value),
+    [null],
+    "editing the URL still releases the prepared job"
+  );
+}
+
+{
+  // A posting that vanished while "preparing" leaves the receiving state with a
+  // visible reason instead of locking Prepare until a reload.
+  const lost = createHarness();
+  lost.render();
+  lost.extension.onStart();
+  lost.extension.onGone();
+  const phases = lost.log.filter(({ event }) => event === "state:extensionPhase").map(({ value }) => value);
+  assert.deepEqual(phases, ["receiving", null], "a lost extension posting leaves the receiving state");
+  const progress = lost.log.filter(({ event }) => event === "state:progress").at(-1)?.value;
+  assert.equal(progress?.status, "failed");
+  assert.equal(progress?.errorHeadline, "Extension posting lost");
+}
+{
+  // The posting vanishes while the tab's own link preparation runs: the
+  // receiving phase still ends, so Prepare does not stay locked afterwards.
+  const gate = deferred();
+  const busy = createHarness({ jobAnalysisGate: gate });
+  const run = runUrl(busy);
+  for (let i = 0; i < 20; i += 1) await settleAsyncWork();
+  busy.render();
+  busy.extension.onStart();
+  busy.extension.onGone();
+  gate.resolve();
+  await run;
+  for (let i = 0; i < 20; i += 1) await settleAsyncWork();
+  assert.equal(busy.state[1], null, "the receiving phase ends even while another run is busy");
+  const active = prepareActive({ isExtractingLink: busy.state[0], extensionImportPhase: busy.state[1], jobAnalysisProgress: busy.state[3], preparationAutomationPending: false });
+  assert.equal(active, false, "Prepare unlocks once the link run settles");
+}
+
 console.log("Job intake entry-point characterization: passed");

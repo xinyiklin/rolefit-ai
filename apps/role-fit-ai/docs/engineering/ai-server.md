@@ -252,11 +252,17 @@ owns:
   prompt version and SHA-256 source fingerprints, without duplicating source text.
   Necessary missing facts return a separate clarification; a repair that asks
   one instead keeps the draft text. Bracketed or doubled-brace placeholders keep
-  an answer a draft. The explicit Save operation appends the exact revision
-  through the normal application mutation queue; initial saves create one Draft
-  without a submission date. Stored revisions are shape-checked on load, so a
-  later count or limit rule never invalidates a tracker; reconcile verifies a
-  new revision's limits and counts against the current rules.
+  an answer a draft: generation, manual edits and reopening all share
+  `answerReadiness`, and the answer append and commit routes refuse an outside
+  writer's "ready" answer that holds one. A labelled range ("Word count:
+  250-300") caps at its second number and sets no minimum, but only when nothing
+  but a minimum waiver or the next question follows it; anything unclear keeps
+  the first-number cap, and other limits are demoted exactly as before. The
+  explicit Save operation appends the exact revision through the normal
+  application mutation queue; initial saves create one Draft without a
+  submission date. Stored revisions are shape-checked on load, so a later count
+  or limit rule never invalidates a tracker; reconcile verifies a new revision's
+  limits and counts against the current rules.
 - resume input into the structured editor: pasted resume text is parsed once into
   `ResumeData`, the source of truth thereafter; a previously saved `.resume` file
   loads its `ResumeData` directly. The file picker accepts only `.resume` (no DOCX,
@@ -353,8 +359,11 @@ dispatch attempts but never an API key.
   existing `previousApp` shape (built from the best match) and adds
   `match: { level, confidence, evidence }` (evidence capped at 3 strings), or
   `previousApp`/`match` null when nothing matches. `import` (POST) accepts only
-  the posting `text`, `url`, the bounded `frameUrls`, and the bounded
-  `claimToken`, stores the page text,
+  the posting `text`, `url`, the bounded `pageTitle` and `frameUrls`, and the
+  bounded `claimToken`, stores the page text (on LinkedIn, Indeed, and
+  Handshake hosts led by "Job title:"/"Company:" lines when the page title
+  matches a known job-board form unambiguously, since those captures keep only
+  the description),
   and returns immediately; a background server pass only
   RESOLVES the raw job text (e.g. fetching the full Workday, Ashby, or Greenhouse posting body) —
   it makes no AI call, because the server cannot read the receiving tab's
@@ -515,9 +524,15 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   current normalization/matching rules as implementation detail and keep their
   behavior locked by grounding/sanitizer probes rather than documenting one
   prefix heuristic as a stable contract.
-- `json.ts` — `parseAiJson` (fenced / prose-wrapped / outermost-brace
-  + trailing-comma repair). `errors.ts` — `UserSafeAiError` and the
-  config-error → 400 mapping.
+- `json.ts` — `parseAiJson` (fenced / prose-wrapped / outermost-brace +
+  trailing-comma repair). `errors.ts` — `UserSafeAiError` and the config-error
+  → 400 mapping. CLI failures are classified in `ai-cli/index.ts` into fixed,
+  user-safe messages: sign-in (401), rate or usage limit (429), Claude overload
+  (503) and an unavailable Codex model (400). Claude is read from its JSON
+  envelope status and text plus stderr; Codex only from error-marked lines after
+  its echoed prompt is removed, so posting text cannot decide the class.
+  Provider text never reaches the client. Resume import and
+  Final review report a provider timeout as a timeout, not a settings problem.
 
 ## API Design
 

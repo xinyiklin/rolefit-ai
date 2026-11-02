@@ -128,11 +128,61 @@ it truthfully.
   a PDF that pdf-lib itself could not reopen. Escape those bytes and
   percent-encode everything outside printable ASCII; `pdf-links.mjs` locks the
   round trip for brackets, backslashes, non-ASCII, and percent-encoded paths.
+- fontkit caches each glyph with the first character that reached it. If
+  U+00AD reaches a fontkit instance before "-" in a face whose cmap shares the
+  hyphen glyph, every later "-" shapes as a zero-width space; and pdf-lib's
+  ToUnicode map keeps that first character, so a U+2010 or U+2011 drawn first
+  makes "-" extract as it. So `pdfSafeText` drops U+00AD before shaping (it
+  never paints mid-line), and `emitPdf` primes each embedded face with the
+  printable ASCII it maps before any document text; `pdf-hyphens.mjs` fails
+  if either is removed. Layout measures U+00AD as absent (no advance; the
+  glyphs either side kern and ligate across it, as the PDF shapes them), and
+  U+200B-U+200F, U+2060 and U+FEFF as zero-width with no kern across them, as
+  fontkit (the PDF) draws them, not as the 500-unit unknown glyph. Chromium
+  still kerns and ligates across all but ZWNJ, so the DOM can drift by one kern
+  there (`special-spaces.mjs`). Other default-ignorable characters (bidi
+  embeddings and isolates, variation selectors) still take that fallback.
+- `measure.ts` is the one owner of display punctuation (`---` → —, `--` → –,
+  `'` → ’): `displayText` for text without tags, and each segment's
+  `display` from `segmentsFromInlineMarks`. A link word keeps exactly what was
+  typed. A word is a whitespace-free run read ACROSS tags (`<lt>` is text); it
+  is a link word when `automaticLinkHref` accepts it whole, and a character
+  inside an explicit `<link>`, suppressed or not, is always as typed, so the
+  page and extracted PDF text carry the address the link opens. Substitutions
+  stay within one segment. Reading words across tags keeps the decision
+  invariant when an edit re-serializes marks (`<b>a--b</b><b>@x.co</b>`
+  becomes one run). Runs carry this
+  display form, and `measure`, `faceSegments`, `runFamilies` and `inkExtent`
+  take it verbatim. The editor's `buildDisplayMap` and RoleFit's
+  `inlineMarksToHtml` apply the same rule; any drift moves the caret and lets
+  diff-based typing rewrite formatting or swallow text into a link
+  (`pdf-links.mjs`, the editor's `link-display.mjs`). A caller that drops tags
+  before layout (small-caps headings strip `<b>`/`<i>`/`<u>`, which would
+  join `-<b>-</b>` into one `--`) takes `displayInlineMarkedText` first and
+  lays out with `preDisplayed`.
+- `paintedText` (`measure.ts`) owns how a single-line field run is painted and
+  measured: a tab or a no-break space paints as one ordinary space in layout,
+  DOM and PDF alike (`special-spaces.mjs`). In paragraphs and wrapping fields a
+  run of only no-break spaces (U+00A0, U+2007, U+202F) stays stretchable glue
+  behind a forbidding penalty, so the optimal breaker never breaks there and
+  editor and PDF justify it alike. When no break set fits the paragraph (an
+  oversized token, or a no-break-tied run wider than the column), the emergency
+  greedy breaker may break at any of its no-break spaces, keeping words whole;
+  tying it into a word box instead would let CSS word-spacing stretch it in the
+  editor but not in the PDF.
 - Underline and link rules come from `underlineSpans` plus `underlineRule`, so
   every renderer draws one rule per contiguous underlined phrase at one
   face-derived depth. Never derive a rule from the text a renderer happens to
   hold: the DOM painter groups merged style spans and the PDF emitter walks
   single runs, so a text-dependent rule silently disagrees between them.
+- `setLine` merges adjacent same-style boxes (hyphen fragments, literal spaces,
+  a redundant mark boundary) into one run whose width is `measure()` of its
+  whole text, because the DOM and PDF shape the whole text: the kern across
+  `Non-|Technical` or the `ffi` across `of<font>fice` is in what they draw.
+  Glue setting and alignment use the merged widths; the breaker still chooses
+  lines from fragment widths, so a positive cross-boundary kern could overshoot
+  a glue-less line by that kern. Measure each merged run once when the line is
+  set, never per absorbed box, which is quadratic (`merged-runs.mjs` times it).
 - Alignment never changes where a line breaks (D082): every alignment breaks
   as a ragged paragraph does, and justify only stretches the spaces of lines
   already chosen. `tall-paragraphs.mjs` lays the same text out in all four.

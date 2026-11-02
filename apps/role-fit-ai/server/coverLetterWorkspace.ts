@@ -2,19 +2,22 @@
 // only the serialized atomic storage primitives are shared.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { mkdir, readFile, readdir, rename } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 
 import { parseCoverLetterFile } from "@typeset/engine/lib/coverLetter.ts";
+import { MAX_VARIANT_CANDIDATES_PER_REQUEST } from "../src/lib/variantCandidateRequests.ts";
 import { readBody, sendJson } from "./http.ts";
 import {
   WorkspaceStorageError,
-  atomicWriteWorkspaceFile,
+  replaceWorkspaceFile,
   coverLetterWorkspaceDir,
   ensureJobWorkspace,
   isMissingFile,
-  nextTrashStamp,
+  listVariantFiles,
   restoreConflictHandled,
+  sendWorkspaceRouteError,
+  trashWorkspaceFile,
   withWorkspaceLock,
   type WorkspaceLocations
 } from "./workspace.ts";
@@ -23,8 +26,6 @@ const DEFAULT_COVER_LETTER_FILE = "default.cover";
 const coverLetterVariantPattern = /^[A-Za-z0-9][A-Za-z0-9_-]*\.cover$/;
 // A cover letter is one page of prose; the resume's 200KB cap is generous here.
 const MAX_COVER_LETTER_BYTES = 200_000;
-// A batch read is a convenience over one lock, not an unbounded workspace dump.
-const MAX_COVER_LETTER_CANDIDATES = 40;
 
 export type CoverLetterOption = { fileName: string; label: string };
 type CoverLetterHistoryEntry = { key: string; originalName: string; date: string };
@@ -94,12 +95,7 @@ export function validateCoverLetterText(data: Buffer | string): string {
 export async function readCoverLetterOptions(
   locations: WorkspaceLocations
 ): Promise<CoverLetterOption[]> {
-  const files = await readdir(coverLetterWorkspaceDir(locations)).catch((error) => {
-    if (isMissingFile(error)) return [] as string[];
-    throw error;
-  });
-  return files
-    .filter((name) => coverLetterVariantPattern.test(name))
+  return (await listVariantFiles(coverLetterWorkspaceDir(locations), coverLetterVariantPattern))
     .map((fileName) => ({ fileName, label: coverLetterLabel(fileName) }))
     .sort((a, b) => {
       if (a.fileName === DEFAULT_COVER_LETTER_FILE) return -1;
@@ -157,16 +153,6 @@ async function readCoverLetterHistory(
   });
 }
 
-async function trashCoverLetterFile(name: string, locations: WorkspaceLocations): Promise<void> {
-  const trashDir = join(coverLetterWorkspaceDir(locations), ".trash");
-  await mkdir(trashDir, { recursive: true });
-  try {
-    await rename(join(coverLetterWorkspaceDir(locations), name), join(trashDir, `${nextTrashStamp()}__${name}`));
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") throw error;
-  }
-}
-
 async function coverLetterSnapshot(locations: WorkspaceLocations) {
   return {
     coverLetterOptions: await readCoverLetterOptions(locations),
@@ -210,9 +196,8 @@ export async function handleWorkspaceCoverLetter(
 
     const snapshot = await withWorkspaceLock(async () => {
       await ensureJobWorkspace(locations.workspaceDir);
-      // Archive before overwriting so every save is recoverable from history.
-      await trashCoverLetterFile(targetName, locations);
-      await atomicWriteWorkspaceFile(join(coverLetterWorkspaceDir(locations), targetName), rawText);
+      const dir = coverLetterWorkspaceDir(locations);
+      await replaceWorkspaceFile(join(dir, targetName), rawText, () => trashWorkspaceFile(dir, targetName));
       return coverLetterSnapshot(locations);
     });
 
@@ -224,11 +209,7 @@ export async function handleWorkspaceCoverLetter(
     });
   } catch (error) {
     if (restoreConflictHandled(error, res)) return;
-    sendJson(res, error instanceof WorkspaceStorageError ? 500 : 400, {
-      error: error instanceof WorkspaceStorageError
-        ? error.message
-        : error instanceof Error ? error.message : "Cover letter save failed."
-    });
+    sendWorkspaceRouteError(res, error, "Cover letter save failed.");
   }
 }
 
@@ -263,11 +244,7 @@ export async function handleSelectCoverLetter(
     sendJson(res, 200, { fileName, label: coverLetterLabel(fileName), ...result });
   } catch (error) {
     if (restoreConflictHandled(error, res)) return;
-    sendJson(res, error instanceof WorkspaceStorageError ? 500 : 400, {
-      error: error instanceof WorkspaceStorageError
-        ? error.message
-        : error instanceof Error ? error.message : "Cover letter load failed."
-    });
+    sendWorkspaceRouteError(res, error, "Cover letter load failed.");
   }
 }
 
@@ -292,7 +269,7 @@ export async function handleCoverLetterCandidates(
       sendJson(res, 400, { error: "List the cover letter versions to read." });
       return;
     }
-    if (requested.length > MAX_COVER_LETTER_CANDIDATES) {
+    if (requested.length > MAX_VARIANT_CANDIDATES_PER_REQUEST) {
       sendJson(res, 400, { error: "Too many cover letter versions were requested at once." });
       return;
     }
@@ -305,13 +282,13 @@ export async function handleCoverLetterCandidates(
       await ensureJobWorkspace(locations.workspaceDir);
       const read: { fileName: string; label: string; text: string }[] = [];
       for (const fileName of fileNames) {
-        // A missing or invalid letter is skipped, never fatal: the ranker's own
-        // completeness rule turns a short candidate list into no recommendation.
+        // A missing, unreadable, or invalid letter is skipped: the ranker reads a
+        // short candidate list as no recommendation.
         try {
           const data = await readFile(join(coverLetterWorkspaceDir(locations), fileName));
           read.push({ fileName, label: coverLetterLabel(fileName), text: validateCoverLetterText(data) });
         } catch (error) {
-          if (isMissingFile(error) || error instanceof WorkspaceStorageError) continue;
+          if (error instanceof WorkspaceStorageError || typeof (error as NodeJS.ErrnoException)?.code === "string") continue;
           throw error;
         }
       }
@@ -320,11 +297,7 @@ export async function handleCoverLetterCandidates(
     sendJson(res, 200, { candidates });
   } catch (error) {
     if (restoreConflictHandled(error, res)) return;
-    sendJson(res, error instanceof WorkspaceStorageError ? 500 : 400, {
-      error: error instanceof WorkspaceStorageError
-        ? error.message
-        : error instanceof Error ? error.message : "Cover letter versions could not be read."
-    });
+    sendWorkspaceRouteError(res, error, "Cover letter versions could not be read.");
   }
 }
 
@@ -357,8 +330,8 @@ export async function handleRestoreCoverLetter(
       // Validate the archived bytes before displacing the current good version.
       const data = await readFile(join(coverLetterWorkspaceDir(locations), ".trash", key));
       const text = validateCoverLetterText(data);
-      await trashCoverLetterFile(targetName, locations);
-      await atomicWriteWorkspaceFile(join(coverLetterWorkspaceDir(locations), targetName), data);
+      const dir = coverLetterWorkspaceDir(locations);
+      await replaceWorkspaceFile(join(dir, targetName), data, () => trashWorkspaceFile(dir, targetName));
       return { text, ...(await coverLetterSnapshot(locations)) };
     });
 

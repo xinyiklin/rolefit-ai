@@ -213,7 +213,9 @@ async function canBind(host: string, port: number): Promise<boolean> {
     const server = createServer();
     server.unref();
     server.once("error", (error: NodeJS.ErrnoException) => {
-      if (error.code === "EADDRINUSE") resolveBind(false);
+      // EACCES covers a reserved or exclusively held port (for example a WinNAT
+      // excluded range); like a busy port, it offers another port instead of failing startup.
+      if (error.code === "EADDRINUSE" || error.code === "EACCES") resolveBind(false);
       else rejectBind(error);
     });
     server.once("listening", () => {

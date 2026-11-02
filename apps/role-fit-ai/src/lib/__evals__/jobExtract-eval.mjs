@@ -633,4 +633,173 @@ assert(!/video interview|how to prepare|set aside/i.test(anReq), "application-pr
 const doYouQualify = extractJobPosting(`Software Engineer\nAcme\n\nWhat you'll do:\nBuild internal tools.\nDo you qualify? You likely do if you have one of the following:\nA bachelor's degree in a technical field.\nAt least one year of professional experience.`).tailoringText;
 assert.match(doYouQualify, /Required Qualifications:[\s\S]*bachelor's degree in a technical field/i, "'Do you qualify?' routes to required qualifications");
 
+// A hyphenated word at line start is prose, not a label: "Employer-paid" never
+// names the employer.
+const hyphenated = extractJobPosting("Senior Backend Engineer\nEmployer-paid health coverage for the whole family.\nCompany: Acme Corp\nLocation: Austin, TX");
+assert.equal(hyphenated.tracking.company, "Acme Corp", "a hyphenated word at line start is not a label");
+assert.equal(extractJobPosting("Senior Backend Engineer\nCompany - Acme Corp").tracking.company, "Acme Corp", "a spaced dash still separates a label");
+assert.equal(extractJobPosting("Senior Backend Engineer\nCompany-Acme Corp").tracking.company, "Acme Corp", "an unspaced dash before a capitalized value still separates a label");
+
+// "plus" as a conjunction keeps a requirement required; the idiom still demotes.
+const plusCue = extractJobPosting("Senior Backend Engineer\nAcme\nRequirements\n- Bachelor's degree plus 3 years of relevant experience.\n- Strong SQL skills.\n- Go experience is a plus.\n- Kubernetes is a great plus for this role.\n").tailoringText;
+assert.match(plusCue, /Required Qualifications:[\s\S]*degree plus 3 years/i, "'degree plus N years' stays required");
+assert.match(plusCue, /Preferred Qualifications:[\s\S]*Go experience is a plus/i, "'is a plus' still demotes");
+assert.match(plusCue, /Preferred Qualifications:[\s\S]*Kubernetes is a great plus/i, "'a great plus' demotes");
+const articlePlus = extractJobPosting("Senior Backend Engineer\nAcme\nRequirements\n- An MBA plus 5 years in finance.\n- A degree plus 3 years of experience.\n- Strong SQL skills.\n").tailoringText;
+assert.match(articlePlus, /Required Qualifications:[\s\S]*An MBA plus 5 years[\s\S]*A degree plus 3 years/i, "'an X plus N years' stays required");
+assert.equal(extractJobPosting("Senior Backend Engineer\nEmployer-Paid Health Insurance\nCompany: Acme Corp").tracking.company, "Acme Corp", "a title-case benefit is not a label value");
+
+// A sentence that starts with a heading word is an item, never a heading: it
+// stays in its section and the section stays open.
+const bonusBullet = extractJobPosting("Senior Backend Engineer\nAcme\nWhat you will do\n- Bonus programs administration for the sales team.\n- Partner with finance on quarterly close.\n- Build and operate payment services.\nWhat you bring\n- 5 years of backend experience.\n").tailoringText;
+const bonusDuties = bonusBullet.slice(bonusBullet.indexOf("Core Responsibilities:"), bonusBullet.indexOf("Required Qualifications:"));
+for (const duty of ["Bonus programs administration", "Partner with finance", "Build and operate payment services"]) {
+  assert.ok(bonusDuties.includes(duty), `'${duty}' stays a responsibility`);
+}
+assert.doesNotMatch(bonusBullet, /Preferred Qualifications:[\s\S]*Build and operate payment services/i, "a 'Bonus ...' bullet does not open a preferred section");
+// A short styled heading with a period or ellipsis is still a heading.
+const styled = extractJobPosting("Senior Backend Engineer\nAcme\nWhat you'll bring to the table.\n- 5 years of backend experience.\nNice to have!\n- Go experience.\nQualifications...\n- Strong SQL skills.\n").tailoringText;
+assert.match(styled, /Required Qualifications:[\s\S]*5 years of backend experience[\s\S]*Strong SQL skills/i, "headings ending in '.' or '...' still open their section");
+assert.match(styled, /Preferred Qualifications:[\s\S]*Go experience/i, "a heading ending in '!' still opens its section");
+
+// Prose that merely contains a framework's name is not a stack keyword, while
+// the name in every ordinary posting shape still counts.
+const prose = extractJobPosting("Platform Engineer\nAcme\nResponsibilities\n- Deploy services to Elastic Beanstalk and manage node pools in the cluster.\n- React quickly to incidents and keep guard rails in place.\n- Maintain the rails that ship data between teams.\nRequirements\n- 3 years of infrastructure experience.\n").tailoringText;
+assert.doesNotMatch(prose, /Tech Stack \/ Keywords:[\s\S]*(?:React|Node\.js|Elasticsearch|Rails)\b/, "react/node/rails/elastic in prose are not keywords");
+for (const [shape, text] of [
+  ["comma list", "- Experience with React, Node.js, Rails and Elasticsearch."],
+  ["bare bullets", "- React\n- Node.js\n- Rails\n- Elasticsearch"],
+  ["line end", "- Experience with React\n- Ruby on Rails\n- Node\n- Elastic Search"],
+  ["labelled", "- Frontend: React | Backend: Rails\n- Tech stack: Node 20, Elasticsearch 8"],
+  ["slash and noun", "- React/Redux experience\n- 3+ years of Node experience\n- Rails developer\n- Elasticsearch clusters"],
+  ["next line and determiner", "- Experience with React\nTo apply, send a resume.\n- Experience with Node\nPools of talent await.\n- Deep knowledge of the Rails framework\n- Migrate screens from Elasticsearch to OpenSearch"],
+  ["migration", "- Migrate screens from React to Vue\n- Node 20\n- Contribute to the Rails codebase\n- Elasticsearch 8"]
+]) {
+  const stack = extractJobPosting(`Platform Engineer\nAcme\nRequirements\n${text}\n- 3 years of experience.\n`).tailoringText;
+  const section = stack.slice(stack.indexOf("Tech Stack / Keywords:"));
+  for (const name of ["React", "Node.js", "Rails", "Elasticsearch"]) {
+    assert.ok(section.includes(`- ${name}`), `${name} counts in the ${shape} shape`);
+  }
+}
+
+// --- Salary period words, the "k" boundary, and score ties -------------------
+const payOfLine = (line) => extractJobPosting("Software Engineer\nAcme\n" + line + "\n").tracking;
+const hourlyRate = payOfLine("$20 - $25 an hour");
+assert.deepEqual([hourlyRate.salaryMin, hourlyRate.salaryMax, hourlyRate.salaryPeriod], [20, 25, "hr"], "'an hour' is an hourly rate");
+assert.equal(payOfLine("Salary: $25 - $30 hourly").salaryPeriod, "hr", "'hourly' is an hourly rate");
+assert.equal(payOfLine("Salary: $5,000 - $7,000 monthly").salaryPeriod, "mo", "'monthly' is a monthly salary");
+assert.equal(payOfLine("20 hours or more per week").salaryMin, undefined, "hours per week is not pay");
+assert.equal(payOfLine("Total rewards include 80 Kubernetes clusters").salaryMin, undefined, "a K-word after a number is not a thousands suffix");
+const kRange = payOfLine("Salary: $120k - $150k");
+assert.deepEqual([kRange.salaryMin, kRange.salaryMax], [120000, 150000], "a real k suffix still counts");
+// Regression guards from review: a pay range followed by bonus wording, and pay
+// that follows a benefits list, keep their salary; a yearly perk stays unmarked.
+for (const [line, min, max] of [
+  ["Salary: $130,000 - $150,000 bonus eligible", 130000, 150000],
+  ["Base Salary: $120,000 - $140,000 Bonus: 10%", 120000, 140000],
+  ["$120,000 - $140,000 Sign-On Bonus Available", 120000, 140000],
+  ["Benefits\n- Medical, dental, vision\nThe hiring range for this position is $130,000 - $160,000 annually.", 130000, 160000]
+]) {
+  const pay = payOfLine(line);
+  assert.deepEqual([pay.salaryMin, pay.salaryMax], [min, max], `${JSON.stringify(line)} keeps its salary`);
+}
+const hourlyOverPerk = payOfLine("Pay: $30 an hour\nEarn $1,500 in referral rewards");
+assert.deepEqual([hourlyOverPerk.salaryMin, hourlyOverPerk.salaryPeriod], [30, "hr"], "an hourly rate outranks a smaller figure on a score tie");
+
+// Regression guards from review: perks worded "yearly" / "monthly" / "an annual"
+// are not pay, and do not displace the real salary.
+for (const [line, min] of [
+  ["Salary: $160,000\n\nBenefits\n- $1,500 yearly learning budget\n\nTotal compensation includes equity and a $1,000 yearly wellness stipend.", 160000],
+  ["Compensation: $140,000\nTotal rewards: $1,200 yearly home office stipend", 140000],
+  ["Perks\n- $1,500 monthly remote work stipend", undefined],
+  ["Benefits\n- $5,250 yearly tuition reimbursement", undefined],
+  ["$1,500 an annual stipend for conferences", undefined]
+]) assert.equal(payOfLine(line).salaryMin, min, `${JSON.stringify(line)} keeps the real salary`);
+// ...while pay worded "yearly" / "monthly" before a connector or on a pay-labelled line stays pay.
+for (const [line, min] of [
+  ["Benefits\n- $1,500 yearly learning budget\nPay: $140,000 - $170,000 yearly plus benefits", 140000],
+  ["Salary: $65,000 - $75,000 yearly plus benefits", 65000],
+  ["Compensation: $120,000 yearly with full benefits", 120000],
+  ["Salary: $90,000 yearly and bonus", 90000],
+  ["$140,000 yearly base salary plus bonus", 140000],
+  ["Salary: $95,000 yearly bonus eligible", 95000],
+  ["Compensation: $6,000 monthly stipend", 6000]
+]) assert.equal(payOfLine(line).salaryMin, min, `${JSON.stringify(line)} stays pay`);
+// Outside a pay line, "yearly" / "monthly" is not a period, so no perk becomes pay;
+// on a pay line (a bare Compensation heading included) it is the period.
+for (const line of ["Benefits\n- $1,500 yearly for professional development\n- $5,250 yearly tuition assistance", "$2,500 yearly bonus", "$1,000 monthly remote work subsidy", "$1,200 monthly housing assistance during relocation", "Shift differential: earn an extra $10 an hour for weekend shifts", "Weekend shifts pay an additional $12 an hour."]) {
+  assert.equal(payOfLine(line).salaryMin, undefined, `${JSON.stringify(line)} is not a salary`);
+}
+const fellowship = payOfLine("Compensation\nFellows receive a $4,000 monthly stipend");
+assert.deepEqual([fellowship.salaryMin, fellowship.salaryPeriod], [4000, "mo"], "a stipend under a Compensation heading is monthly pay");
+// A bonus, allowance, equity, or commission worded "monthly" / "yearly" on a pay
+// line never outranks the base salary; the inferred period only labels it.
+for (const [line, min] of [
+  ["Salary: $120,000 plus a $10,000 yearly bonus", 120000],
+  ["Salary: $85k, $5k yearly bonus", 85000],
+  ["Base salary: $150,000 with a $20,000 yearly retention bonus", 150000],
+  ["Compensation: $85,000 base + $1,000 monthly car allowance", 85000],
+  ["Total compensation: $160,000, including $2,000 yearly equity refresh", 160000],
+  ["Commission: $2,000 monthly; base salary of $55,000", 55000],
+  ["We offer $15 hourly childcare credit. Salary: $100,000", 100000]
+]) assert.equal(payOfLine(line).salaryMin, min, `${JSON.stringify(line)} reports the base salary`);
+// A "k" glued to a currency code still reads as thousands (the range itself does
+// not pair across "USD", as before).
+assert.ok(payOfLine("Salary: $120kUSD - $140kUSD").salaryMin >= 120000, "'$140kUSD' is not lost to the k boundary");
+assert.equal(payOfLine("Salary: $5,000 monthly").salaryPeriod, "mo", "a lone monthly salary is still labelled monthly");
+const overtime = payOfLine("Base salary $120,000 per year; overtime paid at $90/hr");
+assert.deepEqual([overtime.salaryMin, overtime.salaryPeriod], [120000, "yr"], "an overtime rate does not displace the base salary");
+
+// --- Long requirement lists keep every item -------------------------------------
+{
+  const long = ["BS in Mechanical Engineering", "5+ years of hydraulic design", "SolidWorks and GD&T", "FEA tools such as ANSYS", "ISO 4413 familiarity", "Strong technical writing", "Travel up to 20%", "Supplier DFM experience", "A degree plus relevant experience in fluid power"];
+  const brief = extractJobPosting("Mechanical Engineer\nAcme Industrial\nRequirements\n" + long.map((item) => "- " + item + "\n").join("") + "- Six Sigma Green Belt a plus\nPreferred\n- PE license\n").tailoringText;
+  for (const item of long) assert.ok(sectionBody(brief, "Required Qualifications", "Preferred Qualifications").includes(item), `'${item}' is kept in a nine-item requirements list`);
+}
+// Spelled-out counts and a bare "experience" after plus are the conjunction too.
+{
+  const spelled = extractJobPosting("Analyst\nAcme\nRequirements\n- A degree plus two years of experience in analytics\n- A BS plus experience with SQL\n- Strong Excel skills.\n").tailoringText;
+  const required = sectionBody(spelled, "Required Qualifications", "Preferred Qualifications");
+  for (const item of ["A degree plus two years", "A BS plus experience with SQL"]) assert.ok(required.includes(item), `'${item}' stays required`);
+}
+assert.ok(extractKnownTechKeywords("Languages: Go, Rust").includes("Go"), "a one-line labelled language list counts Go");
+// The idiom keeps demoting whatever follows a bare or intensified "a plus".
+{
+  const idioms = ["Experience with Salesforce a plus, one of our core systems", "Fintech experience is a plus, two years of payments experience ideal", "A big plus experience with Kafka", "Kafka experience is a plus Experience with Flink also helpful", "A plus hands-on experience with Snowflake"];
+  const brief = extractJobPosting("Data Engineer\nAcme\nRequirements\n- 3+ years with Python\n" + idioms.map((item) => "- " + item + "\n").join("") + "Preferred\n- Experience with Terraform\n").tailoringText;
+  const preferred = sectionBody(brief, "Preferred Qualifications", "Tech Stack / Keywords");
+  for (const item of idioms) assert.ok(preferred.includes(item), `'${item}' demotes to preferred`);
+}
+
+// --- Abbreviated titles ---------------------------------------------------------
+assert.equal(extractJobPosting("Title: Sr. Software Engineer II\nCompany: Acme\nResponsibilities\n- Build things for customers").tracking.title, "Sr. Software Engineer II", "an abbreviation dot is not a sentence stop");
+assert.equal(extractJobPosting("Job title: Jr. Developer\nCompany: Acme\nResponsibilities\n- Build things for customers").tracking.title, "Jr. Developer", "a Jr. title survives");
+
+// --- Go as a list item, not a verb or navigation -------------------------------
+for (const text of ["- Languages: Python, Java, Go\n- Cloud: AWS", "Languages:\n- Go\n- Python", "• Go", "1. Go", "Skills\nGo\nRust", "Python\nGo\nRust", "Our stack\nGo, Rust, and Python"]) {
+  assert.ok(extractKnownTechKeywords(text).includes("Go"), JSON.stringify(text) + " counts Go");
+}
+for (const text of ["- Go above and beyond for customers", "1. Go to client sites weekly.", "Search jobs\nGo\nSign in", "We go above and beyond", "Go/no-go decisions for each launch, with clear criteria", "- Go/no-go launch decisions for each release", "• Go/No-Go readiness reviews with leadership", "Ready to make an impact? Join us, go\nfurther"]) {
+  assert.ok(!extractKnownTechKeywords(text).includes("Go"), JSON.stringify(text) + " is not the language");
+}
+
+// --- The "plus" conjunction stays required --------------------------------------
+const plusTails = extractJobPosting("Senior Backend Engineer\nAcme\nRequirements\n- A degree plus relevant experience in software\n- The minimum requirement is a degree plus 3 years of experience\n- What we need is a developer plus a strong portfolio of work\n- A degree plus 10 years of software experience.\n- An MBA plus 12+ years of management experience.\n- Strong SQL skills.\n- Kafka experience is a big plus\n- Healthcare experience a plus, but not required.\n- Prior fintech experience is a plus, professional services background also valued.\n- Healthcare compliance a plus, related certifications welcome.\n").tailoringText;
+const plusRequired = sectionBody(plusTails, "Required Qualifications", "Preferred Qualifications");
+for (const item of ["A degree plus relevant experience", "a degree plus 3 years", "a developer plus a strong portfolio", "A degree plus 10 years", "An MBA plus 12+ years"]) assert.ok(plusRequired.includes(item), `'${item}' stays required`);
+const plusPreferred = sectionBody(plusTails, "Preferred Qualifications", "Tech Stack / Keywords");
+for (const item of ["Kafka experience is a big plus", "Healthcare experience a plus", "Prior fintech experience is a plus", "Healthcare compliance a plus"]) assert.ok(plusPreferred.includes(item), `'${item}' demotes`);
+
+// --- Regression guards from review: numbered and bulleted section headings ------
+// open their sections, so no qualification is dropped.
+for (const [label, posting] of [
+  ["numbered sentence-case", "1) Responsibilities and duties\n• Run incident response and blameless postmortems\n• Automate infrastructure with Terraform\n2) Requirements and skills\n• 4+ years of SRE or DevOps experience\n• Expert Linux administration skills\n3) Nice to have\n• CKA certification"],
+  ["numbered with tails", "1. Key responsibilities\n- Run incident response and blameless postmortems\n- Automate infrastructure with Terraform\n2. Qualifications and experience\n- 4+ years of SRE or DevOps experience\n- Expert Linux administration skills\n3. Preferred skills and experience\n- CKA certification"]
+]) {
+  const brief = extractJobPosting("Site Reliability Engineer\nAcme\nWe run the platform for millions of users.\n" + posting + "\n").tailoringText;
+  const required = sectionBody(brief, "Required Qualifications", "Preferred Qualifications");
+  assert.ok(required.includes("4+ years of SRE or DevOps experience") && required.includes("Expert Linux administration skills"), `${label}: required items are kept`);
+  assert.ok(sectionBody(brief, "Core Responsibilities", "Required Qualifications").includes("Run incident response"), `${label}: duties are kept`);
+}
+
 console.log("jobExtract evals passed");

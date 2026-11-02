@@ -87,7 +87,7 @@ assert.match(
 );
 assert.match(
   app,
-  /const coverLetterNeedsUnloadGuard = applicationDocumentNeedsUnloadGuard\(\{[\s\S]{0,180}?dirty: coverLetterEditor\.recoveryDirty,[\s\S]{0,350}?useBeforeUnloadGuard\([\s\S]{0,180}?coverLetterNeedsUnloadGuard/,
+  /const coverLetterNeedsUnloadGuard = applicationDocumentNeedsUnloadGuard\(\{[\s\S]{0,180}?dirty: coverLetterEditor\.recoveryDirty,[\s\S]{0,500}?useBeforeUnloadGuard\([\s\S]{0,180}?coverLetterNeedsUnloadGuard/,
   "title-only edits feed the persistence-aware unload guard"
 );
 assert.match(
@@ -95,4 +95,23 @@ assert.match(
   /handleRestoreCoverDraft[\s\S]{0,300}?coverLetterEditor\.recoveryDirty && !\(await confirmReplaceCoverLetter\(\)\)/,
   "restoring recovery asks before replacing a title-only edit"
 );
+// A letter past the strict .cover limits never throws during render: the
+// codec refuses it with its own error, which the editor hook catches, keeps
+// the last valid serialization as the recovery payload, and explains.
+{
+  const { coverLetterResumeData, serializeCoverLetterFile, CoverLetterFileError, COVER_LETTER_STYLE_DEFAULTS } = await import("@typeset/engine/lib/coverLetter.ts");
+  const tooLong = coverLetterResumeData(Array.from({ length: 501 }, (_, index) => `Paragraph ${index + 1}.`), null);
+  assert.throws(() => serializeCoverLetterFile(tooLong, COVER_LETTER_STYLE_DEFAULTS), CoverLetterFileError, "the codec refuses a 501-paragraph letter with its own error");
+  const hookSource = readFileSync(new URL("../../hooks/useCoverLetterEditor.ts", import.meta.url), "utf8");
+  const appSource = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
+  assert.match(hookSource, /catch \(error\) \{\s*if \(!\(error instanceof CoverLetterFileError\)\) throw error;\s*return \{ fingerprint: `over-limit:/, "the hook catches only the codec's refusal");
+  assert.ok(hookSource.includes("fingerprint: `over-limit:${JSON.stringify([editor.editedResume, toDocumentStyle(style)])}`, limitProblem: error.message"), "an over-limit letter compares as changed, edit by edit, document style included and zoom or spell-check not");
+  assert.match(appSource, /recoveryDraftSaved: coverDraftAutosaveState === "saved" && !coverLetterEditor.overLimit,/, "the unload guard never trusts an older recovery draft for an over-limit letter");
+  assert.match(hookSource, /const recoveryPayload = limitProblem \? lastValidFingerprintRef\.current : currentFingerprint;/, "recovery keeps the last valid letter");
+  assert.match(hookSource, /draftPayload: recoveryPayload,\s*\/\/[^\n]*\n\s*sourcePayload: limitProblem \? null : currentFingerprint/, "a saved copy is never compared with a letter that cannot be saved");
+  assert.equal((hookSource.match(/if \(limitProblem\) \{\s*setStatus\(coverLimitStatus\(limitProblem\)\);\s*return( false)?;\s*\}/g) ?? []).length, 2, "both save paths explain instead of throwing");
+  assert.match(hookSource, /capturePreTailorSnapshot\(editor\.editedResume && !limitProblem/, "accepting Polish over the limit skips the snapshot instead of throwing");
+  assert.match(appSource, /documentFingerprint: coverLetterEditor\.sourcePayload \?\? ""/);
+  assert.match(appSource, /currentCoverLetterSource: coverLetterEditor\.sourcePayload \?\? ""/);
+}
 console.log("cover-letter recovery decisions: PASS");

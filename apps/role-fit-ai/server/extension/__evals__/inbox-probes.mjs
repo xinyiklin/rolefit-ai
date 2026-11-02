@@ -153,6 +153,17 @@ try {
   assert.deepEqual(Object.keys(handoff).sort(), ["text", "url"], "legacy mode fields never cross the inbox hand-off");
   assert.equal(await poll("tab-A", ""), null, "the entry is drained after a single hand-off");
 
+  // --- A job board's page title adds labelled role and employer lines ---
+  // A plain LinkedIn job URL with no frames resolves offline to the captured text.
+  fakeNow = 5_000_000_000_000;
+  const boardText = "About the job" + String.fromCharCode(10) + "Build backend services in Go padding padding";
+  await importPosting({ text: boardText, url: "https://www.linkedin.com/jobs/view/4012345678/", pageTitle: "(2) Senior Backend Engineer | Acme Payments | LinkedIn" });
+  const board = await poll("tab-B", "");
+  assert.equal(board.text, "Job title: Senior Backend Engineer" + String.fromCharCode(10) + "Company: Acme Payments" + String.fromCharCode(10, 10) + boardText, "a LinkedIn capture leads with its title's role and employer");
+  assert.deepEqual(Object.keys(board).sort(), ["text", "url"], "the page title itself never crosses the inbox hand-off");
+  await importPosting({ text: boardText, url: "http://127.0.0.1/jobs/board", pageTitle: "Senior Backend Engineer | Acme Payments | LinkedIn" });
+  assert.equal((await poll("tab-B", "")).text, boardText, "a page that is not a job board gets no lines");
+
   console.log("extension inbox probes: PASS");
 } finally {
   Date.now = realDateNow;

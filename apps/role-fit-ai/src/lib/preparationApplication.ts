@@ -57,3 +57,39 @@ export function appliedApplicationForSession({
     }
   };
 }
+
+// The retried create wins, including what it clears; the earlier row keeps its
+// stage, dates, and what no create writes (tracker edits, documents, links).
+const EARLIER_ATTEMPT_FIELDS = [
+  "appliedAt",
+  "notApplyingAt",
+  "stageHistory",
+  "followupAt",
+  "deadline",
+  "notes",
+  "interviewTips",
+  "contacts",
+  "resumeArtifacts",
+  "coverLetterArtifacts",
+  "attachments",
+  "applicationAnswers",
+  "duplicateDismissedIds",
+  "jobPostingGroupId"
+] as const satisfies readonly (keyof Application)[];
+
+export function retriedCreateOverEarlier(
+  earlier: Application,
+  retried: Application
+): Application {
+  const merged: Application = {
+    ...retried,
+    id: earlier.id,
+    status: earlier.status,
+    createdAt: earlier.createdAt
+  };
+  for (const key of EARLIER_ATTEMPT_FIELDS) {
+    if (earlier[key] === undefined) delete merged[key];
+    else (merged as unknown as Record<string, unknown>)[key] = earlier[key];
+  }
+  return merged;
+}

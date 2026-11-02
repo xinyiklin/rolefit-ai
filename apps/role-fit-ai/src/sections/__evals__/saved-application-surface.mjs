@@ -119,7 +119,7 @@ assert.match(
 assert.match(timelinePopover, /const listed = heldHistory \?\? stageHistory;/);
 assert.match(timelinePopover, /setBusy\(false\);\s*setHeldHistory\(null\);/, "the held list is released when the save settles");
 assert.equal((modal.match(/type="date" max="9999-12-31"/g) ?? []).length, 4, "every Key dates input caps the year at four digits");
-assert.ok(timelinePopover.includes("disabled={locked || !draftChanged} aria-disabled={busy}"), "Save waits out a lock and stays focusable while saving");
+assert.match(timelinePopover, /disabled=\{locked \|\| !draftChanged\}\s*aria-disabled=\{busy \|\| /, "Save waits out a lock and stays focusable while saving");
 assert.match(modal, /void selectTab\(order\[next\]\)\.then\(\(switched\) => \{\s*if \(switched\)/, "keyboard tab focus moves only after a tab switch is confirmed");
 for (const label of ["Log interview", "Log employer response", "Log follow-up sent"]) assert.ok(timelinePopover.includes(`aria-label="${label}"`));
 // An unsaved entry survives stray clicks and asks before any close or navigation drops it.
@@ -134,7 +134,25 @@ for (const [label, pattern] of [
 ]) {
   assert.match(modal, pattern, `${label} asks before discarding an unsaved timeline entry`);
 }
-assert.ok(modal.includes("primaryInputRef.current?.focus()"));
+assert.ok(modal.includes("skippedTriggerRef.current?.focus()"), "closing the Skipped decision returns focus to its trigger");
+assert.ok(modal.includes("triggerRef={skippedTriggerRef}"));
+// Only a saved Skip replaces the Stage select; a Draft's pending Skip keeps the
+// select so it can be undone, with its reasons trigger beside it.
+assert.match(modal, /\{activeApplication\.status === "not_applying" \? skippedTrigger\(true\) : \(/);
+assert.match(modal, /<\/select>\s*<\/span>\s*\{form\.status === "not_applying" \? skippedTrigger\(false\) : null\}/);
+assert.doesNotMatch(modal, /\{form\.status === "not_applying" \? \(\s*<button/, "a pending Skip never hides the Stage select");
+// The trigger shows for a saved Skip even while the form holds another stage
+// (the record became Skipped elsewhere), so its popover renders on the same rule.
+assert.match(modal, /const showsSkippedTrigger = activeApplication\.status === "not_applying" \|\| form\.status === "not_applying";/);
+assert.match(modal, /\{showsSkippedTrigger \? \(\s*<SkippedDecisionPopover/, "every Skipped trigger has a popover to open");
+// A timeline interview that moves the record also moves a pending stage the
+// new stage no longer offers, and a failed save restores the form's own choice.
+assert.match(
+  modal,
+  /const followsMove = moved\s*&& \(previousStatus === previousBaseline\.status \|\| !applicationStatusOptions\(next\.status\)\.includes\(previousStatus\)\);/
+);
+assert.match(modal, /if \(followsMove\) changeForm\(\(current\) => \(\{ \.\.\.current, status: next\.status \}\)\);/);
+assert.match(modal, /if \(!ok && followsMove\) \{\s*changeForm\(\(current\) => \(current\.status === next\.status \? \{ \.\.\.current, status: previousStatus \} : current\)\);/);
 assert.ok(skippedDecisionPopover.includes("maxLength={2_000}"));
 
 // Skip reasons are a list everywhere: one shared checklist edits them, narrow
@@ -265,7 +283,7 @@ assert.match(
   /aria-labelledby="application-job-activity-title"[\s\S]{0,500}?relatedApplications\.length \?/,
   "Job activity keeps its populated and empty states"
 );
-assert.ok(jobSnapshot.includes("buildPreparedJobBrief(preparedText, preparedText)"));
+assert.ok(jobSnapshot.includes("buildSavedPreparedJobBrief(preparedText)"), "the snapshot reopens the saved brief without count caps");
 for (const part of [
   "Overview",
   "Responsibilities",
@@ -399,3 +417,12 @@ assert.match(
 );
 assert.ok(!inspector.includes('<label className="field">'));
 assert.ok(!inspector.includes("APPLICATION_SOURCES"));
+
+// The Prep tab stops at the tracker's contact limits instead of letting the
+// schema refuse (or, before, silently cut) what the user typed.
+assert.match(modal, /disabled=\{form\.contacts\.length >= APPLICATION_CONTACTS_MAX\}/, "Add contact stops at the contact cap");
+assert.equal(
+  (modal.match(/updateContact\(index, "(?:name|title|email|phone)", e\.target\.value\)\} maxLength=\{APPLICATION_CONTACT_FIELD_MAX_LENGTH\}/g) ?? []).length,
+  4,
+  "every contact field stops input at the stored limit"
+);

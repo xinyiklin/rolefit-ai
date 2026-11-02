@@ -28,10 +28,12 @@ export function resolveResumeApplicantName(structuredName: string | null | undef
 }
 
 // Filesystem-safe slug: keep letters/digits, collapse the rest to underscores.
-// Internal to buildResumeFileName below.
+// Accents are dropped from their letters ("García" -> "Garcia"), never turned
+// into underscores. Internal to buildResumeFileName below.
 function slugForFile(value: string): string {
   return value
     .normalize("NFKD")
+    .replace(/\p{M}+/gu, "")
     .replace(/[^A-Za-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
     .slice(0, 60);
@@ -57,11 +59,12 @@ export function buildDocumentTitle(kind: DocumentTitleKind, name: string, compan
 // suffix on a name that already carries one. A user-typed name with no kind
 // suffix gains one in its own separator style.
 export function swapDocumentTitleKind(base: string, kind: DocumentTitleKind): string {
-  const trimmed = base.trim();
+  // Composed form, so a typed "Résumé" is recognized as a kind like "Resume".
+  const trimmed = base.trim().normalize("NFC");
   if (!trimmed) return "";
   // The leading group is empty for a base that is nothing but a kind ("Resume"),
   // which then becomes the bare other kind rather than gaining a stray prefix.
-  const existing = trimmed.match(/(^|[\s_.-])(resume|cover[\s_.-]?letter)$/i);
+  const existing = trimmed.match(/(^|[\s_.-])(r[eé]sum[eé]|cover[\s_.-]?letter)$/iu);
   const separator = existing?.[1] || (trimmed.includes("_") ? "_" : " ");
   const stem = existing ? trimmed.slice(0, trimmed.length - existing[0].length) : trimmed;
   const suffix = DOCUMENT_TITLE_SUFFIX[kind];

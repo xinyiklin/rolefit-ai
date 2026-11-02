@@ -310,7 +310,7 @@ const applicationOpenSource = appSource.slice(
 );
 assert.match(
   appSource,
-  /const preparedCoverLetterState = \{[\s\S]{0,350}?documentDirty: coverLetterEditor\.dirty,[\s\S]{0,120}?documentFingerprint: coverLetterEditor\.draftPayload \?\? ""/,
+  /const preparedCoverLetterState = \{[\s\S]{0,350}?documentDirty: coverLetterEditor\.dirty,[\s\S]{0,120}?documentFingerprint: coverLetterEditor\.sourcePayload \?\? ""/,
   "Prepare guards replacement with body/style identity rather than the output title"
 );
 const coverHookSource = readFileSync(new URL("../usePreparedCoverLetter.ts", import.meta.url), "utf8");

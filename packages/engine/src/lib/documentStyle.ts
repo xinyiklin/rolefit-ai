@@ -336,11 +336,17 @@ const clampStyleNumber = <K extends keyof typeof DOC_STYLE_BOUNDS>(
 };
 
 // Contact divider is a short glyph (UI offers | • · – /, plus a free 2-char
-// input). Clamp to 2 chars so it can't blow out the header; empty falls back to
-// the default "|".
+// input). Clamp to the codecs' two UTF-16 units without cutting inside a
+// surrogate pair ("a🙂" keeps "a", not half an emoji); empty falls back to "|".
 const coerceDivider = (value: unknown): string => {
   if (typeof value !== "string") return DOC_STYLE_DEFAULTS.contactDivider;
-  const trimmed = value.slice(0, 2);
+  let trimmed = "";
+  for (const point of value) {
+    // A lone surrogate in the input iterates as one unit; it is dropped.
+    if (point.length === 1 && point >= "\uD800" && point <= "\uDFFF") continue;
+    if ((trimmed + point).length > 2) break;
+    trimmed += point;
+  }
   return trimmed.length ? trimmed : DOC_STYLE_DEFAULTS.contactDivider;
 };
 
@@ -349,10 +355,11 @@ export function coerceDocStyle(raw: unknown): DocStyle {
   // Local preference patches may carry the current derived preset without all
   // four physical values. Use that current UI state only as their fallback;
   // portable files are parsed by the strict codec instead.
+  // An absent preset means the defaults, not the widest preset.
   const requestedPageMargins: PageMargins =
-    r.pageMargins === "narrow" || r.pageMargins === "custom"
+    r.pageMargins === "narrow" || r.pageMargins === "custom" || r.pageMargins === "normal"
       ? r.pageMargins
-      : "normal";
+      : DOC_STYLE_DEFAULTS.pageMargins;
   const fallbackMargins = pageMarginValuesFor(requestedPageMargins);
   const physicalMargins = {
     top: clampStyleNumber("pageMarginTopPt", r.pageMarginTopPt, fallbackMargins.top),

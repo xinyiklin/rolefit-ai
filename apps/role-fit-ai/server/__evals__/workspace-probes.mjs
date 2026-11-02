@@ -1,6 +1,6 @@
 // Base-resume persistence probes in an isolated temporary workspace.
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rename, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -50,7 +50,8 @@ try {
     handleSelectBaseResume,
     handleRestoreBaseResume,
     ensureJobWorkspace,
-    readWorkspaceBaseResume
+    readWorkspaceBaseResume,
+    replaceWorkspaceFile
   } = await import(`../workspace.ts?workspace-probe=${Date.now()}`);
 
   async function invoke(handler, method, payload) {
@@ -109,6 +110,44 @@ try {
     (error) => error instanceof WorkspaceStorageError,
     "invalid UTF-8 saved .resume bytes fail closed"
   );
+
+  {
+    // The rest of the workspace stays reachable, so the error's advice can be followed.
+    await writeFile(join(resumeDir, "frontend.resume"), starter, "utf8");
+    const res = await invoke(handleWorkspace, "GET", {});
+    assert.equal(res.status, 200, "an unreadable saved default does not fail the whole workspace snapshot");
+    const snapshot = JSON.parse(res.body);
+    assert.equal(snapshot.baseResume.exists, false);
+    assert.match(snapshot.baseResume.error, /invalid/i, "the base resume carries the error");
+    assert.equal(snapshot.baseResume.fileName, "default.resume", "and names the file that failed");
+    assert.match(snapshot.baseResume.error, /\(default\.resume\) could not be read/);
+    assert.equal(snapshot.baseResume.text, undefined, "the starter never stands in for the unreadable default");
+    assert.ok(snapshot.baseResumeOptions.some((option) => option.fileName === "frontend.resume"), "other variants can still be chosen");
+    assert.ok(Array.isArray(snapshot.baseResumeHistory), "history is still listed");
+    assert.ok(Array.isArray(snapshot.coverLetterOptions), "cover letters still load");
+    await unlink(join(resumeDir, "frontend.resume"));
+  }
+
+  {
+    // A directory named like a variant is not listed (reading it would fail).
+    const coverDir = join(locations.workspaceDir, "cover-letters");
+    await mkdir(join(resumeDir, "folder.resume"), { recursive: true });
+    await mkdir(join(coverDir, "folder.cover"), { recursive: true });
+    const snapshot = JSON.parse((await invoke(handleWorkspace, "GET", {})).body);
+    assert.ok(!snapshot.baseResumeOptions.some((option) => option.fileName === "folder.resume"), "a directory is not a resume variant");
+    assert.ok(!snapshot.coverLetterOptions.some((option) => option.fileName === "folder.cover"), "a directory is not a cover-letter variant");
+    // A link counts only when it resolves to a file (a junction needs no
+    // elevation on Windows; elsewhere this is a directory symlink).
+    await symlink(join(resumeDir, "folder.resume"), join(resumeDir, "linked.resume"), "junction");
+    await symlink(join(resumeDir, "missing-target"), join(resumeDir, "broken.resume"), "junction");
+    const linked = JSON.parse((await invoke(handleWorkspace, "GET", {})).body).baseResumeOptions.map((option) => option.fileName);
+    assert.ok(!linked.includes("linked.resume"), "a link to a directory is not a resume variant");
+    assert.ok(!linked.includes("broken.resume"), "a broken link is not a resume variant");
+    await rm(join(resumeDir, "linked.resume"), { recursive: true, force: true });
+    await rm(join(resumeDir, "broken.resume"), { recursive: true, force: true });
+    await rm(join(resumeDir, "folder.resume"), { recursive: true });
+    await rm(join(coverDir, "folder.cover"), { recursive: true });
+  }
 
   await writeFile(join(resumeDir, "default.resume"), starter, "utf8");
   assert.equal((await readWorkspaceBaseResume(undefined, locations)).exists, true, "valid strict .resume loads");
@@ -341,6 +380,50 @@ try {
       starter,
       "the restored base resume carries the archived bytes"
     );
+  }
+
+  // A save archives the live file only after its replacement is staged, and a
+  // failure after the archive puts the live file back: the live version is
+  // never left only in .trash.
+  {
+    const livePath = join(resumeDir, "ordering.resume");
+    await writeFile(livePath, "live", "utf8");
+    let archived = false;
+    await assert.rejects(
+      replaceWorkspaceFile(join(resumeDir, "missing-dir", "ordering.resume"), "new", async () => {
+        archived = true;
+        return null;
+      }),
+      /ENOENT/
+    );
+    assert.equal(archived, false, "nothing is archived before the replacement bytes exist");
+    await assert.rejects(
+      replaceWorkspaceFile(livePath, "new", async () => { throw new Error("archive failed"); }),
+      /archive failed/
+    );
+    assert.equal(await readFile(livePath, "utf8"), "live", "a failed archive leaves the live file");
+    const aside = `${livePath}.aside`;
+    await assert.rejects(
+      replaceWorkspaceFile(livePath, "new", async () => {
+        // Simulate the name being taken between archive and install.
+        await rename(livePath, aside);
+        await mkdir(livePath);
+        await writeFile(join(livePath, "occupied"), "x", "utf8");
+        return async () => {
+          await rm(livePath, { recursive: true, force: true });
+          await rename(aside, livePath);
+        };
+      })
+    );
+    assert.equal(await readFile(livePath, "utf8"), "live", "a failed install restores the archived live file");
+    assert.ok(!(await readdir(resumeDir)).some((name) => name.includes(".tmp")), "no staged file is left behind");
+    await replaceWorkspaceFile(livePath, "new", async () => {
+      await rename(livePath, aside);
+      return () => rename(aside, livePath);
+    });
+    assert.equal(await readFile(livePath, "utf8"), "new", "a successful replace installs the staged bytes");
+    await rm(aside, { force: true });
+    await rm(livePath, { force: true });
   }
 
   console.log("workspace persistence probes: PASS");

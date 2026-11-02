@@ -9,8 +9,8 @@ import { sanitizeContentWarnings } from "../../shared/contentWarnings.ts";
 // from prompts.ts so answers follow the same anti-fabrication guarantees.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { FetchTimeoutError, isRequestAborted, requestAbortSignal, sendJson } from "../http.ts";
-import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
+import { isRequestAborted, requestAbortSignal, sendJson } from "../http.ts";
+import { UserSafeAiError, isProviderTimeout, safeConfigErrorMessage } from "./errors.ts";
 import { readAiJsonBody } from "./json.ts";
 import { resolveProviderRequest } from "./providers.ts";
 import { accomplishmentStyleRules, fenceUntrusted, honestTailoringRules, inputFirewallRule } from "./prompts.ts";
@@ -23,7 +23,7 @@ import {
   proseHasUngroundedTerm
 } from "./grounding.ts";
 import { candidateClaimIssue } from "./claimEvidence.ts";
-import { hasUngroundedNumericClaim } from "./sanitize.ts";
+import { hasUngroundedNumericClaim, withoutPostingScaleFacts } from "./sanitize.ts";
 
 // Optional dispatch-attempt collector: callConfiguredProvider bumps `attempts`.
 type AttemptStats = { attempts?: number };
@@ -153,11 +153,12 @@ export function bindApplicationAnswers(
     const text = typeof answer.answer === "string" ? answer.answer.trim() : "";
     if (!text || text.length > 4_000 || /<\/?[a-z][^>]*>|[\u0000-\u0008\u000b\u000c\u000e-\u001f]/i.test(text)) unusableAnswers();
     const warnings: string[] = [];
-    const claimIssue = candidateClaimIssue(text, groundingText, groundingText);
+    const claims = withoutPostingScaleFacts(text, jobText);
+    const claimIssue = candidateClaimIssue(claims, groundingText, groundingText);
     if (
       claimIssue
       || proseHasUngroundedTerm(text, jobLower, groundingLower)
-      || hasUngroundedNumericClaim(text, groundingText)
+      || hasUngroundedNumericClaim(claims, groundingText)
       // The JD-specific prose gate above cannot see a fabricated technology
       // absent from the posting (for example, claiming Salesforce in a Python-
       // only application). Application prose may name the target company, so
@@ -420,7 +421,7 @@ export async function handleApplicationAnswers(req: IncomingMessage, res: Server
       sendJson(res, error.status, { error: error.message });
       return;
     }
-    if (error instanceof FetchTimeoutError || (error instanceof Error && /timed out|timeout/i.test(error.message))) {
+    if (isProviderTimeout(error)) {
       sendJson(res, 504, { error: "The AI provider timed out. Try again or switch providers." });
       return;
     }

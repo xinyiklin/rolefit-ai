@@ -70,6 +70,7 @@ console.log(
 const advice={kind:'emphasis',sectionId:'s0',entryId:'e0',jobExcerpt:'Python services',candidateExcerpt:'Built Python service.',rationale:'Highlight the Python service work.'};
 assert.equal(sanitizeResumeAdvice([advice],scope,'Python services and Terraform workflows').length,1);
 assert.ok(sanitizeResumeAdvice([{...advice,entryId:'not-sent'}],scope,'Python services')[0].warnings.length);
+assert.equal(sanitizeResumeAdvice([{...advice,warnings:['model-authored']}],scope,'Python services and Terraform workflows')[0].warnings,undefined,'a model-authored warning list never stands in for the evidence checks');
 assert.equal(sanitizeResumeAdvice([{...advice,rationale:'Ask for evidence of Terraform workflows before adding them.'}],scope,'Python services and Terraform workflows').length,1,'editorial guidance may discuss missing evidence without asserting it');
 
 for (const rationale of [

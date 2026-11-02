@@ -112,8 +112,11 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
     value. Step-control feedback sits beside the control so it never covers
     the instruction text.
 - The sidebar service line (and its tooltip sentence) derives from the last
-  connection-status probe (startup, window re-show, and Settings' poll), never
-  a fixed "ready". Each page's hidden `h1` is the page's sidebar label.
+  connection-status probe (startup, window re-show, and the Settings and
+  Browser extension polls), never a fixed "ready". The extension tab polls
+  because Approve/Remove are gated on server ownership; only a second
+  consecutive failed probe clears the last known ownership. Each page's hidden
+  `h1` is the page's sidebar label.
 - `runtime-paths.cts` owns the source-versus-package application, server, and
   writable-workspace resolution. `build-package.mjs` owns the minimal staged
   runtime; `forge.config.cjs` owns ASAR, native makers, signing/notarization,
@@ -130,7 +133,9 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   sends bounded, versioned credential snapshots only to a server process the
   companion owns. A reused standalone listener never receives vault data and
   provider save/remove/enable mutations must fail until the user stops that
-  listener and reopens RoleFit through the companion.
+  listener and reopens RoleFit through the companion. While a reused service
+  (standalone, or another companion session's) is open, the Providers summary
+  says it does not use these providers instead of counting them "ready".
 - Main keeps the owned server's shape-only provider snapshot current while the
   companion window is hidden or closed. Snapshot refreshes and mutations are
   serialized so an older probe cannot overwrite a newer vault change; renderer

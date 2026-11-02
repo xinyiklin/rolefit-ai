@@ -1,5 +1,5 @@
 import { useId } from "react";
-import type { UpcomingItem } from "../../lib/applicationAnalytics";
+import { upcomingList, type UpcomingItem } from "../../lib/applicationAnalytics";
 import { companyInitials, displayCompany, displayRole, parseDate } from "../../lib/applicationDisplay";
 import { relativeDay } from "./analyticsFormat";
 
@@ -22,7 +22,7 @@ export function UpcomingSection({
   onOpenApplications: () => void;
 }) {
   const titleId = useId();
-  const items = [...interviews, ...followups].sort((a, b) => a.days - b.days || (a.kind === "interview" ? -1 : 1));
+  const items = upcomingList(interviews, followups);
   const hidden = items.length - VISIBLE;
 
   return (

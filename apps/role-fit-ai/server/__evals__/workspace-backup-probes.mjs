@@ -688,6 +688,61 @@ try {
     (error) => error instanceof WorkspaceBackupError && error.status === 413 && error.message === WORKSPACE_BACKUP_TOO_LARGE_MESSAGE
   );
 
+  // --- A backup exported before the retired 'interested' stage migrated ---
+  // That build bundled the record's resume and attachment because its metadata
+  // named them; the migration strips them, so they are checked, not restored.
+  {
+    const fixture = await readFile(
+      join(appRoot, "server", "applications", "__evals__", "fixtures", "tracker-v0-interested.json")
+    );
+    const legacyId = JSON.parse(fixture.toString("utf8")).applications[0].id;
+    const pdf = Buffer.from("%PDF-1.4\n%synthetic\n");
+    const entry = (path, data, encoding) => ({
+      path,
+      encoding,
+      byteLength: data.byteLength,
+      sha256: digest(data),
+      data: data.toString(encoding === "base64" ? "base64" : "utf8")
+    });
+    const legacyEnvelope = {
+      format: "rolefit-workspace-backup",
+      schemaVersion: 1,
+      createdAt: "2026-07-29T10:00:02.000Z",
+      files: [
+        entry("applications.json", fixture, "utf8"),
+        entry(`applications/${legacyId}/resume.resume`, Buffer.from(starterText, "utf8"), "utf8"),
+        entry(`applications/${legacyId}/attachments/draft.pdf`, pdf, "base64")
+      ]
+    };
+    const legacyTarget = join(isolatedRoot, "legacy-interested-workspace");
+    const result = await restoreWorkspaceBackup(legacyTarget, legacyEnvelope, fixedDate, 0);
+    assert.equal(result.restoredFiles, 1, "a pre-migration backup restores its tracker without the retired files");
+    const [restored] = await readApplications(legacyTarget);
+    assert.equal(restored.status, "not_applying", "the retired stage restores as a Skipped decision");
+    assert.equal(restored.resumeArtifacts, undefined, "the restored record names no sent documents");
+    await assert.rejects(
+      () => readdir(join(legacyTarget, "applications", legacyId)),
+      (error) => error.code === "ENOENT",
+      "the retired record's bundled files are not installed"
+    );
+
+    const tampered = structuredClone(legacyEnvelope);
+    tampered.files[2].sha256 = "0".repeat(64);
+    await assert.rejects(
+      () => restoreWorkspaceBackup(join(isolatedRoot, "legacy-tampered"), tampered, fixedDate, 0),
+      (error) => error instanceof WorkspaceBackupError && /integrity check/.test(error.message),
+      "a retired file is still integrity-checked"
+    );
+    await assert.rejects(
+      () => restoreWorkspaceBackup(join(isolatedRoot, "legacy-orphan"), {
+        ...legacyEnvelope,
+        files: [...legacyEnvelope.files, entry("applications/untracked/attachments/draft.pdf", pdf, "base64")]
+      }, fixedDate, 0),
+      (error) => error instanceof WorkspaceBackupError && /tracker and saved document files do not match/.test(error.message),
+      "a file for any other untracked record still refuses the backup"
+    );
+  }
+
   // --- Presence tab-id contract ---
   assert.equal(isValidPresenceTabId("tab_ABC-123"), true, "allowed-charset tab ids validate");
   assert.equal(isValidPresenceTabId("a".repeat(64)), true, "64-char tab ids are the upper bound");

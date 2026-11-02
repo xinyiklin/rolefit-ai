@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { splitProfileEvidence } from "../../src/lib/coverLetterEvidence.ts";
 import {
   ANSWER_FACTS_MAX, ANSWER_FACTS_MAX_CHARS, ANSWER_INVALID_CONTROL, ANSWER_QUESTION_MAX_CHARS, ANSWER_TEXT_MAX_CHARS, ANSWER_REFINEMENT_MAX_CHARS,
-  extractAnswerConstraints, hasUnresolvedAnswerPlaceholder, normalizeAnswerText, validateAnswerConstraints,
+  answerReadiness, extractAnswerConstraints, hasUnresolvedAnswerPlaceholder, normalizeAnswerText, validateAnswerConstraints,
   type ApplicationAnswerRevision
 } from "../../shared/applicationAnswersContract.ts";
 import { candidateContextLimitError } from "../../shared/candidateProfileContract.ts";
@@ -14,7 +14,7 @@ import { findUngroundedCuratedClaimTerm, findUngroundedOutcomeClaim, findUngroun
 import { ANSWER_CONVERSATION_FENCE_NAMES, fenceUntrusted, inputFirewallRule } from "./prompts.ts";
 import { resolveProviderRequest } from "./providers.ts";
 import { recordProviderUsage, type UsageSink } from "./providerUsage.ts";
-import { hasUngroundedNumericClaim } from "./sanitize.ts";
+import { hasUngroundedNumericClaim, withoutPostingScaleFacts } from "./sanitize.ts";
 
 export const APPLICATION_ANSWER_PROMPT_VERSION = "application-answer-conversation-v4";
 type AnswerRequest = {
@@ -125,9 +125,10 @@ function evidenceWarnings(answer: string, input: AnswerRequest): string[] {
   if (!answer) return [];
   const evidence = [input.resumeText, ...[input.candidateContext, ...input.explicitFacts, input.clarification].flatMap(splitProfileEvidence)].join("\n");
   const job = `${input.jobText}\n${input.rawJobText}`;
-  const issue = candidateClaimIssue(answer, evidence, evidence);
+  const claims = withoutPostingScaleFacts(answer, job);
+  const issue = candidateClaimIssue(claims, evidence, evidence);
   const unsupported = issue || proseHasUngroundedTerm(answer, job.toLowerCase(), evidence.toLowerCase())
-    || hasUngroundedNumericClaim(answer, evidence) || findUngroundedCuratedClaimTerm(answer, evidence)
+    || hasUngroundedNumericClaim(claims, evidence) || findUngroundedCuratedClaimTerm(answer, evidence)
     || findUngroundedProseProperClaimTerm(answer, evidence, job) || findUngroundedOutcomeClaim(answer, evidence, { candidateProse: true });
   return unsupported ? [`Not supported by provided evidence. ${issue ?? "Check the claims, tools, numbers, and outcomes in this answer."}`] : [];
 }
@@ -174,7 +175,7 @@ export async function generateApplicationAnswer(
     id: input.answerRevisionId, applicationId: input.applicationId,
     questionId: input.question.id, questionRevision: input.question.revision, question: input.question.text,
     answer: draft.answer, ...(draft.clarification ? { clarification: draft.clarification } : {}),
-    status: draft.clarification && !draft.answer ? "needs-input" : draft.clarification || !validation.compliant || incomplete ? "draft" : "ready",
+    status: draft.clarification && !draft.answer ? "needs-input" : draft.clarification ? "draft" : answerReadiness(draft.answer, validation.compliant),
     constraints, counts: validation.counts, compliant: validation.compliant,
     ...(warnings?.length ? { warnings } : {}),
     ...(input.previousAnswer ? { previousAnswerId: input.previousAnswer.id } : {}),

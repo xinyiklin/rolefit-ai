@@ -674,10 +674,26 @@ function isProseSentenceStart(text: string, index: number): boolean {
   return /(?:^|[.!?]["')\]]*\s+|[\r\n]\s*)$/.test(prefix);
 }
 
+// evidence: what grounds the claim when it differs from the claim's own forms ("2x"
+// grounds "doubled"). needsObject: the verb states a result only before a measure or
+// an outcome noun ("raised coverage to 85%", not "raised concerns").
 type OutcomeClaimFamily = Readonly<{
   label: string;
   pattern: RegExp;
+  evidence?: RegExp;
+  needsObject?: boolean;
 }>;
+
+// A multiplier's base form is a verb only after "to" or "help" ("helped double revenue");
+// "double precision", "a double major", "double-checked", and "doubled as" claim nothing.
+const MULTIPLIER_ADJECTIVE_NOUNS = String.raw`precision|digits?|quotes?|clicks?|entry|spac\w*|check\w*|counting|booking|majors?|minors?|shifts?|duty|degrees?|time|down|up|as`;
+const multiplierVerb = (stem: string, base: string) =>
+  new RegExp(String.raw`\b${stem}(?:ed|es|ing)\b(?!-|\s+(?:as|down|up)\b)|(?<=\b(?:to|help(?:ed|s|ing)?(?:\s+[a-z]+){0,2}?)\s+)${base}\b(?!-|\s+(?:${MULTIPLIER_ADJECTIVE_NOUNS})\b)`, "i");
+// The result as a factor ("2x", "two-fold", "twice as"; not "2x AWS Certified") or a percent rise.
+const multiplierEvidence = (stem: string, base: string, factor: number, word: string, times: string, percent: number) =>
+  new RegExp(String.raw`${multiplierVerb(stem, base).source}|\b${factor}(?:\.0)?\s?[x×](?![a-z])(?!\s*(?:aws|gcp|azure|certified|certifications?|winner|champion|awards?|hackathon)\b)|\b(?:${word}|${factor})[- ]?fold\b|\b${times}\s+(?:as|the|more|faster|higher)\b|\b${percent}\s?%\s+(?:increase|more|higher|growth|gain|faster)\b|\b(?:grew|grow|rose|increased|increasing|up|jumped|boosted|raised)(?:\s+[a-z]+){0,3}?(?:\s+by)?\s+${percent}\s?%`, "i");
+// A cut by half or a 50% reduction ("reduced build times 50%"), never a 50% increase.
+const HALVING_EVIDENCE = /\bhalv(?:ed|es|ing)\b(?!-)|\b(?:in|by) half\b|\b(?:cut(?:s|ting)?|reduc(?:e|es|ed|ing)|lower(?:s|ed|ing)?|dropp?(?:s|ed|ing)?|decreas(?:e|es|ed|ing)|slash(?:es|ed|ing)?|trimm?(?:s|ed|ing)?|shr(?:ank|unk|inking)|fell|down)\b[^.;\n]{0,40}?\b50\s?%|\b50\s?%\s+(?:fewer|less|lower|reduction|cut|drop|decrease|faster|smaller|cheaper|shorter)\b/i;
 
 // Ordinary-English achievement claims need their own grounding backstop. The
 // technology/proper-name and numeric gates cannot see an invented outcome such
@@ -692,22 +708,38 @@ const OUTCOME_VERB_FAMILIES: readonly OutcomeClaimFamily[] = Object.freeze([
   { label: "boost", pattern: /\bboost(?:s|ed|ing)?\b/i },
   { label: "cut", pattern: /\bcuts?\b|\bcutting\b/i },
   { label: "decrease", pattern: /\bdecreas(?:e|es|ed|ing)\b/i },
+  { label: "double", pattern: multiplierVerb("doubl", "double"), evidence: multiplierEvidence("doubl", "double", 2, "two", "twice", 100) },
+  { label: "drop", pattern: /\bdrop(?:s|ped|ping)?\b/i, needsObject: true },
   { label: "eliminate", pattern: /\beliminat(?:e|es|ed|ing)\b/i },
   { label: "enable", pattern: /\benabl(?:e|es|ed|ing)\b/i },
   { label: "generate", pattern: /\bgenerat(?:e|es|ed|ing)\b/i },
   // "growing" is frequently an adjective ("a growing customer base"), so
   // keep this family to unambiguous past/result forms.
   { label: "grow", pattern: /\bgrew\b|\bgrown\b/i },
+  { label: "halve", pattern: /\bhalv(?:ed|ing)\b(?!-)|(?<=\b(?:to|help(?:ed|s|ing)?)\s+)halve\b/i, evidence: HALVING_EVIDENCE },
+  // "halves" and "slashes" are also plural nouns ("two halves", "trailing slashes").
+  { label: "halve", pattern: /(?<!\b(?:two|three|the|both|its|their|into|in|of)\s+)\bhalves\b(?!\s+of\b)/i, evidence: HALVING_EVIDENCE, needsObject: true },
   { label: "improve", pattern: /\bimprov(?:e|es|ed|ing)\b/i },
   { label: "increase", pattern: /\bincreas(?:e|es|ed|ing)\b/i },
+  { label: "lift", pattern: /\blift(?:s|ed|ing)?\b/i, needsObject: true },
   { label: "lower", pattern: /\blower(?:s|ed|ing)?\b/i },
+  // "to minimize dropped messages" is a purpose; "(helped) minimize downtime" is a result.
+  { label: "maximize", pattern: /\bmaximi[sz](?:es|ed|ing)\b|(?<=\bhelp(?:ed|s|ing)?\s+(?:to\s+)?)maximi[sz]e\b|(?<!\bto\s+)\bmaximi[sz]e\b/i, evidence: /\bmaximi[sz](?:e|es|ed|ing)\b/i },
+  { label: "minimize", pattern: /\bminimi[sz](?:es|ed|ing)\b|(?<=\bhelp(?:ed|s|ing)?\s+(?:to\s+)?)minimi[sz]e\b|(?<!\bto\s+)\bminimi[sz]e\b/i, evidence: /\bminimi[sz](?:e|es|ed|ing)\b/i },
   { label: "prevent", pattern: /\bprevent(?:s|ed|ing)?\b/i },
   { label: "protect", pattern: /\bprotect(?:s|ed|ing)?\b/i },
+  { label: "quadruple", pattern: multiplierVerb("quadrupl", "quadruple"), evidence: multiplierEvidence("quadrupl", "quadruple", 4, "four", "four times", 300) },
+  { label: "raise", pattern: /\brais(?:e|es|ed|ing)\b/i, needsObject: true },
   { label: "reduce", pattern: /\breduc(?:e|es|ed|ing)\b/i },
   { label: "save", pattern: /\bsav(?:e|es|ed|ing)\b/i },
   { label: "shorten", pattern: /\bshorten(?:s|ed|ing)?\b/i },
+  { label: "shrink", pattern: /\bshr(?:ink|inks|ank|unk|inking)\b/i, needsObject: true },
+  { label: "slash", pattern: /\bslash(?:ed|ing)\b(?!-)|(?<=\b(?:to|help(?:ed|s|ing)?)\s+)slash\b(?!-)/i },
+  { label: "slash", pattern: /(?<!\b(?:two|the|forward|back|trailing|leading|double|with|and|of)\s+)\bslashes\b/i, needsObject: true },
   { label: "strengthen", pattern: /\bstrengthen(?:s|ed|ing)?\b/i },
-  { label: "streamline", pattern: /\bstreamlin(?:e|es|ed|ing)\b/i }
+  { label: "streamline", pattern: /\bstreamlin(?:e|es|ed|ing)\b/i },
+  { label: "trim", pattern: /\btrim(?:s|med|ming)?\b/i, needsObject: true },
+  { label: "triple", pattern: multiplierVerb("tripl", "triple"), evidence: multiplierEvidence("tripl", "triple", 3, "three", "three times", 200) }
 ]);
 
 const OUTCOME_NOUN_FAMILIES: readonly OutcomeClaimFamily[] = Object.freeze([
@@ -748,18 +780,30 @@ function outcomeAttributionIsConditional(sentence: string, index: number): boole
   const clausePrefix = sentence.slice(0, index).split(/[,;]\s+|\s+(?:that|which|who)\s+/).at(-1) ?? "";
   return /\b(?:would|could|can|will|might)\b[^.;!?]*$/i.test(clausePrefix)
     || /\bmay\b[^.;!?]*$/.test(clausePrefix)
-    || /\b(?:aim|hope|plan|seek|intend)(?:s|ed|ing)?\s+to\b[^.;!?]*$/i.test(clausePrefix);
+    || /\b(?:aim|hope|plan|seek|intend|want|wish|eager)(?:s|ed|ing)?\s+to\b[^.;!?]*$/i.test(clausePrefix)
+    || /(?:['’]d\s+(?:like|love|want|hope)|\b(?:excited|ready|thrilled|keen|glad|happy|love|like))\s+to\b[^.;!?]*$/i.test(clausePrefix);
 }
 
 // "LLM-enabled features" or "cost-aware" is a compound adjective, not a claimed result.
-function standaloneOutcomeMatch(pattern: RegExp, sentence: string): { index: number } | null {
+function standaloneOutcomeMatch(pattern: RegExp, sentence: string): { index: number; end: number } | null {
   for (const match of sentence.matchAll(new RegExp(pattern.source, "gi"))) {
     const index = match.index ?? 0;
     if (index > 0 && sentence[index - 1] === "-" && !/\b(?:re|pre|un|de|co)-$/i.test(sentence.slice(0, index))) continue;
     if (/^\s+out\s+of\b/i.test(sentence.slice(index + match[0].length))) continue;
-    return { index };
+    return { index, end: index + match[0].length };
   }
   return null;
+}
+
+// A measure or result noun later in the clause ("raised coverage to 85%"); a raised or
+// dropped problem ("raised concerns", "drop malicious traffic") is no result.
+const RAISED_OR_DROPPED_NOUNS = new Set(["risk", "incident", "outage", "error", "defect", "loss"]);
+function outcomeObjectFollows(sentence: string, end: number, problemsCount = false): boolean {
+  const clause = sentence.slice(end).split(/[,;:]|\b(?:and|but|while|which|that|who|so|when|whenever|if|after|before|until|once)\b/i)[0]
+    // "performance risks" or "latency concerns" are what was raised, not a result.
+    .replace(/\b[\w-]+\s+(?:risks?|issues?|concerns?|questions?|flags?|alerts?|tickets?|bugs?)\b/gi, " ");
+  return /\d\s*(?:%|x\b|percent)|\b(?:by|to)\s+[~$€£]?\d|\bfrom\s+[~$€£]?\d[^,;]*?\bto\s+[~$€£]?\d|\b(?:dozens|hundreds|thousands|millions|billions)\b|\b(?:coverage|sales|engagement|speed|uptime|signups?|productivity)\b/i.test(clause)
+    || OUTCOME_NOUN_FAMILIES.some(({ label, pattern }) => (problemsCount || !RAISED_OR_DROPPED_NOUNS.has(label)) && pattern.test(clause));
 }
 
 // Returns the first unsupported ordinary-language achievement family. Resume
@@ -783,8 +827,9 @@ export function findUngroundedOutcomeClaim(
     for (const family of OUTCOME_VERB_FAMILIES) {
       const match = standaloneOutcomeMatch(family.pattern, sentence);
       if (!match || outcomeAttributionIsConditional(sentence, match.index)) continue;
+      if (family.needsObject && !outcomeObjectFollows(sentence, match.end, family.label === "halve" || family.label === "slash")) continue;
       factualOutcomeVerb = true;
-      if (!family.pattern.test(source)) return family.label;
+      if (!family.pattern.test(source) && !family.evidence?.test(source)) return family.label;
     }
     if (!factualOutcomeVerb) continue;
     for (const family of OUTCOME_NOUN_FAMILIES) {
@@ -814,6 +859,141 @@ function sentenceLeadingTokenActsAsEntitySubject(text: string, endIndex: number)
   return PROPER_SUBJECT_CLAIM_VERBS.has(next);
 }
 
+// ---------------------------------------------------------------------------
+// Affiliation claims: a workplace or school the candidate claims. The explicit, role,
+// and bare "at"/"for" frames are specified in AGENTS.md ("Numbers, outcomes, and workplaces").
+
+// A run of capitalized words ("Bank of America", "O'Neil Labs", "eBay") that ends at a possessive.
+const AFFILIATION_WORD = String.raw`(?:\p{Lu}|\p{Ll}(?=\p{Lu}))[\p{L}\p{N}.&-]*(?:['’](?![sS]?(?![\p{L}\p{N}]))[\p{L}\p{N}.&-]+)*`;
+const AFFILIATION_NAME = new RegExp(String.raw`(?<![\p{L}\p{N}])(?!(?:At|As|In|For|With|While|Back|Before|After|During|Since|The|My|Our|I|We)\b)${AFFILIATION_WORD}(?:[ \t]+(?:(?:of|&)[ \t]+)?(?!(?:I|We|My|Our|In|At|For|With|And|But|As|The|To|On|By)\b)${AFFILIATION_WORD})*(?:['’][sS]?(?![\p{L}\p{N}]))?`, "gu");
+// Names coordinated before this one ("at Beta Corp and Stripe", "at both Stripe, Plaid, and") share its frame.
+const COORDINATED_BEFORE = new RegExp(String.raw`(?:${AFFILIATION_WORD}(?:,\s*|\s+)(?:(?:and|or|&)\s+)?)+$`, "u");
+const COORDINATED_AFTER = new RegExp(String.raw`^(?:\s*,\s*(?:(?:and|or|&)\s+)?|\s+(?:and|or|&)\s+)(?!(?:I|We)\b)${AFFILIATION_WORD}(?:[ \t]+${AFFILIATION_WORD})*`, "u");
+const EXPLICIT_AFFILIATION = /(?:\b(?:while|back|previously|formerly|earlier)\s+(?:at|with)|\b(?:interned|interning)\s+(?:at|with|for)|\b(?:worked|employed)\s+(?:at|for|by)|\b(?:studied|studying)\s+at|\bmy\s+(?:[\w-]+\s+){0,2}?(?:time|years?|months?|tenure|stint|role|job|internship|days|studies)\s+(?:at|with)|\b(?:joined|attended|(?:co-?)?founded|(?:graduated|graduating)\s+from|graduate\s+of|alumn(?:us|a|i|ae)?\s+of|alum\s+of)|\b(?:degree|diploma|bachelor['’]?s|master['’]?s|associate['’]?s|mba|bba|ph\.?d\.?|doctorate|b\.?sc?\.?|m\.?sc?\.?|b\.?a\.?|m\.?a\.?|b\.?eng\.?|m\.?eng\.?)(?![a-z])[^;!?]{0,40}?\b(?:from|at))\s+(?:the\s+)?$/i;
+// "a Stanford graduate", "Stripe, where I built…", "my former employer, Stripe".
+const EXPLICIT_AFFILIATION_SUFFIX = /^(?:['’]s?)?\s+(?:graduate|grad|alum(?:nus|na|ni|nae)?)\b|^,\s+where\s+(?:I|we)\s+(?!would\b|will\b|could\b|['’])/i;
+const EXPLICIT_AFFILIATION_APPOSITIVE = /\b(?:former|previous|last|old)\s+(?:employer|company|job|school|university|college)\s*,\s*$/i;
+const ROLE_NOUNS = String.raw`engineer|developer|intern|employee|contractor|consultant|designer|analyst|scientist|manager|hire`;
+const ROLE_AFFILIATION = /(?:\bas\s+(?:a|an|the)\s+(?:[\w'’-]+\s+){0,4}?(?:at|for|with)|\b(?:engineer|developer|intern|contractor|consultant|freelancer|designer|analyst|scientist|manager|lead|architect|researcher|student|fellow|employee)s?\s+(?:at|for|with)|\b(?:work|works|working|currently|was|were)\s+(?:at|for))\s+(?:the\s+|both\s+)?$/i;
+const ROLE_NOUN_AFTER = new RegExp(String.raw`^\s+(?:[\w-]+\s+){0,2}(?:${ROLE_NOUNS})s?\b`, "i");
+const PLACE_AFFILIATION = /\b(?:at|for)\s+(?:the\s+|both\s+|either\s+)?$/i;
+// A talk or demo at a conference is an event, not a workplace; so is a named event.
+const EVENT_BEFORE = /\b(?:presented|presenting|spoke|speaking|talked|demoed|exhibited|lectured)\b[^,;.!?]*$/i;
+const EVENT_NAME = /(?:Con|Conference|Summit|Celebration|Expo|Meetup|Hackathon|Festival|Week|Forum|Workshop|Symposium|Camp|Fair|Day|Talks?)$/;
+// Someone else's workplace: "My sister, an engineer at Stripe".
+const OTHER_PERSON = /\b(?:my|his|her|their|our)\s+(?:sister|brother|friend|mentor|manager|colleague|partner|father|mother|parent|wife|husband|cousin|uncle|aunt|classmate|roommate|son|daughter)\b[^.;!?]*$/i;
+const AFFILIATION_CLAUSE_BREAK = /[,;:]|\b(?:and|but|which|that|while|so|because|where|who|whereas|though|although)\b/i;
+const AFFILIATION_INTENT = /\b(?:would|could|can|will|might|should|want|wants|hope|hoping|plan|aim|eager|excited|seek|seeking|join|joining|forward)\b|\b(?:love|like)\s+to\b|['’](?:d|ll)\b/i;
+const PAST_STATE = /\b(?:was|were|had|spent|spoke|wrote|ran|made|took|gave|taught|held|kept|met|won|began|sold|brought|drove|did)\b/i;
+const NOT_PAST_ADJECTIVES = new Set(["interested", "excited", "based", "focused", "skilled", "experienced", "motivated", "dedicated", "detailed", "advanced", "related", "needed", "required", "preferred", "distributed", "automated", "impressed", "inspired", "drawn", "struck", "pleased", "thrilled", "amazed"]);
+// Words that may follow a name without making it a modifier ("at Stripe for four years").
+const AFTER_NAME_FREE = /^(?:for|of|to|in|on|at|by|with|from|as|and|or|but|during|since|until|where|when|while|which|who|that|then|before|after|over|across|through|between|alongside|i|we|[a-z]+ing|[a-z]+ly)$/;
+// "Boston College" is not "Boston University", but "Stanford University" is "Stanford".
+const INSTITUTION_KINDS = /\b(?:university|college|institute|school|polytechnic|academy|seminary|conservatory)\b/gi;
+const AFFILIATION_GENERIC_WORDS = new Set(["university", "college", "institute", "school", "polytechnic", "academy", "inc", "corp", "corporation", "llc", "ltd", "labs", "lab", "technologies", "technology", "group", "company", "co", "of", "the", "&"]);
+// Dates, holidays, and departments ("dashboards for Finance and Operations") are not workplaces.
+const NOT_AFFILIATION_NAMES = /^(?:Q[1-4]|January|February|March|April|May|June|July|August|September|October|November|December|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Christmas|Thanksgiving|Easter|Halloween|Hanukkah|New Year|Black Friday|Cyber Monday|Finance|Operations|Ops|Product|Support|Sales|Marketing|Engineering|Legal|HR|Design|Data|Security|Compliance|Accounting|Research|IT|Customer Success|Customer Support|People|Inc|LLC|Ltd|Corp|Co|GmbH|PLC|LLP)$/;
+
+type AffiliationClaim = { name: string; index: number; end: number };
+
+const affiliationKey = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+// "Harbor, Inc." and "Harbor Labs" are Harbor; "Harbor Freight" is another company.
+const employerKey = (value: string) => affiliationKey(value).replace(/(?:\s+(?:inc|llc|ltd|corp|corporation|co|company|labs?|technologies|technology|group|hq))+$/, "");
+
+// A past action or a first-person present one ("I build APIs at Stripe") reports work; feelings do not.
+const FIRST_PERSON_PRESENT_ACTION = /\b(?:I|[Ww]e)\s+(?:currently\s+|now\s+)?(?!(?:am|are|was|were|would|could|should|will|can|may|might|want|hope|plan|love|like|think|believe|admire|appreciate|enjoy|look|feel|see|know|wish|aim|read|follow|hear|notice|learn|watch|meet)\b)[a-z]+(?<!ed)\b/;
+function clauseHasPastAction(clause: string): boolean {
+  return PAST_STATE.test(clause) || FIRST_PERSON_PRESENT_ACTION.test(clause) || (clause.match(/[A-Za-z]+/g) ?? []).some((word) => {
+    const lower = word.toLowerCase();
+    return actionVerbPast(lower) === lower || (/^[a-z]{3,}(?<!e)ed$/.test(lower) && !NOT_PAST_ADJECTIVES.has(lower));
+  });
+}
+
+// `employers` (the target employer) count only in an explicit frame or an "At <employer>,"
+// opening that reports work ("At Harbor, I built…").
+function affiliationClaims(text: string, employers: readonly string[] = []): AffiliationClaim[] {
+  const employerKeys = new Set(employers.map(employerKey).filter((key) => key.length >= 2));
+  const claims: AffiliationClaim[] = [];
+  for (const match of text.matchAll(AFFILIATION_NAME)) {
+    const index = match.index ?? 0;
+    const name = match[0].replace(/[.'’]+s?$/, "").replace(/['’]s$/, "");
+    if (/^(?:I|We|My|Our)$/.test(name) || NOT_AFFILIATION_NAMES.test(name) || EVENT_NAME.test(name) || curatedClaimTerms(name).length > 0) continue;
+    const rawBefore = text.slice(0, index);
+    // A coordinated name takes the frame of the list it ends: "at Beta Corp and Stripe".
+    const listed = rawBefore.slice(-160).match(COORDINATED_BEFORE)?.[0] ?? "";
+    const before = listed && /(?:,|\b(?:and|or|&))\s*$/.test(listed) ? rawBefore.slice(0, rawBefore.length - listed.length) : rawBefore;
+    const after = text.slice(index + match[0].length);
+    // "Stripe's payments team" is still the workplace; "Stripe headquarters" or "Harbor's open house" is not.
+    const possessive = /['’]s?$/.test(match[0]);
+    const team = possessive && /^\s*(?:[\w-]+\s+){0,2}(?:team|org|group|division|office|lab)s?\b/.test(after);
+    // "ex-Stripe" and "a former Stripe engineer" claim a workplace; "a former Harbor customer" does not.
+    const former = /\b(?:former\s+|ex-)$/i.test(before) && (ROLE_NOUN_AFTER.test(after) || /^(?:['’]s)?\s*(?:[,.;:)]|$)/.test(after));
+    if (((EXPLICIT_AFFILIATION.test(before) || EXPLICIT_AFFILIATION_APPOSITIVE.test(before)) && (!possessive || team)) || former || EXPLICIT_AFFILIATION_SUFFIX.test(after)) {
+      claims.push({ name, index, end: index + name.length });
+      continue;
+    }
+    // "as a Stripe engineer", "As Stripe's first payments engineer", and "on Stripe's payments team" name a workplace too.
+    const role = ROLE_AFFILIATION.test(before) || (/\b(?:a|an|as)\s+$/i.test(before) && ROLE_NOUN_AFTER.test(after));
+    if (!role && !PLACE_AFFILIATION.test(before) && !(team && /\b(?:on|in|with|within)\s+(?:the\s+)?$/i.test(before))) continue;
+    if ((!role && EVENT_BEFORE.test(before)) || OTHER_PERSON.test(before)) continue;
+    // The word after the name (past any names coordinated with it) shows whether it is a modifier.
+    // After a coordinated list any lowercase word is its noun ("Medicare and Medicaid billing").
+    let tail = after;
+    for (let more = tail.match(COORDINATED_AFTER); more; more = tail.match(COORDINATED_AFTER)) tail = tail.slice(more[0].length);
+    const next = tail.match(/^\s+([a-z][\w-]*)/)?.[1];
+    const nextIsVerb = next !== undefined && (actionVerbPast(next) === next || /^(?:was|is|taught|gave|showed|let|had|made)$|^[a-z]{3,}(?<!e)ed$/.test(next));
+    const modifier = next !== undefined && (tail !== after || before !== rawBefore ? !/^(?:and|or|but|for|to|in|on|at|by|with|from|as|during|since|until|where|when|while|which|who|that)$/.test(next) : !AFTER_NAME_FREE.test(next)) && !nextIsVerb;
+    if (!ROLE_NOUN_AFTER.test(after) && (possessive ? !team : modifier)) continue;
+    // A sentence that opens "At Stripe," or "Previously, at Stripe," is about the clause after it.
+    const sentenceBefore = before.split(/[.!?]\s+/).at(-1) ?? "";
+    const sentenceAfter = after.split(/[.!?](?:\s|$)/)[0];
+    const opening = /^\s*(?:At|As)\s/.test(sentenceBefore) && !AFFILIATION_CLAUSE_BREAK.test(sentenceBefore);
+    const following = `${sentenceBefore} ${sentenceAfter.replace(/^\s*,/, "").split(AFFILIATION_CLAUSE_BREAK)[0]}`;
+    let clause = opening ? following : `${before.split(AFFILIATION_CLAUSE_BREAK).at(-1)}${after.split(AFFILIATION_CLAUSE_BREAK)[0]}`;
+    if (!opening && !clauseHasPastAction(clause.replace(name, " ")) && clause.replace(name, " ").trim().split(/\s+/).length <= 3) clause = following;
+    if (AFFILIATION_INTENT.test(clause)) continue;
+    const reportsWork = clauseHasPastAction(clause.replace(name, " "));
+    if (employerKeys.has(employerKey(name)) && !(opening && /^\s*At\s/.test(sentenceBefore) && reportsWork)) continue;
+    if (!role && !reportsWork) continue;
+    claims.push({ name, index, end: index + name.length });
+  }
+  return claims;
+}
+
+// As a phrase, or word by word when the evidence beside it names no other institution kind
+// and no "State"/"Tech" the claim lacks ("University of Michigan" is not "Michigan State").
+function affiliationGrounded(name: string, evidence: unknown): boolean {
+  if (isTermGrounded(name, evidence)) return true;
+  const words = name.split(/\s+/).filter((word) => !AFFILIATION_GENERIC_WORDS.has(word.toLowerCase().replace(/[.,]+$/, "")));
+  if (!words.length || !words.every((word) => isTermGrounded(word, evidence))) return false;
+  const kinds = new Set((name.match(INSTITUTION_KINDS) ?? []).map((kind) => kind.toLowerCase()));
+  if (!kinds.size) return true;
+  const claimed = name.toLowerCase();
+  const first = words[0].replace(/[.,]+$/, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return [...String(evidence ?? "").matchAll(new RegExp(String.raw`(?:\S+\s+){0,3}\b${first}\b(?:\s+\S+){0,3}`, "gi"))].some((near) => {
+    const nearKinds = (near[0].match(INSTITUTION_KINDS) ?? []).map((kind) => kind.toLowerCase());
+    const distinguishing = (near[0].match(/\b(?:state|tech|a&m)\b/gi) ?? []).map((word) => word.toLowerCase());
+    return (!nearKinds.length || nearKinds.some((kind) => kinds.has(kind))) && distinguishing.every((word) => claimed.includes(word));
+  });
+}
+
+export function findUngroundedAffiliation(text: string, evidence: unknown, employers: readonly string[] = []): string | null {
+  return affiliationClaims(text, employers).find((claim) => !affiliationGrounded(claim.name, evidence))?.name ?? null;
+}
+
+// Answers carry no company field: the target employer is the name the posting introduces
+// itself with, never a customer, competitor, or school it mentions elsewhere.
+function postingEmployerNames(jobText: string): string[] {
+  const name = String.raw`(${AFFILIATION_WORD}(?:[ \t]+${AFFILIATION_WORD}){0,3})`;
+  const cues = [
+    new RegExp(String.raw`^\s*[^\n]{0,80}?(?:\s[-–—|@]\s|\bat\s+)${name}\s*$`, "gmu"),
+    new RegExp(String.raw`^\s*(?:[Cc]ompany|[Ee]mployer|[Oo]rganization)\s*:\s*${name}`, "gmu"),
+    new RegExp(String.raw`(?:^|[.!?]\s+|\n)\s*(?:At\s+${name},\s+(?:we|our|you)\b|(?:Join|About|Why|Welcome to|We are|We're)\s+${name})`, "gu"),
+    new RegExp(String.raw`(?:^|[.!?]\s+|\n)\s*${name}(?:['’]s\s+(?:mission|team|culture|values|benefits|employees|people|platform|products?|customers)\b|\s+(?:is|was|are|has|have|builds|makes|helps|provides|offers|powers|serves|creates|develops|operates|runs|delivers)\b(?!\s+(?:a|an)\s+(?:plus|bonus|must)\b))`, "gu")
+  ];
+  return [...new Set(cues.flatMap((cue) => [...jobText.matchAll(cue)].flatMap((match) => match.slice(1).filter(Boolean))))];
+}
+
 // Proper-name gate for application prose. Unlike resume-field rewrites, a
 // truthful answer is expected to name the target company/product from the JD,
 // so candidate evidence is not the only allowed source. Reject an unsupported
@@ -836,8 +1016,17 @@ export function findUngroundedProseProperClaimTerm(
     .replace(/\[(?:add|insert|todo)\b[^\]]*\]/gi, (placeholder) => placeholder.replace(/[^\r\n]/g, " "))
     .replace(/<\/?(?:b|i|u)>/gi, " ");
   const properToken = /\b(?:[A-Z][A-Za-z0-9.+#]{2,}|[a-z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*)\b/g;
+  // The posting grounds the target employer and the names it discusses, never a
+  // workplace or school the candidate claims ("At Plaid I built…", "a Stanford graduate").
+  const job = String(jobText ?? "");
+  const affiliations = job ? affiliationClaims(prose, postingEmployerNames(job)) : [];
   for (const match of prose.matchAll(properToken)) {
     const token = match[0];
+    const affiliation = affiliations.find((claim) => (match.index ?? 0) >= claim.index && (match.index ?? 0) < claim.end);
+    if (affiliation) {
+      if (affiliationGrounded(affiliation.name, candidateEvidence)) continue;
+      return token;
+    }
     if (isTermGrounded(token, candidateEvidence) || isTermGrounded(token, jobText)) continue;
     const sentenceStart = isProseSentenceStart(prose, match.index ?? 0);
     if (sentenceStart) {

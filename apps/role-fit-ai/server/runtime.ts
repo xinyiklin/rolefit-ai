@@ -232,8 +232,10 @@ export function requestGuardError(
   origin: string | undefined
 ): "Forbidden host." | "Cross-origin request blocked." | null {
   const requestHost = (hostHeader ?? "").toLowerCase();
+  // Browsers omit the default port, so a server on 80 sees "localhost".
+  const loopbackHosts = [`localhost:${port}`, `127.0.0.1:${port}`, `[::1]:${port}`, hostHeaderFor(bindHost, port)];
   const allowedHosts = isLoopbackBindHost(bindHost)
-    ? new Set([`localhost:${port}`, `127.0.0.1:${port}`, `[::1]:${port}`, hostHeaderFor(bindHost, port)])
+    ? new Set(port === 80 ? [...loopbackHosts, ...loopbackHosts.map((host) => host.replace(/:80$/, ""))] : loopbackHosts)
     : new Set(namesThisMachine(requestHost, port, bindHost) ? [requestHost] : []);
   if (!allowedHosts.has(requestHost)) return "Forbidden host.";
   if (origin && !allowedHosts.has(originHostOf(origin))) return "Cross-origin request blocked.";

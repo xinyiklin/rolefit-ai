@@ -192,5 +192,11 @@ try {
   saves[3].resolve({ id: "application-b" });
   await preserveUnfinished;
   assert.equal(state.isSavePending(), false, "settled Save releases application actions");
+  // A stored "ready" is re-judged on reopen: a placeholder or a missed limit makes it a draft.
+  for (const [question, answer] of [["Why us?", "I admire [Company]."], ["Why us? Maximum 2 words.", "Three words here."], ["Why us? Word count: 2-3", "Three words here."]]) {
+    state.reopen({ question, answer, status: "ready", savedAt: "2026-01-01T00:00:00.000Z" });
+    state = hook();
+    assert.equal(state.conversation.messages.at(-1).response.status, answer.includes("[") || question.includes("Maximum") ? "draft" : "ready", question);
+  }
   console.log("Answers conversation lifecycle passed: identity, exact revisions, manual edits, facts, save races and stale requests");
 } finally { unmount(); globalThis.fetch = originalFetch; }

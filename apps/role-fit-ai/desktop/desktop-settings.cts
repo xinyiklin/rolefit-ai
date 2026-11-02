@@ -13,6 +13,7 @@ import { join } from "node:path";
 import {
   ROLEFIT_EXTENSION_ORIGIN_MAX_COUNT,
   ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION,
+  isFetchBlockedPort,
   normalizeRoleFitExtensionOrigin,
   type RoleFitExtensionPairingSettings,
   type RoleFitDesktopSiteSettings
@@ -71,10 +72,22 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
+// A RangeError, so a saved blocked port reads as invalid settings; the code
+// lets the IPC boundary show this message instead of its generic one.
+export class DesktopSitePortBlockedError extends RangeError {
+  readonly code = "ROLEFIT_DESKTOP_PORT_BLOCKED";
+
+  constructor(port: number) {
+    super(`Port ${port} is one browsers refuse to connect to. Choose another port.`);
+    this.name = "DesktopSitePortBlockedError";
+  }
+}
+
 export function validateLocalSitePort(value: unknown): number {
   if (!Number.isInteger(value) || (value as number) < 1 || (value as number) > 65_535) {
     throw new RangeError("Local site port must be an integer from 1 through 65535.");
   }
+  if (isFetchBlockedPort(value as number)) throw new DesktopSitePortBlockedError(value as number);
   return value as number;
 }
 
@@ -82,8 +95,12 @@ function parseEnvironmentPort(value: string): number {
   if (!/^\d{1,5}$/.test(value)) {
     throw new Error("ROLEFIT_DESKTOP_PORT must be an integer from 1 through 65535.");
   }
+  const port = Number(value);
+  if (isFetchBlockedPort(port)) {
+    throw new Error(`ROLEFIT_DESKTOP_PORT ${port} is one browsers refuse to connect to. Choose another port.`);
+  }
   try {
-    return validateLocalSitePort(Number(value));
+    return validateLocalSitePort(port);
   } catch {
     throw new Error("ROLEFIT_DESKTOP_PORT must be an integer from 1 through 65535.");
   }
@@ -313,25 +330,47 @@ export function createDesktopSettingsManager(
     return createSettingsState(validPort, "saved");
   });
 
+  const SETTINGS_UNREADABLE = "RoleFit's desktop settings could not be read. Try again.";
+
+  // Absent, invalid, or unsupported settings hold no origins, as loadPersisted
+  // reads them. A file that cannot be read right now throws instead: a write
+  // that took the empty list as current would revoke every approved extension.
   const loadPersistedOrigins = async (): Promise<readonly string[]> => {
+    let text: string | null;
     try {
       if (!(await fileExists(settingsPath))) return Object.freeze([]);
       const metadata = await lstat(settingsPath);
-      if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.size > MAX_SETTINGS_FILE_BYTES) {
-        return Object.freeze([]);
-      }
-      const parsed = parsePersistedSettings(
-        JSON.parse(await readFile(settingsPath, "utf8")) as unknown
-      );
-      return parsed.extensionOrigins;
+      text = metadata.isFile() && !metadata.isSymbolicLink() && metadata.size <= MAX_SETTINGS_FILE_BYTES
+        ? await readFile(settingsPath, "utf8")
+        : null;
+    } catch {
+      throw new Error(SETTINGS_UNREADABLE);
+    }
+    if (text === null) return Object.freeze([]);
+    try {
+      return parsePersistedSettings(JSON.parse(text)).extensionOrigins;
     } catch {
       return Object.freeze([]);
     }
   };
 
-  const loadExtensionPairingSettings = (): Promise<RoleFitExtensionPairingSettings> => queue(async () =>
-    createExtensionPairingSettings(await loadPersistedOrigins())
-  );
+  // The port an origin change writes back must be the saved one, never the
+  // default that stands in while the file is unreadable.
+  const loadPersistedForWrite = async (): Promise<RoleFitDesktopSiteSettings> => {
+    const current = await loadPersisted();
+    if (current.warning === "saved-settings-unreadable") throw new Error(SETTINGS_UNREADABLE);
+    return current;
+  };
+
+  // A read degrades the way load() does for the port: the companion still
+  // starts, with no origins listed until the file can be read again.
+  const loadExtensionPairingSettings = (): Promise<RoleFitExtensionPairingSettings> => queue(async () => {
+    try {
+      return createExtensionPairingSettings(await loadPersistedOrigins());
+    } catch {
+      return createExtensionPairingSettings([]);
+    }
+  });
 
   const saveExtensionOrigin = (value: string): Promise<RoleFitExtensionPairingSettings> => queue(async () => {
     const origin = normalizeRoleFitExtensionOrigin(value);
@@ -341,7 +380,7 @@ export function createDesktopSettingsManager(
     if (currentOrigins.length >= ROLEFIT_EXTENSION_ORIGIN_MAX_COUNT) {
       throw new Error(`RoleFit supports up to ${ROLEFIT_EXTENSION_ORIGIN_MAX_COUNT} paired extension origins.`);
     }
-    const current = await loadPersisted();
+    const current = await loadPersistedForWrite();
     const origins = Object.freeze([...currentOrigins, origin]);
     await persist(current.localSitePort, origins);
     return createExtensionPairingSettings(origins);
@@ -353,7 +392,7 @@ export function createDesktopSettingsManager(
     const currentOrigins = await loadPersistedOrigins();
     const origins = Object.freeze(currentOrigins.filter((candidate) => candidate !== origin));
     if (origins.length === currentOrigins.length) return createExtensionPairingSettings(currentOrigins);
-    const current = await loadPersisted();
+    const current = await loadPersistedForWrite();
     await persist(current.localSitePort, origins);
     return createExtensionPairingSettings(origins);
   });

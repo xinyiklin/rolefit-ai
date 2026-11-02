@@ -70,7 +70,8 @@ function inlineHtmlForRange(range: ClipboardRange): string {
       string | null
     ];
     const styles = [
-      `font-family: ${family}`,
+      // Quoted: unquoted "Source Serif 4" is invalid CSS, since "4" is no identifier.
+      `font-family: '${family}'`,
       `font-size: ${size}pt`,
       `line-height: ${lineHeight}`,
       ...(bold ? ["font-weight: 700"] : []),

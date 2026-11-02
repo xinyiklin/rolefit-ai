@@ -145,11 +145,13 @@ the keyboard command is an ES module. Chrome and Edge need 123+
    requires substantial descriptions with aligned metadata plus strong lexical
    and ordered-phrase overlap; small amounts of shared boilerplate do not
    produce a warning.
-3. **Prepare in RoleFit** sends exactly `{text, url, frameUrls, claimToken}` to
-   `POST /api/extension/import` and opens a fresh app tab with that short claim
-   token. The server resolves the raw posting text in the background (for
-   example, fetching the full description for a Greenhouse link), so it
-   survives popup focus loss. The app polls
+3. **Prepare in RoleFit** sends exactly `{text, url, pageTitle, frameUrls,
+   claimToken}` to `POST /api/extension/import` and opens a fresh app tab with
+   that short claim token. The server resolves the raw posting text in the
+   background (for example, fetching the full description for a Greenhouse
+   link), so it survives popup focus loss. On LinkedIn, Indeed, and Handshake it
+   adds the role and employer as labelled lines when the page title matches a
+   known job-board title form unambiguously. The app polls
    `GET /api/extension/inbox?tabId=...&claimToken=...`; progress is reported
    while that resolve runs, and the delivered inbox payload contains only
    `{text, url}`. The receiving tab always runs provider-backed job analysis and
@@ -171,9 +173,10 @@ the keyboard command is an ES module. Chrome and Edge need 123+
    accepts that option, with a normal fresh-tab fallback elsewhere.
 
 Each preparation handoff is its own independent RoleFit tab. The claim token
-keeps the new posting out of older visible tabs while still allowing a
-no-strand fallback if the new tab never opens or closes before draining the
-import inbox entry.
+keeps the new posting out of older visible tabs: only the tab opened with that
+token can claim the entry. If that tab fails to open, the popup's Try again
+reopens the same hand-off; an entry no tab ever claims expires after ten
+minutes.
 
 Duplicate detection is a workflow gate, not a score. A warning found before or
 after Job analysis asks the user to continue the current pipeline or stop; stopping

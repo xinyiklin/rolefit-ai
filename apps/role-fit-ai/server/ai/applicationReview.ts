@@ -14,8 +14,8 @@ import {
 } from "../../shared/applicationReviewContract.ts";
 import { isRequestAborted, requestAbortSignal, sendJson } from "../http.ts";
 import { readAiJsonBody } from "./json.ts";
-import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
-import { resolveProviderRequest } from "./providers.ts";
+import { UserSafeAiError, isProviderTimeout, safeConfigErrorMessage } from "./errors.ts";
+import { providerLabel, resolveProviderRequest } from "./providers.ts";
 import { callConfiguredProvider } from "./clients.ts";
 import { fenceUntrusted, inputFirewallRule } from "./prompts.ts";
 import { candidateClaimIssue, explicitAdviceClaims } from "./claimEvidence.ts";
@@ -220,6 +220,7 @@ export async function handleApplicationReview(
   }
   const request = requestAbortSignal(req, res);
   let local: ApplicationReviewResult | undefined;
+  let provider = "";
   try {
     const body = await readAiJsonBody(req, 1_000_000);
     const input = parseApplicationReviewInput(body);
@@ -229,6 +230,7 @@ export async function handleApplicationReview(
       return;
     }
     const config = resolveProviderRequest(body);
+    provider = config.provider;
     const raw = await callConfiguredProvider({
       ...config,
       signal: request.signal,
@@ -242,8 +244,10 @@ export async function handleApplicationReview(
     const message =
       error instanceof UserSafeAiError
         ? error.message
-        : safeConfigErrorMessage(error instanceof Error ? error.message : "") ||
-          "Final review could not finish. Check AI settings and retry.";
+        : isProviderTimeout(error)
+          ? `${providerLabel(provider)} timed out. Try again or switch providers.`
+          : safeConfigErrorMessage(error instanceof Error ? error.message : "") ||
+            "Final review could not finish. Check AI settings and retry.";
     sendJson(
       res,
       local ? 200 : error instanceof UserSafeAiError ? error.status : 500,

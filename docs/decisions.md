@@ -239,6 +239,10 @@ later entry wins.
   fallback, and the PDF draws the face's own glyph or `.notdef`, while the
   editor's font stack may draw one from Tinos or Arimo; covering them needs new
   font assets.
+  Amended 2026-10-30 [TOOL]: invisible format characters (soft hyphen,
+  U+200B-U+200F, U+2060, U+FEFF) are not on that fallback: they measure zero
+  width, as the PDF draws them. Kerning and ligatures continue across a soft
+  hyphen and stop at the others, matching the PDF; Chromium kerns across them.
 
 ### RoleFit product behavior and trust decisions
 

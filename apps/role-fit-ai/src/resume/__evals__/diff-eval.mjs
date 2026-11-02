@@ -95,4 +95,21 @@ assert.deepEqual(
   assert.deepEqual(metricPrompts, ["Grew revenue [ADD METRIC: dollar amount]."], "metricPrompts matches case-insensitively and reads only the polished text, not the source");
 }
 
+// Every view rebuilds its own side exactly: dropping or replacing a field's
+// first word never glues the next word to the removed one.
+{
+  const view = (segments, keep) => segments.filter((segment) => keep.includes(segment.type)).map((segment) => segment.text).join("");
+  for (const [before, after] of [
+    ["Java, Python, SQL", "Python, SQL"],
+    ["Thanks. I am excited", "I am excited"],
+    ["Led team of five", "Guided team of five"],
+    ["Python, SQL", "Java, Python, SQL"],
+    ["Built  internal tools", "Built tools"]
+  ]) {
+    const { segments } = buildResumeDiff(before, after);
+    assert.equal(view(segments, ["equal", "removed"]), before, `the Now view reads the source exactly: ${before}`);
+    assert.equal(view(segments, ["equal", "added"]), after, `the Proposed view reads the proposal exactly: ${after}`);
+  }
+}
+
 console.log("diff probes passed");

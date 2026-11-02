@@ -1,8 +1,11 @@
 /// <reference lib="es2022.intl" />
+// A trailing "with no prior streaming experience" denies only itself, up to the next comma.
+const TRAILING_EXPERIENCE_DENIAL = /\s+(with\s+no\s+(?:[\w+-]+\s+){0,4}experience\b[^,;]*),?/gi;
+
 export function evidenceSegments(value: string): string[] {
   return [...new Intl.Segmenter("en", { granularity: "sentence" }).segment(value)]
     .flatMap(({ segment }) =>
-      segment.split(/[\r\n;]+|\s+but\s+|,\s*(?=not\b|never\b)|\s+and\s+(?=not\b|never\b)/i)
+      segment.replace(TRAILING_EXPERIENCE_DENIAL, "\n$1\n").split(/[\r\n;]+|\s+but\s+|,\s*(?=not\b|never\b)|\s+and\s+(?=not\b|never\b)/i)
     )
     .map((text) => text.trim())
     .filter(Boolean);
@@ -14,7 +17,7 @@ export function evidencePolarity(segment: string): "affirmative" | "denied" | "a
     /\b(?:no (?:[\w+-]+\s+){0,4}experience|without experience|(?:never|not) (?:used|use|worked|built|developed|learned|experienced|familiar|proficient|skilled)|(?:have|has)(?:\s+not|n't) (?:used|worked|built|developed)|(?:do|did)(?:\s+not|n't) (?:use|work|build|develop)|lack(?:s|ing)? (?:experience|knowledge|skills?)|unfamiliar with)\b/i.test(
       text
     ) ||
-    /^(?:no|not|never)\b/i.test(text.trim())
+    /^(?:no|not|never)\b(?!-)/i.test(text.trim())
   )
     return "denied";
   if (

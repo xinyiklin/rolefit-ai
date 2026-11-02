@@ -1,13 +1,12 @@
 // Job analysis extracts a posting into bounded structured fields.
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
-  FetchTimeoutError,
   isRequestAborted,
   requestAbortSignal,
   sendJson
 } from "../http.ts";
 import { candidateContextLimitError } from "../../shared/candidateProfileContract.ts";
-import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
+import { UserSafeAiError, isProviderTimeout, safeConfigErrorMessage } from "./errors.ts";
 import { readAiJsonBody } from "./json.ts";
 import { providerLabel, resolveProviderRequest } from "./providers.ts";
 import { callConfiguredProvider } from "./clients.ts";
@@ -322,7 +321,7 @@ export async function handleJobAnalysis(req: IncomingMessage, res: ServerRespons
       sendJson(res, error.status, { error: error.message });
       return;
     }
-    if (error instanceof FetchTimeoutError || (error instanceof Error && /timed out|timeout/i.test(error.message))) {
+    if (isProviderTimeout(error)) {
       sendJson(res, 504, { error: `${providerLabel(provider)} timed out. Try again or switch providers.` });
       return;
     }

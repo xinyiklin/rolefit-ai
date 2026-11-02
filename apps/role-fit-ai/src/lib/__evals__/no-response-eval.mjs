@@ -1,6 +1,7 @@
 // No response is derived from the latest dated activity: the submission or any
 // timeline entry. Day-granular in every zone; only Applied and Interviewing
-// records are ever flagged; dueAt is the local day the threshold passed.
+// records are ever flagged; dueAt is the local day the threshold passed, or
+// the day after a follow-up that held the record if later.
 import assert from "node:assert/strict";
 
 import {
@@ -176,6 +177,13 @@ assert.equal(
 assert.ok(
   noResponseCandidate({ ...quiet, followupAt: toIso("2026-10-19") }, 21, today),
   "an overdue follow-up no longer holds it back"
+);
+const held = noResponseCandidate({ ...quiet, followupAt: toIso("2026-10-19") }, 21, today);
+assert.equal(toDateInput(held.dueAt), "2026-10-20", "the silence is dated after the follow-up that held it, not inside the hold");
+assert.equal(
+  toDateInput(noResponseCandidate({ ...quiet, followupAt: toIso("2026-08-05") }, 21, today).dueAt),
+  "2026-08-22",
+  "a follow-up that ended before the threshold leaves the silence date unchanged"
 );
 
 console.log("no-response eval passed");

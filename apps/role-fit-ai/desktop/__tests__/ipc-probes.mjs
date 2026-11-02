@@ -20,6 +20,7 @@ import {
   isRoleFitConnectionServerState,
   isRoleFitExtensionSetupCopyTarget,
   isRoleFitProviderId,
+  isFetchBlockedPort,
   isRoleFitWorkspaceBackupFileName,
   normalizeRoleFitExtensionOrigin,
   normalizeRoleFitDesktopPlatform
@@ -168,6 +169,23 @@ assert.equal(isRoleFitWorkspaceBackupFileName("C:drive.rolefit-backup"), false);
 assert.equal(isRoleFitWorkspaceBackupFileName(".hidden.rolefit-backup"), false);
 assert.equal(isRoleFitWorkspaceBackupFileName("plain.json"), false);
 assert.equal(isRoleFitWorkspaceBackupFileName(`${"n".repeat(300)}.rolefit-backup`), false);
+// A user-chosen name may start with any character that is not a dot or a separator.
+assert.equal(isRoleFitWorkspaceBackupFileName("Été 2026.rolefit-backup"), true);
+assert.equal(isRoleFitWorkspaceBackupFileName("_old.rolefit-backup"), true);
+assert.equal(isRoleFitWorkspaceBackupFileName("(1).rolefit-backup"), true);
+assert.equal(isFetchBlockedPort(6_000), true);
+assert.equal(isFetchBlockedPort(10_080), true);
+assert.equal(isFetchBlockedPort(5_181), false);
+assert.equal(isFetchBlockedPort(6_001), false);
+// The extension keeps its own copy of the list (it shares no module with the
+// companion); the two must refuse exactly the same ports.
+{
+  const extensionSettings = await readFile(new URL("../../extension/settings.js", import.meta.url), "utf8");
+  const listed = extensionSettings.match(/FETCH_BLOCKED_PORTS = new Set\(\[([\s\S]*?)\]\)/)?.[1] ?? "";
+  const extensionPorts = new Set(listed.split(",").map((port) => Number(port.trim())).filter(Number.isInteger));
+  const companionPorts = new Set(Array.from({ length: 65_535 }, (_, index) => index + 1).filter(isFetchBlockedPort));
+  assert.deepEqual([...extensionPorts].sort((a, b) => a - b), [...companionPorts].sort((a, b) => a - b), "extension and companion refuse the same ports");
+}
 assert.equal(normalizeRoleFitDesktopPlatform("darwin"), "darwin");
 assert.equal(normalizeRoleFitDesktopPlatform("freebsd"), "other");
 assert.equal(isRoleFitCliProviderId("claude-cli"), true);
@@ -316,6 +334,7 @@ let removedExtensionOrigin = null;
 let extensionPairingFailure = null;
 let siteSettingsFailure = null;
 let saveShouldLeak = false;
+let saveFailure = null;
 let terminalShouldLeak = false;
 let workspaceOverviewResult = {
   workspacePath: "/private/rolefit/workspaces/workspace",
@@ -390,6 +409,7 @@ const options = {
     savedApiProvider = provider;
     savedApiKey = apiKey;
     if (saveShouldLeak) throw new Error(`vault rejected ${apiKey}`);
+    if (saveFailure) throw saveFailure;
     return connectionFor(provider, {
       configured: true,
       ready: true,
@@ -953,6 +973,16 @@ assert.ok(sanitizedError instanceof Error);
 assert.match(sanitizedError.message, /Unable to save API provider/);
 assert.doesNotMatch(sanitizedError.message, new RegExp(leakingSecret));
 saveShouldLeak = false;
+saveFailure = new Error(
+  "Restart RoleFit and let this companion start the local service before changing providers."
+);
+await assert.rejects(
+  installedHandlers.get(channels.saveApi)(requestEvent(), "anthropic", leakingSecret),
+  (error) => error instanceof Error &&
+    error.message ===
+      "Restart RoleFit and let this companion start the local service before changing providers."
+);
+saveFailure = null;
 
 terminalShouldLeak = true;
 let sanitizedTerminalError = null;
@@ -972,6 +1002,15 @@ siteSettingsFailure = Object.assign(new Error("private port-probe detail"), {
 await assert.rejects(
   installedHandlers.get(channels.applyPort)(requestEvent(), 5_193),
   /already in use/
+);
+// A refused port names its reason: the blocked-port message is RoleFit's own
+// text, never a probe diagnostic.
+siteSettingsFailure = Object.assign(new Error("Port 6000 is one browsers refuse to connect to. Choose another port."), {
+  code: "ROLEFIT_DESKTOP_PORT_BLOCKED"
+});
+await assert.rejects(
+  installedHandlers.get(channels.applyPort)(requestEvent(), 6_000),
+  /Port 6000 is one browsers refuse/
 );
 siteSettingsFailure = Object.assign(new Error("private environment detail"), {
   code: "ROLEFIT_DESKTOP_SETTINGS_LOCKED"
@@ -1121,13 +1160,28 @@ assert.match(
 );
 assert.match(
   companionRendererSource,
-  /function scheduleConnectionPoll\(\)[\s\S]*activeTabId !== "settings"[\s\S]*document\.visibilityState === "hidden"/,
-  "the connection status poll runs only while Settings is active and visible"
+  /function scheduleConnectionPoll\(\)[\s\S]*?!pollsConnectionStatus\(activeTabId\)[\s\S]*?document\.visibilityState === "hidden"/,
+  "the connection status poll runs only while Settings or Browser extension is active and visible"
+);
+assert.match(
+  companionRendererSource,
+  /function pollsConnectionStatus\(tab\) \{\s*return tab === "settings" \|\| tab === "extension";\s*\}/,
+  "the extension tab keeps the ownership status behind Approve/Remove live, so a transient probe failure recovers"
+);
+assert.match(
+  companionRendererSource,
+  /function activateTab\([\s\S]*?if \(pollsConnectionStatus\(tab\)\) \{\s*if \(hasUsableBridge\(\)\) void refreshConnectionStatus\(\);/,
+  "opening the extension tab refreshes the connection status that gates pairing"
 );
 assert.match(
   companionRendererSource,
   /async function refreshConnectionStatus\(\)[\s\S]*window\.clearTimeout\(connectionPollTimer\)[\s\S]*finally[\s\S]*scheduleConnectionPoll\(\)/,
   "each connection refresh clears its predecessor and schedules one successor only after settling"
+);
+assert.match(
+  companionRendererSource,
+  /async function refreshConnectionStatus\(\)[\s\S]*?connectionStatusFailures = 0;[\s\S]*?catch \{[\s\S]*?connectionStatusFailures \+= 1;\s*if \(connectionStatusFailures >= 2\) liveConnectionStatus = null;/,
+  "one failed connection probe keeps the last ownership; only a second consecutive failure clears it"
 );
 assert.match(
   companionRendererSource,
@@ -1185,7 +1239,7 @@ assert.doesNotMatch(
   "the renderer never exposes an in-app credential flow or inconsistent terminal label"
 );
 const copyExtensionSetupValueSource = companionRendererSource.slice(
-  companionRendererSource.indexOf("function announceExtensionSetupCopy"),
+  companionRendererSource.indexOf("function announceStatus"),
   companionRendererSource.indexOf("function parseLocalSitePortInput")
 );
 assert.match(copyExtensionSetupValueSource, /extensionCopyPending[\s\S]*bridge\.copyExtensionSetupValue\(target\)/);
@@ -1364,6 +1418,160 @@ assert.deepEqual(extensionCopyCalls, ["chrome", "chrome", "chrome", "edge", "chr
 assert.deepEqual(rendererCopyRenderCalls, []);
 assert.match(companionRendererSource, /Copied Chrome extensions address\./);
 assert.doesNotMatch(companionRendererSource, /navigator\.clipboard|clipboard\.writeText/);
+
+function rendererSlice(start, end) {
+  const from = companionRendererSource.indexOf(start);
+  const to = companionRendererSource.indexOf(end, from);
+  assert.ok(from >= 0 && to > from, `renderer slice ${start} .. ${end}`);
+  return companionRendererSource.slice(from, to);
+}
+assert.match(
+  companionRendererSource,
+  /function announceStatus\(message\) \{\s*elements\.extensionSetupStatus\.textContent = ""/,
+  "the shared status announcer targets the live region outside every panel"
+);
+const openRoleFitSource = rendererSlice(
+  "async function openRoleFitInBrowser",
+  "for (const button of [elements.openRoleFit"
+);
+assert.doesNotMatch(openRoleFitSource, /\bannounce\(/, "Open RoleFit never announces into the hidden Providers panel");
+assert.match(openRoleFitSource, /catch \{\s*announceStatus\("RoleFit could not be opened/);
+const openFolderSource = rendererSlice(
+  "function setOpenExtensionDirectoryLabel",
+  "for (const button of elements.extensionCopyButtons)"
+);
+assert.doesNotMatch(openFolderSource, /\bannounce\(/, "Open folder never announces into the hidden Providers panel");
+assert.match(
+  openFolderSource,
+  /setOpenExtensionDirectoryLabel\("Open folder"\);[\s\S]*catch \{[\s\S]*setOpenExtensionDirectoryLabel\("Couldn't open, try again", message\);\s*announceStatus\(message\);/,
+  "a failed Open folder shows on the control until the next try and is announced from any tab"
+);
+
+const pairingLoadSettings = { schemaVersion: 1, origins: ["chrome-extension://abcdefghijklmnopabcdefghijklmnop"], pendingOrigins: [] };
+let pairingLoadOutcome = "reject";
+const pairingLoadRenders = [];
+const pairingLoadHarness = vm.runInNewContext(
+  `
+    let extensionPairingSettings = null;
+    let extensionPairingLoadState = "loading";
+    let extensionPairingStartupRetriesLeft = 0;
+    let extensionPairingRetryTimer = 0;
+    ${rendererSlice("async function loadExtensionPairingSettings()", "function extensionPairingErrorMessage")}
+    ({
+      loadExtensionPairingSettings,
+      settings: () => extensionPairingSettings,
+      loadState: () => extensionPairingLoadState
+    });
+  `,
+  {
+    bridge: {
+      async getExtensionPairingSettings() {
+        if (pairingLoadOutcome === "reject") throw new Error("transient pairing probe failure");
+        return pairingLoadSettings;
+      }
+    },
+    document: { visibilityState: "visible" },
+    window: {
+      setTimeout() {
+        throw new Error("startup retries are exhausted in this harness");
+      },
+      clearTimeout() {}
+    },
+    EXTENSION_PAIRING_STARTUP_RETRY_MS: 1_500,
+    updateExtensionPairingControls: () => pairingLoadRenders.push("controls"),
+    syncInstallDisclosure: () => pairingLoadRenders.push("disclosure")
+  }
+);
+await pairingLoadHarness.loadExtensionPairingSettings();
+assert.equal(pairingLoadHarness.loadState(), "error", "a failure before any successful load is still terminal");
+assert.equal(pairingLoadRenders.length, 2);
+pairingLoadOutcome = "resolve";
+await pairingLoadHarness.loadExtensionPairingSettings();
+assert.equal(pairingLoadHarness.loadState(), "ok");
+assert.equal(pairingLoadHarness.settings(), pairingLoadSettings);
+pairingLoadRenders.length = 0;
+pairingLoadOutcome = "reject";
+await pairingLoadHarness.loadExtensionPairingSettings();
+assert.equal(pairingLoadHarness.loadState(), "ok", "one failed poll after a load never shows the terminal error");
+assert.equal(pairingLoadHarness.settings(), pairingLoadSettings, "a failed poll keeps the last pairing rows");
+assert.deepEqual(pairingLoadRenders, [], "a failed poll after a load does not re-render the rows");
+
+const ownedConnectionStatus = { serverState: "owned", port: 5_181, siteUrl: "http://127.0.0.1:5181/" };
+let connectionProbeOutcome = "resolve";
+const connectionPollHarness = vm.runInNewContext(
+  `
+    let liveConnectionStatus = null;
+    let connectionStatusLoaded = false;
+    let connectionStatusGeneration = 0;
+    let connectionStatusFailures = 0;
+    let connectionPollTimer = 0;
+    ${rendererSlice("async function refreshConnectionStatus()", "async function runWorkspaceTransfer")}
+    ({ refreshConnectionStatus, status: () => liveConnectionStatus });
+  `,
+  {
+    bridge: {
+      async getConnectionStatus() {
+        if (connectionProbeOutcome === "reject") throw new Error("transient connection probe failure");
+        return connectionProbeOutcome === "reused"
+          ? { serverState: "reused-standalone", port: 5_181 }
+          : ownedConnectionStatus;
+      }
+    },
+    window: { clearTimeout() {} },
+    hasUsableBridge: () => true,
+    renderConnectionStatus() {},
+    updateExtensionPairingControls() {},
+    scheduleConnectionPoll() {}
+  }
+);
+await connectionPollHarness.refreshConnectionStatus();
+assert.equal(connectionPollHarness.status(), ownedConnectionStatus);
+connectionProbeOutcome = "reject";
+await connectionPollHarness.refreshConnectionStatus();
+assert.equal(
+  connectionPollHarness.status(),
+  ownedConnectionStatus,
+  "one failed connection probe keeps the ownership behind Approve/Remove"
+);
+await connectionPollHarness.refreshConnectionStatus();
+assert.equal(connectionPollHarness.status(), null, "a second consecutive failure clears the ownership");
+connectionProbeOutcome = "resolve";
+await connectionPollHarness.refreshConnectionStatus();
+connectionProbeOutcome = "reject";
+await connectionPollHarness.refreshConnectionStatus();
+assert.equal(connectionPollHarness.status(), ownedConnectionStatus, "a success resets the failure count");
+connectionProbeOutcome = "reused";
+await connectionPollHarness.refreshConnectionStatus();
+assert.equal(connectionPollHarness.status().serverState, "reused-standalone", "a confirmed non-owned state applies at once");
+
+const providerMutationErrorMessage = vm.runInNewContext(
+  `${rendererSlice("function providerMutationErrorMessage", "function connectionStatus(")}
+  providerMutationErrorMessage;`
+);
+const reusedListenerSentence =
+  "Restart RoleFit and let this companion start the local service before changing providers.";
+assert.equal(
+  providerMutationErrorMessage(
+    new Error(`Error invoking remote method 'rolefit:companion:remove-provider': Error: ${reusedListenerSentence}`),
+    "The provider could not be removed."
+  ),
+  reusedListenerSentence,
+  "a reused listener's instruction reaches the user without Electron's remote-method prefix"
+);
+assert.equal(
+  providerMutationErrorMessage(new Error("private vault failure"), "The provider could not be removed."),
+  "The provider could not be removed."
+);
+assert.match(
+  companionRendererSource,
+  /async function runProviderAction[\s\S]*?catch \(error\) \{\s*announce\(providerMutationErrorMessage\(error, failureMessage\)\);/,
+  "provider add/remove failures pass the caught error to the message extractor"
+);
+assert.match(
+  companionRendererSource,
+  /async function saveApiProvider[\s\S]*?catch \(error\) \{\s*announce\(providerMutationErrorMessage\(\s*error,/,
+  "API key save failures pass the caught error to the message extractor"
+);
 for (const target of ROLEFIT_EXTENSION_SETUP_COPY_TARGETS) {
   assert.match(
     companionHtmlSource,
@@ -1532,5 +1740,49 @@ assert.deepEqual(invocations, [
   { channel: channels.workspaceFolder, args: [] },
   { channel: channels.connectionStatus, args: [] }
 ]);
+
+// The provider summary tells the truth about the open service: a standalone
+// development server never receives the providers added in this companion.
+{
+  const summarySource = companionRendererSource.slice(
+    companionRendererSource.indexOf("function renderProviderSummary"),
+    companionRendererSource.indexOf("function renderCheckingProviders")
+  );
+  const text = () => ({ textContent: "" });
+  const elements = {
+    providerSummary: text(),
+    overviewProviderSummary: text(),
+    navProvidersAttention: { hidden: true },
+    overviewProvidersCard: {}
+  };
+  const providers = [{ id: "claude-cli" }, { id: "openai-api" }];
+  const context = {
+    elements,
+    SUPPORTED_PROVIDERS: providers,
+    providerRecords: new Map([["claude-cli", { configured: true, ready: true }], ["openai-api", { configured: false, ready: false }]]),
+    liveConnectionStatus: { serverState: "owned" },
+    setCardTone: () => {}
+  };
+  const summary = vm.runInNewContext(`${summarySource}; ({ renderProviderSummary });`, context);
+  summary.renderProviderSummary();
+  assert.equal(elements.providerSummary.textContent, "1 added · 1 ready for RoleFit.", "an owned service uses the companion's providers");
+  context.liveConnectionStatus = { serverState: "reused-standalone" };
+  summary.renderProviderSummary();
+  assert.match(elements.providerSummary.textContent, /development server, which does not use the providers added here/, "a dev server is never described as using them");
+  assert.equal(elements.overviewProviderSummary.textContent, "Not used by the dev server");
+  assert.equal(elements.navProvidersAttention.hidden, false, "and the Providers section asks for attention");
+  context.liveConnectionStatus = { serverState: "reused-companion" };
+  summary.renderProviderSummary();
+  assert.match(elements.providerSummary.textContent, /another companion session started, which does not use the providers added here. Stop that service/, "another session's service is not described as using them either");
+  assert.equal(elements.overviewProviderSummary.textContent, "Not used by this service");
+  context.providerRecords.set("claude-cli", { configured: false, ready: false });
+  summary.renderProviderSummary();
+  assert.equal(elements.providerSummary.textContent, "No providers added yet. Add a CLI or API provider to begin.", "with nothing added there is nothing to call unused");
+  assert.match(
+    companionRendererSource,
+    /function renderConnectionStatus\(\) \{[\s\S]{0,400}?if \(elements\.companionRoot\.dataset\.status !== "error"\) renderProviderSummary\(\);/,
+    "a change of service ownership re-renders the summary without hiding a provider-status error"
+  );
+}
 
 console.log("desktop provider-management and workspace IPC contract and preload probes: passed");

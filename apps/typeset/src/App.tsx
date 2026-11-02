@@ -112,6 +112,11 @@ export default function App() {
   const workspaceRef = useRef<HTMLElement>(null);
   const initializedRef = useRef(false);
   const lastWrittenDraftRef = useRef<string | null>(null);
+  const lastWrittenTitleRef = useRef<string | null>(null);
+  // A restored draft is already stored; writing it back unchanged could
+  // overwrite a newer draft another tab saved since this tab read it.
+  const restoredDraftRef = useRef<{ draft: string; title: string } | null>(null);
+  const pendingAutosaveRef = useRef<(() => void) | null>(null);
   const autoFitRef = useRef(false);
   const dragDepthRef = useRef(0);
   const noticeExitTimerRef = useRef<number | null>(null);
@@ -184,24 +189,30 @@ export default function App() {
     let initialDocumentStyle: DocumentStyle = toDocumentStyle(DOC_STYLE_DEFAULTS);
     let initialTitle = UNTITLED_RESUME_TITLE;
 
-    try {
-      const draft = restoreAutosavedDraft(window.localStorage);
-      if (draft.kind === "restored") {
-        initialData = draft.parsed.data;
-        initialDocumentStyle = draft.parsed.documentStyle;
-        initialTitle = draft.title || UNTITLED_RESUME_TITLE;
-      } else if (draft.kind === "unreadable") {
-        setNotice({
-          tone: "error",
-          message: draft.kept
-            ? "Your last local draft could not be read, so a fresh resume was opened instead. The draft was kept in this browser's storage."
-            : "Your last local draft could not be read or kept, so a fresh resume was opened instead."
-        });
+    const draft = restoreAutosavedDraft(() => window.localStorage);
+    if (draft.kind === "restored") {
+      initialData = draft.parsed.data;
+      initialDocumentStyle = draft.parsed.documentStyle;
+      initialTitle = draft.title || UNTITLED_RESUME_TITLE;
+      try {
+        restoredDraftRef.current = {
+          draft: serializeResumeFile(initialData, { ...DOC_STYLE_DEFAULTS, ...initialDocumentStyle }),
+          title: initialTitle
+        };
+      } catch {
+        // Without the comparison, the first autosave simply writes the draft.
       }
-    } catch {
+    } else if (draft.kind === "unreadable") {
       setNotice({
         tone: "error",
-        message: "Your last local draft could not be restored, so a fresh resume was opened instead."
+        message: draft.kept
+          ? "Your last local draft could not be read, so a fresh resume was opened instead. The draft was kept in this browser's storage."
+          : "Your last local draft could not be read or kept, so a fresh resume was opened instead."
+      });
+    } else if (draft.kind === "unavailable") {
+      setNotice({
+        tone: "info",
+        message: "Local saving is unavailable in this browser, so drafts will not be kept here. Download a .resume file to keep your work."
       });
     }
 
@@ -218,21 +229,55 @@ export default function App() {
     if (!initializedRef.current || !resume) return;
     setSaveStatus("saving");
 
-    const timer = window.setTimeout(() => {
+    const save = () => {
+      pendingAutosaveRef.current = null;
       try {
         const draft = serializeResumeFile(resume, docStyle.style);
+        const title = documentTitle.trim() || UNTITLED_RESUME_TITLE;
+        const restored = restoredDraftRef.current;
+        if (restored && restored.draft === draft && restored.title === title) {
+          // An edit undone before the delay leaves the restored, stored draft.
+          commitDocumentSaveBaseline(editor.markClean, docStyle.markClean);
+          setSaveStatus("saved");
+          return;
+        }
+        restoredDraftRef.current = null;
         window.localStorage.setItem(AUTOSAVE_KEY, draft);
         lastWrittenDraftRef.current = draft;
-        window.localStorage.setItem(DOCUMENT_TITLE_KEY, documentTitle.trim() || UNTITLED_RESUME_TITLE);
+        window.localStorage.setItem(DOCUMENT_TITLE_KEY, title);
+        lastWrittenTitleRef.current = title;
         commitDocumentSaveBaseline(editor.markClean, docStyle.markClean);
         setSaveStatus("saved");
       } catch {
         setSaveStatus({ state: "error", label: "Local save unavailable" });
       }
-    }, AUTOSAVE_DELAY_MS);
+    };
+    const timer = window.setTimeout(save, AUTOSAVE_DELAY_MS);
+    pendingAutosaveRef.current = () => {
+      window.clearTimeout(timer);
+      save();
+    };
 
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      pendingAutosaveRef.current = null;
+    };
   }, [docStyle.markClean, documentStyleSignature, documentTitle, editor.markClean, resume]);
+
+  // Mobile browsers and discarded tabs may never fire beforeunload, so a hidden
+  // page writes its pending draft now instead of after the autosave delay.
+  useEffect(() => {
+    const flush = () => pendingAutosaveRef.current?.();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, []);
 
   useEffect(() => {
     document.title = `${documentTitle.trim() || UNTITLED_RESUME_TITLE} — Typeset`;
@@ -241,7 +286,9 @@ export default function App() {
   // The next autosave here stores this tab's work again and clears the error.
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
-      if (draftReplacedElsewhere(event, lastWrittenDraftRef.current)) {
+      if (draftReplacedElsewhere(event, lastWrittenDraftRef.current, lastWrittenTitleRef.current)) {
+        // The restored copy is no longer what is stored, so it must be written.
+        restoredDraftRef.current = null;
         setSaveStatus({ state: "error", label: "Replaced by another tab" });
       }
     };
@@ -252,7 +299,9 @@ export default function App() {
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
       const state = typeof saveStatus === "string" ? saveStatus : saveStatus.state;
-      if (!editor.dirty && !docStyle.dirty && state !== "error") return;
+      // "saving" covers the autosave delay after a title-only edit, which
+      // marks neither the document nor its style dirty.
+      if (!editor.dirty && !docStyle.dirty && state !== "error" && state !== "saving") return;
       event.preventDefault();
     };
     window.addEventListener("beforeunload", onBeforeUnload);
@@ -456,6 +505,9 @@ export default function App() {
 
   const onDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
+      // Only a file drop is the shell's; a text drop into the title field or
+      // the editor keeps the browser's own insertion.
+      if (!hasDraggedFiles(event)) return;
       event.preventDefault();
       dragDepthRef.current = 0;
       setIsDraggingFile(false);
@@ -567,13 +619,16 @@ export default function App() {
         docStyle={docStyle}
         globalAlignments={globalAlignments ?? undefined}
         onGlobalAlignmentChange={(scope, alignment) => {
-          editor.actions.clearAlignmentOverrides(scope);
+          // Clearing the overrides and setting the default are one undo step.
+          docStyle.groupHistory(() => {
+            editor.actions.clearAlignmentOverrides(scope);
+            if (scope === "body") docStyle.set("bodyAlign", alignment);
+            else if (scope === "header") docStyle.set("headerAlign", alignment === "justify" ? "left" : alignment);
+            else docStyle.set("headingAlign", alignment === "justify" ? "left" : alignment);
+          });
           setInlineFormat((current) =>
             current.alignmentScope === scope ? { ...current, alignment } : current
           );
-          if (scope === "body") docStyle.set("bodyAlign", alignment);
-          else if (scope === "header") docStyle.set("headerAlign", alignment === "justify" ? "left" : alignment);
-          else docStyle.set("headingAlign", alignment === "justify" ? "left" : alignment);
         }}
         styleMarkStates={styleMarkStates}
         onStyleFieldMarkChange={(field, mark, on) => {

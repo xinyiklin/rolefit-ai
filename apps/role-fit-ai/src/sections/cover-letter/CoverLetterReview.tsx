@@ -316,9 +316,9 @@ export function CoverLetterReview({
       ) : (
         <>
           <ProposalFeedbackList title="Check before using" items={preflight.warnings ?? []} tone="warning" />
-          {preflight.missingFields.length > 0 ? (
+          {preflight.detailFields.length > 0 ? (
             <div className="cover-letter-review__fields">
-              {preflight.missingFields.map((field) => {
+              {preflight.detailFields.map((field) => {
                 const id = `cover-letter-detail-${field.key}`;
                 return (
                   <label key={field.key} htmlFor={id}>

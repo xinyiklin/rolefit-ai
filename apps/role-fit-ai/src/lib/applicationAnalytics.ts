@@ -1,5 +1,5 @@
 import type { Application } from "../hooks/useApplications";
-import { displayCompany, parseDate } from "./applicationDisplay.ts";
+import { displayCompany, isOpenApplication, parseDate } from "./applicationDisplay.ts";
 import { deriveTimeline, interviewLabel } from "./applicationStageHistory.ts";
 import { lastActivityAt, noResponseCandidate } from "./noResponse.ts";
 
@@ -24,7 +24,6 @@ export type AnalyticsPeriod = (typeof ANALYTICS_PERIODS)[number]["id"];
 // A rate over fewer than this many applications is not shown.
 export const MIN_RATE_SAMPLE = 3;
 const UPCOMING_FOLLOWUP_DAYS = 7;
-const OPEN_STATUSES = ["applied", "interviewing", "offer"];
 const CLOSED_STATUSES = ["rejected", "withdrawn", "ghosted"];
 
 // Local calendar day as an integer, so day arithmetic survives DST.
@@ -360,7 +359,7 @@ export function upcomingItems(applications: Application[], today = new Date()) {
   const interviews: UpcomingItem[] = [];
   const followups: UpcomingItem[] = [];
   for (const application of applications) {
-    if (!OPEN_STATUSES.includes(application.status)) continue;
+    if (!isOpenApplication(application)) continue;
     for (const row of deriveTimeline(application, today)) {
       if (row.kind !== "interview") continue;
       const date = parseDate(row.at);
@@ -376,6 +375,14 @@ export function upcomingItems(applications: Application[], today = new Date()) {
   const order = (a: UpcomingItem, b: UpcomingItem) =>
     a.days - b.days || displayCompany(a.application).localeCompare(displayCompany(b.application));
   return { interviews: interviews.sort(order), followups: followups.sort(order) };
+}
+
+// One dated list for "Coming up": soonest (and overdue) first, an interview
+// before a follow-up on the same day, and each kind keeps upcomingItems' order.
+export function upcomingList(interviews: UpcomingItem[], followups: UpcomingItem[]): UpcomingItem[] {
+  return [...interviews, ...followups].sort(
+    (a, b) => a.days - b.days || (a.kind === b.kind ? 0 : a.kind === "interview" ? -1 : 1)
+  );
 }
 
 export function trackingHygiene(applications: Application[]) {

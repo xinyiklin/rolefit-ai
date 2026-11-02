@@ -422,7 +422,9 @@ The browser remains the only RoleFit product UI. Electron starts or compatibly
 reuses the same numeric-loopback server, renders only a compact local `file:`
 setup window, and opens the selected local site in the system browser. The
 default is `http://localhost:5181`; **Local site port** accepts an available
-integer from 1 through 65535 and applies it through a clean companion restart.
+integer from 1 through 65535, except the ports browsers refuse to connect to
+(the Fetch standard's bad ports, such as 6000 or 10080), and applies it
+through a clean companion restart.
 `ROLEFIT_DESKTOP_PORT` is a locked per-launch override. Its typed
 preload exposes fixed write-only API-key setup, provider removal/status,
 external-terminal sign-in, install/sign-in-guide, and browser-open methods for
@@ -764,7 +766,9 @@ read as the candidate's own evidence, so it should be a saved resume or
   applied, or the details RoleFit needs first.
 - `draft_answer` — an answer revision for a saved record, to save with
   `add_application_answers`; pass `jobDescription` when the record has no
-  brief.
+  brief. It carries the call's `explicitFacts` and `clarification` as its
+  saved facts, as the app's Save does, so each call for a question passes
+  every fact the user has given for it.
 - `review_application` — the Final application review of a record's saved
   documents.
 

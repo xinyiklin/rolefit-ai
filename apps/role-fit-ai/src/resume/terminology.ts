@@ -12,7 +12,7 @@ export function affirmativeTerm(text: string, keyword: string): boolean {
 }
 
 export function jobTerminology(jobText: string): { terms: JobTerm[]; limitations: string[] } {
-  const brief = parseTailoringSections(jobText, Number.MAX_SAFE_INTEGER);
+  const brief = parseTailoringSections(jobText);
   const sections = [
     ["required", brief.requiredQualifications], ["responsibility", brief.responsibilities],
     ["technical", brief.techKeywords], ["preferred", brief.preferredQualifications]

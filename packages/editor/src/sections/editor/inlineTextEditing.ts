@@ -1,14 +1,15 @@
 // Pure editing math for the typeset editor (no DOM, no React): the mapping
 // between a field's VALUE (inline-marks string, ASCII ligatures, real
 // whitespace) and its DISPLAY form (what the engine paints: tags stripped,
-// --- → — / -- → – / ' → ’, authored horizontal whitespace preserved, and
-// literal hard breaks preserved as "\n"). Every edit is expressed in display coordinates
-// (where the caret lives) and applied to the value without losing marks,
-// ligature sources, or preserved outer whitespace.
+// --- → — / -- → – / ' → ’ outside links, authored horizontal whitespace
+// preserved, and literal hard breaks preserved as "\n"). Every edit is expressed
+// in display coordinates (where the caret lives) and applied to the value
+// without losing marks, ligature sources, or preserved outer whitespace.
 //
 // The display model mirrors measure.ts exactly: segmentsFromInlineMarks's tag
-// grammar (<b>/<i>/<u>, unclosed tolerated) and texLigatures's sequential
-// replaces (which a longest-match walker reproduces for any hyphen run).
+// grammar (<b>/<i>/<u>, unclosed tolerated) and displayText: texLigatures's
+// sequential replaces within one segment (which a longest-match walker
+// reproduces for any hyphen run), skipped for a link word (see wordAt).
 // `<lt>` is one display "<"; serializeChars writes it back only where a raw "<"
 // would start a tag, so typed or pasted tag-shaped text always stays text.
 
@@ -22,11 +23,13 @@ import {
   inlineFontSizePt,
   isInlineFontSizePt,
   isInlineLiteralLessThan,
+  joinInlineMarkText,
   paragraphIndentFromInlineMarks,
   paragraphIndentPt,
   paragraphLineHeight,
   paragraphSpacingFromInlineMarks,
   paragraphSpacePt,
+  stripInlineMarks,
   type FieldAlignment
 } from "@typeset/engine/lib/inlineMarksText.ts";
 import {
@@ -96,6 +99,30 @@ const TAG_RE = new RegExp(
 
 // ---- value → display ----
 
+// The whitespace-free word read across tags (<lt> is text) that the engine
+// tests with automaticLinkHref; a link word keeps its typed punctuation.
+function wordAt(value: string, start: number): { text: string; end: number } {
+  let text = "";
+  let j = start;
+  while (j < value.length && !/\s/.test(value[j])) {
+    if (value[j] === "<") {
+      if (isInlineLiteralLessThan(value.slice(j, j + INLINE_LITERAL_LESS_THAN.length))) {
+        text += "<";
+        j += INLINE_LITERAL_LESS_THAN.length;
+        continue;
+      }
+      const tag = TAG_RE.exec(value.slice(j));
+      if (tag) {
+        j += tag[0].length;
+        continue;
+      }
+    }
+    text += value[j];
+    j += 1;
+  }
+  return { text, end: j };
+}
+
 export function buildDisplayMap(value: string, opts?: { uppercase?: boolean; preserveWhitespace?: boolean }): DisplayMap {
   // Single-line fields render their value verbatim (white-space: pre), so their
   // display keeps every space — the caret can sit between repeated spaces and
@@ -120,6 +147,8 @@ export function buildDisplayMap(value: string, opts?: { uppercase?: boolean; pre
   const indentStack: number[] = [];
   const linkStack: Array<string | null> = [];
   let linkSuppressed = 0;
+  let wordEnd = 0;
+  let wordIsAutoLink = false;
   let i = 0;
   while (i < value.length) {
     const tag = TAG_RE.exec(value.slice(i));
@@ -223,11 +252,19 @@ export function buildDisplayMap(value: string, opts?: { uppercase?: boolean; pre
       i = j;
       continue;
     }
+    if (i >= wordEnd) {
+      const word = wordAt(value, i);
+      wordEnd = word.end;
+      wordIsAutoLink = automaticLinkHref(word.text) !== null;
+    }
     let raw: string;
     let shown: string;
     if (ch === "<" && isInlineLiteralLessThan(value.slice(i, i + INLINE_LITERAL_LESS_THAN.length))) {
       raw = value.slice(i, i + INLINE_LITERAL_LESS_THAN.length);
       shown = "<";
+    } else if (wordIsAutoLink || flags.linkHref !== null) {
+      raw = ch;
+      shown = ch;
     } else if (value.startsWith("---", i)) {
       raw = "---";
       shown = "—";
@@ -425,6 +462,43 @@ export function setEmptyFieldTypingFormat(
   return { value, caretValueIndex: value.length };
 }
 
+const PARAGRAPH_FORMAT_TAG = /<\/?(?:align|indent|space-before|space-after)\b/i;
+
+// The merged paragraph takes the UPPER one's alignment, spacing, and indent
+// (the engine reads them first-match); a blank upper defers to the lower.
+export function mergeParagraphValues(upper: string, lower: string): { value: string; index: number } {
+  const upperMap = buildDisplayMap(upper, { preserveWhitespace: true });
+  if (!upperMap.chars.length) return joinInlineMarkText("", lower);
+  const lowerMap = buildDisplayMap(lower, { preserveWhitespace: true });
+  // A textless lower paragraph contributes nothing, not even its carrier marks.
+  if (!lowerMap.chars.length) return joinInlineMarkText(upper, "");
+  const upperBlank = !upperMap.display.trim();
+  const source = (upperBlank ? lowerMap : upperMap).chars[0];
+  const owned = {
+    alignment: source.alignment,
+    spaceBeforePt: source.spaceBeforePt,
+    spaceAfterPt: source.spaceAfterPt,
+    indentPt: source.indentPt
+  };
+  // Rewriting drops empty paragraph-format carriers (older merges stored them
+  // mid-value), which would otherwise win the engine's first-match read.
+  const adopt = (map: DisplayMap, value: string): string =>
+    !PARAGRAPH_FORMAT_TAG.test(value) && owned.alignment === null && owned.spaceBeforePt === null &&
+    owned.spaceAfterPt === null && owned.indentPt === null
+      ? value
+      : serializeChars(map.prefix, map.chars.map((char) => ({ ...char, ...owned })), map.suffix, 0).value;
+  return upperBlank
+    ? joinInlineMarkText(adopt(upperMap, upper), lower)
+    : joinInlineMarkText(upper, adopt(lowerMap, lower));
+}
+
+// Only a bullet (list row or prose paragraph) holds hard breaks; every other
+// field is one line, so inserted line breaks become a single space.
+export function normalizeFieldInsert(src: Pick<FieldSrc, "kind">, text: string): string {
+  const normalized = text.replace(/\r/g, "");
+  return src.kind === "bullet" ? normalized : normalized.replace(/\s*\n+\s*/g, " ");
+}
+
 // Replace display range [dStart, dEnd) with plain text; returns the new value
 // and the caret's VALUE index (convert back to display with a fresh map, so
 // newly-formed ligatures — e.g. typing the second "-" of "--" — land right).
@@ -435,6 +509,23 @@ export function applyEdit(
   insert: string,
   typingFormat?: Partial<TypingFormat>
 ): { value: string; caretValueIndex: number } {
+  const edit = editChars(map, dStart, dEnd, insert, typingFormat);
+  return withBoundary(serializeChars(edit.prefix, edit.chars, edit.suffix, edit.boundary));
+}
+
+// The character text a run of display chars stores, `<lt>` read as "<".
+const charsText = (chars: readonly DisplayChar[]): string =>
+  chars.map((char) => (isInlineLiteralLessThan(char.raw) ? "<" : char.raw)).join("");
+
+// applyEdit before serialization; `boundary` is the CHARACTER index after the
+// insertion (a display index is not stable across an edit).
+function editChars(
+  map: DisplayMap,
+  dStart: number,
+  dEnd: number,
+  insert: string,
+  typingFormat?: Partial<TypingFormat>
+): { prefix: string; chars: DisplayChar[]; suffix: string; boundary: number } {
   const inherit = map.chars[dStart - 1] ?? map.chars[dStart] ?? emptyFieldFormat(map);
   // Character formatting is inherited from the LEFT, the way typing works. Link
   // state is not: a word processor does not extend a hyperlink when you type at
@@ -490,7 +581,7 @@ export function applyEdit(
     : [];
   const suffix = reviveSuffix ? "" : map.suffix;
   const chars = [...map.chars.slice(0, dStart), ...leading, ...inserted, ...map.chars.slice(dEnd)];
-  return withBoundary(serializeChars(map.prefix, chars, suffix, dStart + leading.length + inserted.length));
+  return { prefix: map.prefix, chars, suffix, boundary: dStart + leading.length + inserted.length };
 }
 
 export function applyPlainTextInputEdit(
@@ -502,26 +593,39 @@ export function applyPlainTextInputEdit(
   historyIntent?: "insert" | "deleteBackward";
   historyText?: string;
 } {
-  const map = buildDisplayMap(value, { preserveWhitespace: true });
-  if (map.display === nextText) {
+  // The header popover's <input> shows the stored text (`stripInlineMarks`),
+  // so diff that, over one map char per stored unit, never the display.
+  const display = buildDisplayMap(value, { preserveWhitespace: true });
+  const map: DisplayMap = {
+    ...display,
+    chars: display.chars.flatMap((char) =>
+      isInlineLiteralLessThan(char.raw)
+        ? [char]
+        : Array.from(char.raw, (_, index) => ({ ...char, raw: char.raw[index] }))
+    )
+  };
+  const text = stripInlineMarks(value);
+  if (map.prefix + charsText(map.chars) + map.suffix !== text) {
+    throw new Error("applyPlainTextInputEdit: the display map and stripInlineMarks disagree on the stored text");
+  }
+  if (text === nextText) {
     return { value, caretValueIndex: value.length };
   }
-  const commonLength = Math.min(map.display.length, nextText.length);
+  const commonLength = Math.min(text.length, nextText.length);
   let prefix = 0;
-  while (prefix < commonLength && map.display[prefix] === nextText[prefix]) {
+  while (prefix < commonLength && text[prefix] === nextText[prefix]) {
     prefix += 1;
   }
   let suffix = 0;
   while (
     suffix < commonLength - prefix &&
-    map.display[map.display.length - 1 - suffix] ===
-      nextText[nextText.length - 1 - suffix]
+    text[text.length - 1 - suffix] === nextText[nextText.length - 1 - suffix]
   ) {
     suffix += 1;
   }
-  const dEnd = map.display.length - suffix;
+  const dEnd = text.length - suffix;
   const insert = nextText.slice(prefix, nextText.length - suffix);
-  const removed = map.display.slice(prefix, dEnd);
+  const removed = text.slice(prefix, dEnd);
   const affectedLinks: Array<{
     start: number;
     end: number;
@@ -541,7 +645,7 @@ export function applyPlainTextInputEdit(
     const insertionInside =
       prefix === dEnd && prefix > start && prefix < end;
     if (intersectsReplacement || insertionInside) {
-      const automaticHref = automaticLinkHref(map.display.slice(start, end));
+      const automaticHref = automaticLinkHref(charsText(map.chars.slice(start, end)));
       affectedLinks.push({
         start,
         end,
@@ -555,48 +659,28 @@ export function applyPlainTextInputEdit(
     }
   }
 
-  let edited = applyEdit(
-    map,
-    prefix,
-    dEnd,
-    insert
-  );
-  const delta = insert.length - (dEnd - prefix);
-  const transformedBoundary = (
-    index: number,
-    edge: "start" | "end"
-  ): number => {
+  // Link edges and the caret ride on the edited characters: the edit can flip
+  // another word into or out of link shape (`–` ⇄ `--`) and shift the display.
+  const edit = editChars(map, prefix, dEnd, insert);
+  const shift = edit.chars.length - map.chars.length;
+  const moved = (index: number, edge: "start" | "end"): number => {
     if (index <= prefix) return index;
-    if (index >= dEnd) return index + delta;
-    return edge === "start" ? prefix : prefix + insert.length;
+    if (index >= dEnd) return index + shift;
+    return edge === "start" ? prefix : edit.boundary;
   };
+  let chars = edit.chars;
   for (const link of affectedLinks) {
-    const editedMap = buildDisplayMap(edited.value, { preserveWhitespace: true });
-    const start = Math.max(
-      0,
-      Math.min(transformedBoundary(link.start, "start"), editedMap.chars.length)
-    );
-    const end = Math.max(
-      start,
-      Math.min(transformedBoundary(link.end, "end"), editedMap.chars.length)
-    );
+    const start = moved(link.start, "start");
+    const end = Math.max(start, moved(link.end, "end"));
     const href = link.automatic
-      ? automaticLinkHref(editedMap.display.slice(start, end))
+      ? automaticLinkHref(charsText(chars.slice(start, end)))
       : link.href;
-    const chars = editedMap.chars.map((char, index) =>
-      index >= start && index < end
-        ? { ...char, linkHref: href, linkSuppressed: false }
-        : char
-    );
-    edited = withBoundary(
-      serializeChars(
-        editedMap.prefix,
-        chars,
-        editedMap.suffix,
-        Math.min(prefix + insert.length, chars.length)
-      )
+    // Only the href is re-applied: each character keeps its own <nolink> state.
+    chars = chars.map((char, index) =>
+      index >= start && index < end ? { ...char, linkHref: href } : char
     );
   }
+  const edited = withBoundary(serializeChars(edit.prefix, chars, edit.suffix, edit.boundary));
   return {
     ...edited,
     ...(removed.length === 0 && insert.length > 0
@@ -1022,6 +1106,33 @@ export function replaceWithLink(
   }));
   const chars = [...map.chars.slice(0, dStart), ...inserted, ...map.chars.slice(dEnd)];
   return withBoundary(serializeChars(map.prefix, chars, map.suffix, dStart + inserted.length));
+}
+
+// The range a link Apply can link IN PLACE, keeping per-character formatting:
+// the target when `text` is its display text, or the target narrowed past its
+// edge whitespace when `text` is that text trimmed — the link popover trims,
+// while a double-click selection keeps its trailing space. Null when the text
+// really changed and the range must be replaced.
+export function inPlaceLinkRange(
+  map: DisplayMap,
+  dStart: number,
+  dEnd: number,
+  text: string
+): { dStart: number; dEnd: number } | null {
+  if (dStart === dEnd || !text) return null;
+  const current = map.display.slice(dStart, dEnd);
+  if (text === current) return { dStart, dEnd };
+  if (text !== current.trim()) return null;
+  // An existing link run is re-pointed whole; narrowing it would leave its edge
+  // whitespace on the old URL.
+  const href = map.chars[dStart].linkHref;
+  if (href && map.chars.slice(dStart, dEnd).every((char) => char.linkHref === href)) {
+    return { dStart, dEnd };
+  }
+  return {
+    dStart: dStart + current.length - current.trimStart().length,
+    dEnd: dStart + current.trimEnd().length
+  };
 }
 
 // The contiguous run of an EXPLICIT link under a collapsed caret, if any. The

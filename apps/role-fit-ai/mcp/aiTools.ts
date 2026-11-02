@@ -15,6 +15,12 @@ import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
 import { parseResumeFile, serializeResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import { parseApplicationAnswerRevision } from "../shared/applicationAnswerStorage.ts";
 import {
+  ANSWER_FACTS_MAX,
+  ANSWER_FACTS_MAX_CHARS,
+  ANSWER_REFINEMENT_MAX_CHARS,
+  answerFactsWithinLimits
+} from "../shared/applicationAnswersContract.ts";
+import {
   applicationReviewEvidenceLimitError,
   localApplicationReview,
   sanitizeApplicationReviewResult
@@ -644,10 +650,14 @@ export function createAiTools(client: RoleFitClient): Tool[] {
         "Draft an answer to one application question with RoleFit's answer stage, for a saved tracker record " +
         "(commit a Draft first). It answers against `jobDescription` when you pass one (the brief from " +
         "analyze_job), otherwise the record's saved brief, plus the record's posting, and its saved resume unless " +
-        "you pass `resume`. The result is an answer revision to save unchanged with add_application_answers. If it asks " +
+        "you pass `resume`. The result is an answer revision to save unchanged with add_application_answers; it " +
+        "carries this call's explicitFacts and clarification as its saved facts, as the app does. If it asks " +
         "for a clarification, ask the user and call again with their reply as `clarification`; to revise a draft, " +
-        "send it as previousAnswer with a `refinement`. RoleFit treats `clarification` and `explicitFacts` as the " +
-        "candidate's evidence, so they must come from the user." + PROVIDER_RUN_NOTE + RUNS_PROVIDER,
+        "send it as previousAnswer with a `refinement`. Nothing is kept between calls, so on every call for a " +
+        "question pass all the facts the user has given for it, earlier clarification replies included, as " +
+        "`explicitFacts` (a saved answer's facts are its userFacts in get_application). RoleFit treats " +
+        "`clarification` and `explicitFacts` as the candidate's evidence, so they must come from the user." +
+        PROVIDER_RUN_NOTE + RUNS_PROVIDER,
       inputSchema: {
         type: "object",
         required: ["id", "question"],
@@ -668,7 +678,11 @@ export function createAiTools(client: RoleFitClient): Tool[] {
           },
           refinement: { type: "string", description: "How to change previousAnswer; it is never evidence." },
           clarification: { type: "string", description: "The user's reply to the clarification asked for." },
-          explicitFacts: { type: "array", items: { type: "string" }, description: "Facts the user stated for this answer." }
+          explicitFacts: {
+            type: "array",
+            items: { type: "string" },
+            description: "Every fact the user has stated for this question so far, earlier clarification replies included."
+          }
         }
       },
       async run({ id, question, jobDescription, questionId, questionRevision, resume, resumeConcerns, previousAnswer, refinement, clarification, explicitFacts }, signal) {
@@ -678,6 +692,20 @@ export function createAiTools(client: RoleFitClient): Tool[] {
         }
         const concerns = textList(resumeConcerns, "resumeConcerns");
         if (isToolResult(concerns)) return concerns;
+        // As in the app, the user's facts and clarification are saved with the
+        // revision, so a later redraft from the saved answer keeps its evidence.
+        const listed: unknown[] = Array.isArray(explicitFacts) ? explicitFacts : [];
+        const reply = typeof clarification === "string" ? clarification.trim() : "";
+        const userFacts = [
+          ...listed,
+          ...(reply && !listed.some((fact) => typeof fact === "string" && fact.trim() === reply) ? [clarification as string] : [])
+        ];
+        if (userFacts.length > ANSWER_FACTS_MAX || userFacts.join("\n").length > ANSWER_FACTS_MAX_CHARS) {
+          return fail("explicitFacts and clarification together exceed the answer's fact limit; move lasting facts into the Profile.");
+        }
+        const factRule = `must be non-empty text of at most ${ANSWER_REFINEMENT_MAX_CHARS.toLocaleString("en-US")} characters, without control characters.`;
+        if (listed.length && !answerFactsWithinLimits(listed)) return fail(`explicitFacts: each fact ${factRule}`);
+        if (reply && !answerFactsWithinLimits([clarification])) return fail(`clarification: ${factRule}`);
         const record = await client.getApplication(id);
         if (isToolResult(record)) return record;
         const jobText = (jobDescription as string | undefined) ?? record.jobDescription ?? "";
@@ -728,7 +756,13 @@ export function createAiTools(client: RoleFitClient): Tool[] {
           || answer.questionRevision !== turn.question.revision || answer.question !== turn.question.text) {
           return fail("The answer did not match this question. Draft it again.");
         }
-        return { ok: true, value: { answer, providerRun: providerRun(drafted.value, context.fields) } };
+        return {
+          ok: true,
+          value: {
+            answer: userFacts.length ? { ...answer, userFacts: { provenance: "user-declared", facts: userFacts } } : answer,
+            providerRun: providerRun(drafted.value, context.fields)
+          }
+        };
       }
     },
     {

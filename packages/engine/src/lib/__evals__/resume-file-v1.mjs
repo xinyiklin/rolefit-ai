@@ -3,7 +3,7 @@
 
 import assert from "node:assert/strict";
 
-import { DOC_STYLE_DEFAULTS, FONT_FAMILY_OPTIONS } from "../documentStyle.ts";
+import { DOC_STYLE_DEFAULTS, FONT_FAMILY_OPTIONS, coerceDocStyle } from "../documentStyle.ts";
 import { buildStarterResume } from "../../sampleResume.ts";
 import {
   MAX_RESUME_FILE_BYTES,
@@ -199,6 +199,25 @@ expectError(mutated((file) => { file.style.contactDivider = "———"; }), "in
 // The 2-character divider ceiling is inclusive.
 const twoCharDivider = mutated((file) => { file.style.contactDivider = "•—"; });
 assert.equal(parseResumeFile(JSON.stringify(twoCharDivider)).documentStyle.contactDivider, "•—");
+// The lenient coercion keeps the codec's two-unit bound without ever cutting
+// inside a surrogate pair, so what it keeps always serializes.
+assert.equal(coerceDocStyle({ contactDivider: "a🙂" }).contactDivider, "a");
+assert.equal(coerceDocStyle({ contactDivider: "🙂x" }).contactDivider, "🙂");
+assert.equal(coerceDocStyle({ contactDivider: "🙂" }).contactDivider, "🙂");
+// An absent margin preset falls back to the documented defaults, as every other field does.
+{
+  const absent = coerceDocStyle({});
+  assert.equal(absent.pageMargins, DOC_STYLE_DEFAULTS.pageMargins, "an absent preset is the default preset");
+  for (const side of ["Top", "Right", "Bottom", "Left"]) {
+    assert.equal(absent[`pageMargin${side}Pt`], DOC_STYLE_DEFAULTS[`pageMargin${side}Pt`], `an absent ${side} margin is the default`);
+  }
+  const normal = coerceDocStyle({ pageMargins: "normal" });
+  assert.equal(normal.pageMargins, "normal", "an explicit normal preset is kept");
+  for (const side of ["Top", "Right", "Bottom", "Left"]) assert.equal(normal[`pageMargin${side}Pt`], 72, `an explicit normal ${side} margin is one inch`);
+}
+assert.equal(coerceDocStyle({ contactDivider: "\uD83Da" }).contactDivider, "a", "a lone surrogate in the input is dropped");
+assert.equal(coerceDocStyle({ contactDivider: "\uD83D" }).contactDivider, DOC_STYLE_DEFAULTS.contactDivider);
+assert.equal(parseResumeFile(JSON.stringify(mutated((file) => { file.style.contactDivider = "🙂"; }))).documentStyle.contactDivider, "🙂");
 
 // ----- binary inputs: Uint8Array, ArrayBuffer, File, and non-UTF-8 bytes -----
 

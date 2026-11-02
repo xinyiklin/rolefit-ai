@@ -389,12 +389,13 @@ export async function callClaudeCli({ model, reasoningEffort, systemPrompt, user
   return String(envelope.result ?? "");
 }
 
-// Map a claude CLI failure to an actionable, SAFE message: a 401 / auth failure
-// points at sign-in; a timeout (no CLI stdout to classify) points at a faster
-// model; anything else is the generic "couldn't complete" hint. All three are in
-// errors.ts' SAFE set so /api/resume-polish surfaces them verbatim instead of "did not
-// return a usable draft". `stdout` is claude's JSON result (present on a non-zero
-// exit); `sourceError` is the rejected runCli error (carries the timeout flag).
+const CLAUDE_CLI_RATE_LIMIT_MESSAGE =
+  "Claude Code reached a rate limit or usage quota. Wait, then retry or switch providers.";
+const CLAUDE_CLI_OVERLOADED_MESSAGE =
+  "Claude is temporarily overloaded. Wait a moment, then retry or switch providers.";
+
+// Map a claude CLI failure (its JSON `stdout` and the rejected runCli error) to a
+// UserSafeAiError that routes pass through verbatim.
 export function classifyClaudeFailure(stdout: string, sourceError?: CliError): Error {
   let message = "";
   let authStatus = 0;
@@ -405,14 +406,21 @@ export function classifyClaudeFailure(stdout: string, sourceError?: CliError): E
   } catch {
     // stdout wasn't JSON (e.g. an empty/garbled non-zero exit).
   }
-  // Stderr remains private and is only inspected for the same narrow auth
-  // category as Claude's JSON envelope. Never return or log it.
+  // Stderr remains private and is only matched against the same narrow auth,
+  // limit and overload categories as Claude's JSON envelope. Never return or log it.
   const diagnostic = `${message}\n${sourceError?.stderr ?? ""}`;
   if (
     authStatus === 401 ||
     /not logged in|please run \/login|invalid authentication|failed to authenticate|unauthorized|\b401\b/i.test(diagnostic)
   ) {
     return new UserSafeAiError(CLAUDE_CLI_AUTH_MESSAGE, 401);
+  }
+  // A usage or rate limit clears with time; a working CLI must not be sent to reinstall.
+  if (authStatus === 429 || /usage limit|rate.?limit|too many requests|quota|\b429\b/i.test(diagnostic)) {
+    return new UserSafeAiError(CLAUDE_CLI_RATE_LIMIT_MESSAGE, 429);
+  }
+  if (authStatus === 529 || /overloaded|\b529\b/i.test(diagnostic)) {
+    return new UserSafeAiError(CLAUDE_CLI_OVERLOADED_MESSAGE, 503);
   }
   // No CLI-reported error to classify and the call timed out → the actionable
   // cause is the timeout, not a generic CLI error.
@@ -450,13 +458,49 @@ export async function callCodexCli({ model, reasoningEffort, systemPrompt, userP
   const args = buildCodexCliArgs({ model, reasoningEffort }, workdir, outputPath);
 
   try {
-    const { stdout } = await runCli("codex", args, combined, { cwd: workdir, signal });
+    let stdout;
+    try {
+      ({ stdout } = await runCli("codex", args, combined, { cwd: workdir, signal }));
+    } catch (error) {
+      throw classifyCodexFailure(error as CliError, combined);
+    }
     recordProviderUsage(sink, totalOnlyUsage(extractCodexTokensUsed(stdout)));
     const directOutput = await readBoundedFile(outputPath);
     return directOutput.trim() || extractCodexFinalOutput(stdout);
   } finally {
     await rm(workdir, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+const CODEX_CLI_AUTH_MESSAGE =
+  "Codex couldn't authenticate (401). Open RoleFit Companion, sign in or reconnect Codex, then check providers and retry.";
+const CODEX_CLI_RATE_LIMIT_MESSAGE =
+  "Codex reached a rate limit or usage quota. Wait, check the ChatGPT plan's usage, or switch providers.";
+const CODEX_CLI_MODEL_MESSAGE =
+  "Codex rejected the selected model. Choose another model in AI settings and retry.";
+
+// Classify a non-zero codex exit from its private streams. Codex echoes the
+// prompt, so the prompt is removed and only error-marked lines are read; an
+// unrecognized failure, timeout, or abort is returned unchanged for the route.
+export function classifyCodexFailure(error: CliError, prompt = ""): Error {
+  if (typeof error?.exitCode !== "number") return error;
+  const normalize = (text: string): string => text.replace(/\r\n?/g, "\n");
+  const echoed = normalize(prompt).trim();
+  const streams = normalize(`${error.stdout ?? ""}\n${error.stderr ?? ""}`);
+  const diagnostic = (echoed ? streams.split(echoed).join("\n") : streams)
+    .split("\n")
+    .filter((line) => /^\s*(?:\[[^\]]*\]\s*)?(?:error|stream error)\b/i.test(line))
+    .join("\n");
+  if (/not logged in|log ?in again|codex login|\b401\b|unauthori[sz]ed|refresh token|token (?:has )?expired/i.test(diagnostic)) {
+    return new UserSafeAiError(CODEX_CLI_AUTH_MESSAGE, 401);
+  }
+  if (/usage limit|rate.?limit|too many requests|quota|\b429\b/i.test(diagnostic)) {
+    return new UserSafeAiError(CODEX_CLI_RATE_LIMIT_MESSAGE, 429);
+  }
+  if (/model_not_found|unknown model|model\b[^\n]{0,120}\b(?:not supported|not found|does not exist|not available|unavailable)/i.test(diagnostic)) {
+    return new UserSafeAiError(CODEX_CLI_MODEL_MESSAGE, 400);
+  }
+  return error;
 }
 
 // The transcript's last "tokens used" line carries one total; codex reports no

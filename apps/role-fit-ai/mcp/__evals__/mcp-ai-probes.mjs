@@ -26,6 +26,7 @@ import {
 } from "@typeset/engine/lib/coverLetter.ts";
 import { coerceDocStyle } from "@typeset/engine/lib/documentStyle.ts";
 import { parseResumeFile, serializeResumeFile } from "@typeset/engine/lib/resumeFile.ts";
+import { parseApplicationAnswerRevision } from "../../shared/applicationAnswerStorage.ts";
 import { PROFILE_BACKGROUND_CHAR_LIMIT } from "../../shared/candidateProfileContract.ts";
 import { flattenResumeTargets } from "../../shared/resumePolishContract.ts";
 import { buildStageRequestFields } from "../../src/lib/aiRequest.ts";
@@ -304,6 +305,7 @@ const aiCalls = () => calls.filter(({ path }) => !["/api/workspace/preferences",
   assert.equal(sent.customInstructions, "Shared guidance.");
   assert.deepEqual({ provider: sent.provider, model: sent.model, reasoningEffort: sent.reasoningEffort }, stageFields("application-answers"));
   assert.equal(drafted.value.answer.answer, "I build reliable APIs.");
+  assert.equal(drafted.value.answer.userFacts, undefined, "no user facts are invented");
   assert.deepEqual(drafted.value.providerRun, stageFields("application-answers"));
 
   // A passed brief is answered against, so a record without one still works.
@@ -316,6 +318,35 @@ const aiCalls = () => calls.filter(({ path }) => !["/api/workspace/preferences",
   await call("draft_answer", { id: "a1", question: "Why Acme?", jobDescription: passedBrief });
   assert.equal(aiCalls()[0].body.jobText, passedBrief, "a passed brief wins over the record's");
   assert.match((await call("draft_answer", { id: "a1", question: "Why?", jobDescription: "short" })).value.error, /^jobDescription:/);
+
+  // The user's facts and clarification are saved with the revision, as in the app.
+  const withFacts = await call("draft_answer", {
+    id: "a1", question: "Why Acme?", explicitFacts: ["I led the Kafka migration."], clarification: "Two years at Initech.",
+    previousAnswer: { id: "prior", text: "Earlier draft." }
+  });
+  assert.equal(withFacts.ok, true, JSON.stringify(withFacts.value));
+  assert.deepEqual(withFacts.value.answer.userFacts, { provenance: "user-declared", facts: ["I led the Kafka migration.", "Two years at Initech."] });
+  assert.notEqual(parseApplicationAnswerRevision(withFacts.value.answer), null, "the revision with its facts is a valid saved answer");
+  calls.length = 0;
+  const tooMany = await call("draft_answer", { id: "a1", question: "Why Acme?", explicitFacts: Array.from({ length: 21 }, (_, index) => `Fact ${index}.`) });
+  assert.match(tooMany.value.error, /exceed the answer's fact limit/);
+  assert.equal(aiCalls().length, 0, "an oversized fact set is refused before any provider call");
+  const repeated = await call("draft_answer", {
+    id: "a1", question: "Why Acme?", explicitFacts: ["Two years at Initech."], clarification: " Two years at Initech. ",
+    previousAnswer: { id: "prior", text: "Earlier draft." }
+  });
+  assert.deepEqual(repeated.value.answer.userFacts.facts, ["Two years at Initech."], "a clarification also listed as a fact is saved once");
+  const refined = await call("draft_answer", {
+    id: "a1", question: "Why Acme?", explicitFacts: ["I led the Kafka migration.", "Two years at Initech."], refinement: "Shorter.",
+    previousAnswer: { id: "prior", text: "Earlier draft." }
+  });
+  assert.deepEqual(refined.value.answer.userFacts.facts, ["I led the Kafka migration.", "Two years at Initech."], "a refinement call that resends the facts keeps them");
+  calls.length = 0;
+  assert.match((await call("draft_answer", { id: "a1", question: "Why Acme?", explicitFacts: ["  "] })).value.error, /each fact must be non-empty text/, "an invalid fact is named, not reported as over the limit");
+  assert.match((await call("draft_answer", { id: "a1", question: "Why Acme?", clarification: "x".repeat(4_001), previousAnswer: { id: "prior", text: "Earlier draft." } })).value.error, /^clarification: must be non-empty text/, "a bad clarification names its own field");
+  assert.equal(aiCalls().length, 0);
+  const described = tools.draft_answer;
+  assert.match(described.description, /pass all the facts the user has given for it/, "the agent is told to resend every fact, since nothing is kept between calls");
 
   reply["/api/application-answers"] = (body) => json(200, { answer: revision(body, { userFacts: { provenance: "user-declared", facts: ["x"] } }) });
   assert.match((await call("draft_answer", { id: "a1", question: "Why Acme?" })).value.error, /did not match/, "a generated revision never carries user facts");

@@ -79,16 +79,6 @@ export async function changeApplicationStatus(workspaceDir: string, id: string, 
         [current]
       );
     }
-    if (current.status === nextStatus) {
-      return { application: current, revision: snapshot.revision, changed: false };
-    }
-    if (!stageMenuMoveAllowed(current.status, nextStatus)) {
-      const allowed = APPLICATION_STATUSES.filter((candidate) => stageMenuMoveAllowed(current.status, candidate));
-      throw new ApplicationsStorageError(
-        `A ${current.status} record cannot move to ${nextStatus}; allowed: ${allowed.join(", ") || "none"}.`,
-        400
-      );
-    }
     // Only a record with an application date gets a dated history entry; a
     // first submission or a Draft's Skip is dated when it is written.
     if (at) {
@@ -100,6 +90,25 @@ export async function changeApplicationStatus(workspaceDir: string, id: string, 
       if (day < toDateInput(current.appliedAt) || day > toDateInput(todayIso())) {
         throw new ApplicationsStorageError("date: must fall between the application date and today.", 400);
       }
+    }
+    if (current.status === nextStatus) {
+      // Setting the current stage again is the safe retry after a lost reply:
+      // the documents it carries are already saved. Documents for a record
+      // that has none are not silently dropped.
+      if (request.documents !== undefined && !current.resumeArtifacts) {
+        throw new ApplicationsStorageError(
+          `documents: this record is already ${current.status} and has no saved resume; documents are saved only with a first submission.`,
+          400
+        );
+      }
+      return { application: current, revision: snapshot.revision, changed: false };
+    }
+    if (!stageMenuMoveAllowed(current.status, nextStatus)) {
+      const allowed = APPLICATION_STATUSES.filter((candidate) => stageMenuMoveAllowed(current.status, candidate));
+      throw new ApplicationsStorageError(
+        `A ${current.status} record cannot move to ${nextStatus}; allowed: ${allowed.join(", ") || "none"}.`,
+        400
+      );
     }
     // Drafts and job-only Skips hold no documents, so their first submission
     // is where the resume arrives. Keyed on the stage: a migrated submitted

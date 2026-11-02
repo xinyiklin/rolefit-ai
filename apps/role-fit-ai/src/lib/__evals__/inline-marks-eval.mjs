@@ -82,4 +82,12 @@ assert.equal(inlineMarksToHtml(null), "", "null input is coerced to the empty st
 assert.equal(inlineMarksToHtml(undefined), "", "undefined input is coerced to the empty string, not a throw");
 assert.equal(inlineMarksToHtml(42), "42", "a non-string, non-nullish value is coerced via String() and rendered as plain text");
 
+// ── display punctuation follows the engine: a link keeps its typed text ──
+assert.equal(
+  inlineMarksToHtml("Mail a--b@x.com -- it's <link=https%3A%2F%2Fexample.test>O'Neil--site</link> <b>sean.o'brien@gmail.com</b>"),
+  "Mail a--b@x.com – it’s O'Neil--site <strong>sean.o'brien@gmail.com</strong>",
+  "a linked email, URL or explicit link shows exactly as typed; other words get display punctuation"
+);
+assert.equal(inlineMarksToHtml("a<lt>b--c@x.com don't"), "a&lt;b--c@x.com don’t", "a literal < stays inside its word, as the engine reads it");
+
 console.log("PASS inline mark HTML boundary");

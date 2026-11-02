@@ -42,6 +42,7 @@ import {
   ROLEFIT_WORKSPACE_TEXT_BASE_RESUME_RE,
   ROLEFIT_WORKSPACE_STAT_FILE_MAX_BYTES,
   createRoleFitDesktopRuntimeInfo,
+  isFetchBlockedPort,
   isRoleFitWorkspaceBackupFileName,
   normalizeRoleFitExtensionOrigin,
   type RoleFitCliProviderStatus,
@@ -145,6 +146,9 @@ app.enableSandbox();
 
 let mainWindow: BrowserWindow | null = null;
 let desktopServer: DesktopServerHandle | null = null;
+// Relaunch and activate may recreate a closed window only after startDesktop
+// created its own, or a second untrusted window would remain open.
+let desktopStartupComplete = false;
 let cliProviderManager: CliProviderManager | null = null;
 let providerVault: ProviderVault | null = null;
 let desktopSettingsManager: DesktopSettingsManager | null = null;
@@ -220,8 +224,14 @@ async function getExtensionPairingSettings(): Promise<RoleFitExtensionPairingSet
   if (!Array.isArray(origins) || origins.length > ROLEFIT_EXTENSION_PAIRING_REQUEST_MAX_COUNT) {
     throw new Error("Invalid extension pairing response.");
   }
-  const pendingOrigins = origins.map(normalizeRoleFitExtensionOrigin);
-  if (pendingOrigins.some((origin) => !origin) || new Set(pendingOrigins).size !== pendingOrigins.length) {
+  if (origins.some((origin) => typeof origin !== "string")) {
+    throw new Error("Invalid extension pairing response.");
+  }
+  // The companion approves Chrome, Edge, and Firefox origins; a request from
+  // another scheme the server accepts (Safari) is left out rather than failing
+  // the whole list.
+  const pendingOrigins = origins.map(normalizeRoleFitExtensionOrigin).filter(Boolean);
+  if (new Set(pendingOrigins).size !== pendingOrigins.length) {
     throw new Error("Invalid extension pairing response.");
   }
   return Object.freeze({
@@ -463,6 +473,11 @@ async function backupWorkspaceToFile(): Promise<RoleFitWorkspaceBackupResult> {
     const targetPath = saveResult.filePath.endsWith(".rolefit-backup")
       ? saveResult.filePath
       : `${saveResult.filePath}.rolefit-backup`;
+    // The bridge refuses a name it cannot carry back; refusing it here, before
+    // the write, keeps a saved file from being reported as a failure.
+    if (!isRoleFitWorkspaceBackupFileName(basename(targetPath))) {
+      return workspaceError("Choose a shorter backup file name that does not start with a dot and has none of \\ / : * ? \" < > |.");
+    }
     const temporaryPath = join(dirname(targetPath), `.rolefit-backup-${process.pid}-${randomUUID()}.tmp`);
     try {
       // Never truncate an existing backup before the replacement bytes are
@@ -1406,6 +1421,7 @@ async function persistNextAvailablePort(blockedPort: number): Promise<number> {
   }
   for (let offset = 1; offset <= ALTERNATE_PORT_SCAN_LIMIT; offset += 1) {
     const candidate = alternatePortCandidate(blockedPort, offset);
+    if (isFetchBlockedPort(candidate)) continue;
     try {
       localSiteSettings = await desktopSettingsManager.saveLocalSitePort(candidate);
       return candidate;
@@ -1787,6 +1803,7 @@ async function startDesktop(): Promise<void> {
     desktopServer.launchKind,
     desktopServer.origin
   );
+  desktopStartupComplete = true;
 }
 
 const isSquirrelStartup = process.platform === "win32" && squirrelStartup;
@@ -1800,7 +1817,7 @@ if (isSquirrelStartup || !hasSingleInstanceLock) {
       console.log("ROLEFIT_DESKTOP_SECOND_INSTANCE_FOCUSED");
     }
     if (mainWindow) bringWindowForward();
-    else if (desktopServer) {
+    else if (desktopStartupComplete && desktopServer) {
       const companionPath = join(__dirname, "companion.html");
       mainWindow = createMainWindow(
         companionPath,
@@ -1813,7 +1830,7 @@ if (isSquirrelStartup || !hasSingleInstanceLock) {
   });
   app.on("activate", () => {
     if (shuttingDown) return;
-    if (!mainWindow && desktopServer) {
+    if (!mainWindow && desktopStartupComplete && desktopServer) {
       const companionPath = join(__dirname, "companion.html");
       mainWindow = createMainWindow(
         companionPath,

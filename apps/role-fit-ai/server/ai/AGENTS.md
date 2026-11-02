@@ -116,9 +116,10 @@ application retain blocking technical guards.
   distinguish explicit user facts from generated drafts, and reject oversized
   inputs instead of silently clipping them. Explicit-fact limits live in
   `applicationAnswersContract.ts` because saved revisions reuse them; a
-  generated revision never carries `userFacts` (the client attaches the user's
-  facts at Save and restores them on Reopen). Unknown usage from any dispatch
-  makes the aggregate unknown, including failed repairs.
+  generated revision never carries `userFacts` (the app attaches the user's
+  facts at Save and restores them on Reopen; the MCP `draft_answer` tool
+  attaches the explicitFacts and clarification of its call). Unknown usage
+  from any dispatch makes the aggregate unknown, including failed repairs.
   Refinements make the smallest useful edit and retain supported specifics and
   responsibility levels. A prior draft cannot supply new facts; resume, Profile
   and explicit user facts remain the evidence. Match the question's work/study/
@@ -390,7 +391,9 @@ application retain blocking technical guards.
     AWS/Azure/GCP→cloud, CI→continuous integration; CI evidence never
     grounds CI/CD and a statistical "95% CI" grounds nothing),
     never the reverse, never against a denial, and related practice never
-    entails a broader term (CI is not CI/CD). Written-out, undenied
+    entails a broader term (CI is not CI/CD). On the evidence side a
+    hyphenated "No-downtime" line is affirmative, and a trailing "with no
+    prior ... experience" denies only itself, up to the next comma. Written-out, undenied
     "object-oriented" evidence grounds the abbreviation OOP. Terminology names are
     case-sensitive; lowercase-only grounding leaves out ambiguous names
     (flask, pandas). Contrived collisions (Django Reinhardt) and tools named
@@ -434,6 +437,92 @@ application retain blocking technical guards.
   "One" followed by a participle counts the noun after it ("one shared lock"
   counts locks), so matching evidence grounds it and an invented one still warns.
   Do not restore warnings on sentence-initial verbs or verb choice alone.
+- Numbers, outcomes, and workplaces keep what they were stated for (shared by
+  Resume Polish, cover letters, and Answers; a replay of saved bullets and
+  letter paragraphs showed no warning change).
+  - Each word of an evidence sentence belongs to its nearest quantity of the
+    same kind (percents, durations, and other quantities compete separately),
+    counting the words between plus three across a comma, bullet, or
+    conjunction; years, versions, and bare numbers ("p95") take none, and a
+    range ("from 60% to 85%") shares its words. Sentences end at a line break
+    or ". ! ?" before a space, never inside "e.g." or "U.S."; a bullet does not
+    end one. Keep this linear in the sentence: each word compares only the
+    nearest quantity on either side.
+  - A percent's metric is the noun before it, else after it ("99% uptime",
+    "40% of tickets"); a generic time, speed, or rate takes the word before it
+    ("deploy time" is not "build time"). The evidence's same percent must own
+    that word; a percent with no readable metric matches by value. A
+    duration's curated terms, and a capitalized skill beside it ("6 years of
+    Go", "Rust for 6 years"), must belong to the evidence's same duration.
+  - Scale words are quantities ("millions of users", "used by millions", "a
+    million-dollar deal", "multimillion", "seven-figure"). Each needs a counted
+    quantity at least that large of its noun (a count named by its own words,
+    "Users: 3M"), a duration, or a scale; users, customers, members, and people
+    are one noun; money needs a currency amount; a scale with no noun takes any
+    count; a bare number (an id, a ZIP code) grounds none. A plural must
+    quantify ("of"/"in", a lead word such as "by" or "serving", or its clause
+    end); "in thousands", "a hundred percent", and "a thousand-line" size nothing.
+  - In letters and Answers a scale the posting states is the employer's
+    (`withoutPostingScaleFacts`) unless its clause speaks of the candidate: a
+    first-person word before it, or within eight words after it before any
+    comma, "like", or intention, or a resume-style opening verb. A clause ends
+    at a sentence end or semicolon, ", and" before a new subject, ", which",
+    "because"/"although", an intention, a fit verb ("maps well to"), or a
+    reaction ("drawn to", "learned that", "I noticed Harbor…"); never at a
+    restrictive "which"/"that" ("I built tools that serve millions" stays a claim).
+  - Outcome verbs include double, triple, quadruple, halve, slash, minimize,
+    and maximize. A multiplier's base form counts only after "to" or "help",
+    never as an adjective ("double precision", "double-checked"); "halves" and
+    "slashes" count only before a measure or outcome noun; "to minimize X" is a
+    purpose. "2x", "two-fold", "twice as", or a 100% rise grounds doubled (not
+    "2x AWS Certified"); "in half" or a 50% cut grounds halved, a 50% increase
+    does not. Raise, lift, drop, shrink, and trim count only before a measure
+    or result noun in the same clause, and a raised or dropped problem (risks,
+    incidents, errors, "<x> concerns/alerts") is none. Verbs stay distinct:
+    "raised" coverage warns against "increased". "want", "eager", "excited",
+    "ready", "love", or "I'd like" before "to" makes an outcome an offer.
+  - A workplace or school (`affiliationClaims`) is a claim in an explicit frame
+    even for the target employer ("while/back/previously at", "worked/interned
+    at", "my years at", "joined", "co-founded", "attended", "graduated from", "a
+    BA … from", "ex-Stripe", "a former Stripe engineer", "a <Name> graduate",
+    "<Name>, where I built", "my former employer, <Name>"); in a role frame ("as
+    a payments engineer at", "engineer at", "working at", "a Stripe engineer");
+    and after a bare "at"/"for" or "on Stripe's payments team" only in a clause
+    reporting work (a past verb or first-person present one) and when the name
+    is no modifier ("at Stripe headquarters", "for Spanish-speaking merchants").
+    The target employer counts in a role or bare frame only after an opening
+    "At Harbor," that reports work. Intentions end at the next clause.
+    Coordinated names share a frame; a possessive counts only before a team
+    noun. Departments, dates, holidays, events ("a talk at PyCon"), "a former
+    Harbor customer", and someone else's job ("My sister, an engineer at
+    Stripe") are not the candidate's workplaces.
+  - A name is grounded as a phrase, or word by word when the evidence beside it
+    names no other institution kind and no "State"/"Tech" the claim lacks
+    ("Stanford University" by "Stanford"; "University of Michigan" is not
+    "Michigan State University", "Boston College" not "Boston University").
+    Letters check all candidate evidence except the base letter (it usually
+    names the last company it went to), since a letter rarely cites the
+    Education entry it names. The target employer matches once corporate
+    suffixes are dropped ("Harbor Labs", not "Harbor Freight"). Answers have no
+    company field, so it is the name the posting introduces itself with (title
+    line, "Company:", "At Harbor, we", "Join Harbor", "We are Harbor", "Harbor's
+    mission", "Harbor builds…"); customers, competitors, and schools it names
+    elsewhere ground no affiliation frame.
+  - Accepted gaps: affiliations without a frame ("My Stripe experience",
+    "Before Stripe, I…") or through someone else ("My manager at Stripe"); a
+    past role at the target employer outside an "At Harbor," opening;
+    tool-named employers (left to the curated term check); spelled-out
+    abbreviations ("UC Berkeley", "MIT", AWS); a candidate claim of the
+    posting's own scale in a non-restrictive clause, the next sentence ("It now
+    serves millions"), an opening phrase, or by ellipsis; a percent whose metric
+    word sits in another percent's scope; duration skills neither curated nor
+    capitalized beside the duration; a line's only duration takes every skill
+    on the line ("6 years of Java • Rust hobby projects"); "Golang" vs "Go"
+    (the term check already warns); a job header's duration does not lend
+    itself to the skills under it; noun synonyms outside the people family
+    ("2M MAU"); multipliers stated as before-and-after ("from 500 to 1,000
+    rps") or only as speed; and employer-led outcomes ("Harbor doubled its
+    merchant base").
 - A Resume Polish evidence warning names what failed: up to three concerns, one
   per kind of check (term, number, count purpose, ownership, outcome), each echoing the edit's
   own wording. An ownership concern adds a merged-facts hint only when the
@@ -558,7 +647,8 @@ application retain blocking technical guards.
 - `coverLetterParagraphEvidence.ts` checks explicit factual conflicts against
   paragraph-cited sources, narrowing to explicitly named work when identifiable.
   Employer claims use employer evidence. Run one typed factual pass per claim;
-  explicit affiliations need candidate evidence, but generic capitalization is
+  a workplace or school in an affiliation frame needs candidate evidence
+  (`findUngroundedAffiliation`, rules above), but generic capitalization is
   not proof of an invented name. Do not require sentence bindings or literal
   wording for paraphrases; ambiguous attribution is advisory, not repair.
 - Job analysis delegates summaries and qualification classification to the model.

@@ -28,6 +28,17 @@ import {
   trashApplicationFiles
 } from "./routeSupport.ts";
 
+// A refused request answers 4xx; a write the computer could not complete (a
+// locked or full disk) is a server failure, not a bad request.
+function trackerFailureStatus(error: unknown): number {
+  if (error instanceof ApplicationsStorageError) return error.status;
+  if (error instanceof SyntaxError) return 400;
+  if (error instanceof Error && error.message === "Request is too large.") return 413;
+  // Name only: Node's message names absolute paths.
+  console.error(`[tracker] write failed: ${error instanceof Error ? error.name : "error"}`);
+  return 500;
+}
+
 // The revision names one validated tracker state. A client that already holds
 // it gets 304 instead of the whole tracker. Records that are not canonical are
 // left out and named in `invalidRecords`; every write refuses until they are
@@ -71,8 +82,8 @@ export async function handleSaveApplications(
 ): Promise<void> {
   let currentRevision: string | null = null;
   try {
-    const body = JSON.parse(await readBody(req)) as Record<string, unknown>;
-    if (!Array.isArray(body.applications)) {
+    const body = JSON.parse(await readBody(req)) as Record<string, unknown> | null;
+    if (!body || typeof body !== "object" || !Array.isArray(body.applications)) {
       sendJson(res, 400, { error: "Applications must be an array." });
       return;
     }
@@ -124,12 +135,15 @@ export async function handleSaveApplications(
     sendJson(res, 200, { applications: saved.applications, revision: saved.revision });
   } catch (error) {
     if (workspaceGateHandled(error, res)) return;
-    const status =
-      error instanceof ApplicationsStorageError ? error.status : 400;
+    const status = trackerFailureStatus(error);
     sendJson(res, status, {
       error: storageErrorMessage(
         error,
-        "Application save failed. Check the request and try again."
+        status === 500
+          ? "Application save failed on this computer. Try again."
+          : status === 413
+            ? "The save is larger than the supported limit. Nothing was saved."
+            : "Application save failed. Check the request and try again."
       ),
       ...(status === 409 &&
       error instanceof ApplicationsStorageError &&
@@ -151,8 +165,8 @@ export async function handleDeleteApplication(
     return;
   }
   try {
-    const body = JSON.parse(await readBody(req)) as Record<string, unknown>;
-    const baseUpdatedAt = body.baseUpdatedAt;
+    const body = JSON.parse(await readBody(req)) as Record<string, unknown> | null;
+    const baseUpdatedAt = body && typeof body === "object" ? body.baseUpdatedAt : undefined;
     if (
       typeof baseUpdatedAt !== "string" ||
       !baseUpdatedAt.trim() ||
@@ -182,10 +196,14 @@ export async function handleDeleteApplication(
     sendJson(res, 200, { applications });
   } catch (error) {
     if (workspaceGateHandled(error, res)) return;
-    const status =
-      error instanceof ApplicationsStorageError ? error.status : 400;
+    const status = trackerFailureStatus(error);
     sendJson(res, status, {
-      error: storageErrorMessage(error, "Delete failed."),
+      error: storageErrorMessage(
+        error,
+        status === 500
+          ? "Delete failed on this computer. Try again."
+          : status === 413 ? "The request is larger than the supported limit. Nothing was deleted." : "Delete failed."
+      ),
       ...(status === 409 &&
       error instanceof ApplicationsStorageError &&
       Array.isArray(error.currentApplications)

@@ -13,10 +13,13 @@ import {
   buildDisplayMap,
   displayIndexForValueIndex,
   expandToLinkRun,
+  inPlaceLinkRange,
   inlineFragmentForRange,
+  mergeParagraphValues,
   replaceWithParagraphFragments,
   replaceWithLink,
   setAlignment,
+  setLink,
   setLineHeightRanges,
   setParagraphLineHeight,
   setParagraphSpaceAfter,
@@ -57,12 +60,15 @@ import {
 import { anchorsFromDoc } from "../typesetStructure.ts";
 import { FONT_FAMILY_OPTIONS } from "@typeset/engine/lib/documentStyle.ts";
 import {
+  alignmentFromInlineMarks,
   canonicalInlineMarkText,
   clearInlineOverride,
   effectiveFieldFont,
   inlineMarkTagStartsAt,
   joinInlineMarkText,
-  paragraphSpacingFromInlineMarks
+  paragraphIndentFromInlineMarks,
+  paragraphSpacingFromInlineMarks,
+  stripInlineMarks
 } from "@typeset/engine/lib/inlineMarksText.ts";
 import { automaticLinkHref } from "@typeset/engine/lib/links.ts";
 
@@ -346,9 +352,31 @@ assert.equal(clipboardLineHeight("normal", 11), null);
   ]);
   assert.equal(
     html,
-    '<p style="margin-top: 8pt; margin-right: 0; margin-bottom: 12pt; margin-left: 0; text-align: left; line-height: 1.5"><span style="font-family: Arial; font-size: 10pt; line-height: 1.5; font-weight: 700; white-space: pre-wrap">A paragraph that wraps wherever the destination needs.</span></p>'
+    '<p style="margin-top: 8pt; margin-right: 0; margin-bottom: 12pt; margin-left: 0; text-align: left; line-height: 1.5"><span style="font-family: \'Arial\'; font-size: 10pt; line-height: 1.5; font-weight: 700; white-space: pre-wrap">A paragraph that wraps wherever the destination needs.</span></p>'
   );
   assert.equal(html.includes("&nbsp;"), false, "paragraph spacing does not create a blank paragraph");
+  // A CSS family name written unquoted must be a run of identifiers; "4" and
+  // "3" are numbers, so a browser drops an unquoted Source Serif 4 declaration.
+  for (const family of ["source-serif", "source-sans"]) {
+    const label = FONT_FAMILY_OPTIONS.find((option) => option.value === family).label;
+    const run = buildDisplayMap(`<font=${family}>Serif run</font>`, { preserveWhitespace: true });
+    const runHtml = clipboardHtmlForRanges([
+      {
+        src: { kind: "bullet", sectionId: "summary", entryId: "font", bulletId: "font" },
+        map: run,
+        dStart: 0,
+        dEnd: run.chars.length,
+        defaultFontFamily: "tinos",
+        defaultFontSizePt: 10,
+        defaultAlignment: "left",
+        defaultLineHeight: 1.15
+      }
+    ]);
+    assert.ok(
+      runHtml.includes(`font-family: '${label}';`),
+      `external copy quotes the ${label} family name so it stays valid CSS`
+    );
+  }
   assert.equal(
     (html.match(/<p /g) ?? []).length,
     1,
@@ -1154,6 +1182,48 @@ const dm = (value) => buildDisplayMap(value, { preserveWhitespace: true });
   assert.equal(crossing.end <= 3, true, `a crossing selection must not reach into the neighbour (got end=${crossing.end})`);
 }
 
+// 4b. The link popover trims its Text field, while a double-click selection keeps
+//     its trailing space. Applying with that text unchanged links the trimmed
+//     run in place: the space and the run's own formatting survive.
+{
+  const map = dm("Built <b>Acme</b> Corp tooling");
+  const href = "https://acme.com/";
+  const typed = map.display.slice(6, 11).trim();
+  const range = inPlaceLinkRange(map, 6, 11, typed);
+  assert.deepEqual(range, { dStart: 6, dEnd: 10 }, "the trailing space is left out of the link");
+  const linked = dm(setLink(map, range.dStart, range.dEnd, href).value);
+  assert.equal(linked.display, "Built Acme Corp tooling", "the selected trailing space survives");
+  assert(
+    linked.chars.slice(6, 10).every((char) => char.bold && char.linkHref === href),
+    "the linked run keeps its bold"
+  );
+  assert.equal(linked.chars[10].linkHref, null, "the space stays outside the link");
+  assert.deepEqual(
+    inPlaceLinkRange(dm(" Acme"), 0, 5, "Acme"),
+    { dStart: 1, dEnd: 5 },
+    "leading selected whitespace is narrowed away too"
+  );
+  assert.deepEqual(inPlaceLinkRange(map, 6, 10, "Acme"), { dStart: 6, dEnd: 10 });
+  assert.equal(inPlaceLinkRange(map, 6, 11, "Acme Inc"), null, "changed text is a replacement");
+  assert.equal(inPlaceLinkRange(map, 6, 6, "Acme"), null, "a caret inserts a new link");
+
+  // Editing an EXISTING link re-points its whole run, edge spaces included, so
+  // no edge keeps the old URL as a second link.
+  const existing = dm("Built<link=https%3A%2F%2Fold.com> Acme </link>Corp");
+  const run = expandToLinkRun(existing, 7, 7);
+  const target = inPlaceLinkRange(existing, run.start, run.end, existing.display.slice(run.start, run.end).trim());
+  assert.deepEqual(target, { dStart: run.start, dEnd: run.end }, "the whole link run is the target");
+  const repointed = setLink(existing, target.dStart, target.dEnd, "https://new.com/").value;
+  const repointedMap = dm(repointed);
+  assert.equal(repointedMap.display, "Built Acme Corp");
+  assert.equal((repointed.match(/<link=/g) ?? []).length, 1, "the run stays one link");
+  assert(
+    repointedMap.chars.slice(5, 11).every((char) => char.linkHref === "https://new.com/"),
+    "both edge spaces move to the new URL"
+  );
+  assert(!repointed.includes("old.com"), "no character keeps the old URL");
+}
+
 // 5. A bare filename is not a domain. A resume says "resume.pdf" and "README.md"
 //    constantly; auto-linking them produced https://resume.pdf.
 for (const notALink of ["resume.pdf", "README.md", "notes.txt", "diagram.png", "archive.zip", "data.json", "app.exe"]) {
@@ -1451,6 +1521,20 @@ for (const isALink of ["example.com", "sub.example.co.uk", "example.io/resume.pd
   assert.equal(selectionBandBottomOffset(structural, nextLine(106)), -6, "and still tiles");
 }
 
+// Single-field and cross-field inserts share one line-break normalization.
+{
+  const { normalizeFieldInsert } = await import("../inlineTextEditing.ts");
+  assert.equal(normalizeFieldInsert({ kind: "name" }, "A\r\nB"), "A B", "a single-line field turns a pasted break into a space");
+  assert.equal(normalizeFieldInsert({ kind: "entry" }, "A \n\n B"), "A B");
+  assert.equal(normalizeFieldInsert({ kind: "bullet" }, "A\r\nB"), "A\nB", "a bullet keeps its hard break");
+  const editor = readFileSync(new URL("../TypesetEditor.tsx", import.meta.url), "utf8");
+  assert.match(
+    editor,
+    /remainderOf\(first, normalizeFieldInsert\(first\.src, insert\)\)/,
+    "a cross-field insert normalizes against its first field like a single-field insert"
+  );
+}
+
 // A caret past the final display character restores at the value's end.
 {
   const { valueIndexForDisplayIndex } = await import("../inlineTextEditing.ts");
@@ -1690,7 +1774,61 @@ for (const isALink of ["example.com", "sub.example.co.uk", "example.io/resume.pd
 
 // Keyboard intents keep their meaning on the live and queued-replay paths.
 {
-  const { drainReplayQueue, indentReplacesSelection } = await import("../intentControl.ts");
+  const { drainReplayQueue, edgeNavigation, indentReplacesSelection } = await import("../intentControl.ts");
+  const keyEvent = (key, modifiers = {}) => ({
+    key,
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    shiftKey: false,
+    ...modifiers
+  });
+  assert.deepEqual(
+    edgeNavigation(keyEvent("Home", { ctrlKey: true })),
+    { scope: "document", edge: "start", extend: false },
+    "Ctrl+Home moves to the document start"
+  );
+  assert.deepEqual(
+    edgeNavigation(keyEvent("End", { ctrlKey: true, shiftKey: true })),
+    { scope: "document", edge: "end", extend: true },
+    "Ctrl+Shift+End extends to the document end"
+  );
+  assert.deepEqual(
+    edgeNavigation(keyEvent("Home")),
+    { scope: "line", edge: "start", extend: false },
+    "Home moves to the line start"
+  );
+  assert.deepEqual(
+    edgeNavigation(keyEvent("ArrowLeft", { metaKey: true })),
+    { scope: "line", edge: "start", extend: false },
+    "Cmd+ArrowLeft stays a line-start move"
+  );
+  assert.deepEqual(
+    edgeNavigation(keyEvent("ArrowRight", { metaKey: true })),
+    { scope: "line", edge: "end", extend: false },
+    "Cmd+ArrowRight stays a line-end move"
+  );
+  assert.deepEqual(
+    edgeNavigation(keyEvent("Home", { metaKey: true })),
+    { scope: "document", edge: "start", extend: false },
+    "Cmd+Home moves to the document start"
+  );
+  assert.deepEqual(
+    edgeNavigation(keyEvent("End", { metaKey: true })),
+    { scope: "document", edge: "end", extend: false },
+    "Cmd+End moves to the document end"
+  );
+  assert.deepEqual(
+    edgeNavigation(keyEvent("Home", { ctrlKey: true, altKey: true })),
+    { scope: "line", edge: "start", extend: false },
+    "Ctrl+Alt+Home (AltGr) never jumps to the document start"
+  );
+  assert.deepEqual(
+    edgeNavigation(keyEvent("End", { shiftKey: true })),
+    { scope: "line", edge: "end", extend: true },
+    "Shift+End extends to the line end"
+  );
+  assert.equal(edgeNavigation(keyEvent("ArrowLeft", { ctrlKey: true })), null, "Ctrl+ArrowLeft stays a native word move");
   const INDENTED = "        A paragraph.";
   assert.equal(indentReplacesSelection(INDENTED, 12, "in"), true, "mid-paragraph Tab inserts a tab stop");
   assert.equal(
@@ -1845,12 +1983,102 @@ assert.match(
   const sentenceMap = buildDisplayMap(sentence);
   for (let at = 0; at <= sentenceMap.display.length; at += 1) {
     const { before, after } = splitValueAt(sentenceMap, at);
-    const merged = joinInlineMarkText(before, after);
+    const merged = mergeParagraphValues(before, after);
     assert.equal(buildDisplayMap(merged.value).display, sentenceMap.display, `split and merge at ${at}`);
     assert.ok(plainChars(buildDisplayMap(merged.value)), `split and merge at ${at} forms no mark`);
     assert.equal(displayIndexForValueIndex(buildDisplayMap(merged.value), merged.index), at, `the merge caret returns to ${at}`);
   }
   assert.equal(canonicalInlineMarkText(blocks[2]), "a < b", "stored header and document paste blocks use the canonical spelling");
+
+  // A merged paragraph takes the UPPER paragraph's paragraph format. The engine
+  // reads those marks first-match, so the lower one's used to govern an
+  // unmarked upper paragraph.
+  {
+    const centered = mergeParagraphValues("Led the migration.", "<align=center>Centered line</align>");
+    assert.equal(buildDisplayMap(centered.value).display, "Led the migration.Centered line");
+    assert.equal(alignmentFromInlineMarks(centered.value), null, "the lower alignment does not take over");
+    assert.equal(
+      displayIndexForValueIndex(buildDisplayMap(centered.value), centered.index),
+      "Led the migration.".length,
+      "the merge caret stays at the seam"
+    );
+    const indented = mergeParagraphValues("Plain.", "<indent=36>Ind</indent>");
+    assert.equal(paragraphIndentFromInlineMarks(indented.value), 0, "the lower block indent does not take over");
+    const spaced = mergeParagraphValues(
+      "Plain.",
+      "<space-before=8><space-after=12>Spaced</space-after></space-before>"
+    );
+    assert.deepEqual(
+      paragraphSpacingFromInlineMarks(spaced.value),
+      { lineHeight: null, spaceBeforePt: null, spaceAfterPt: null },
+      "the lower before/after spacing does not take over"
+    );
+    const marked = mergeParagraphValues(
+      "<align=right><indent=18>Upper </indent></align>",
+      "<align=center><line-height=1.5><b>Lower</b></line-height></align>"
+    );
+    const markedMap = buildDisplayMap(marked.value, { preserveWhitespace: true });
+    assert.equal(markedMap.display, "Upper Lower");
+    assert(
+      markedMap.chars.every((char) => char.alignment === "right" && char.indentPt === 18),
+      "the lower text adopts the upper paragraph's alignment and indent"
+    );
+    assert(
+      markedMap.chars.slice(6).every((char) => char.bold && char.lineHeight === 1.5),
+      "the lower text keeps its character format and its own line height"
+    );
+    assert.equal(
+      mergeParagraphValues("Plain.", "<align=center></align>").value,
+      "Plain.",
+      "an empty lower paragraph's carrier marks do not survive the merge"
+    );
+    // Older merges stored empty paragraph-format carriers mid-value; a lower
+    // paragraph's carrier must not win the engine's first-match read either.
+    const carried = mergeParagraphValues("Plain upper", "<align=center></align>Body");
+    assert.equal(buildDisplayMap(carried.value).display, "Plain upperBody");
+    assert.equal(alignmentFromInlineMarks(carried.value), null, "a lower empty alignment carrier is dropped");
+    assert.equal(
+      paragraphIndentFromInlineMarks(mergeParagraphValues("Plain", "Body<indent=36></indent>").value),
+      0,
+      "a lower empty indent carrier is dropped"
+    );
+
+    // A whitespace-only upper line is visually empty too: the lower paragraph's
+    // format governs, and the whitespace is kept.
+    for (const blank of [" ", "\n"]) {
+      const merged = mergeParagraphValues(blank, "<align=center><indent=18>Text</indent></align>");
+      const mergedMap = buildDisplayMap(merged.value, { preserveWhitespace: true });
+      assert.equal(mergedMap.display, `${blank}Text`, `the ${JSON.stringify(blank)} upper line is kept`);
+      assert(
+        mergedMap.chars.every((char) => char.alignment === "center" && char.indentPt === 18),
+        `a ${JSON.stringify(blank)} upper line takes the lower paragraph's format`
+      );
+      assert.equal(alignmentFromInlineMarks(merged.value), "center");
+      assert.equal(
+        displayIndexForValueIndex(mergedMap, merged.index),
+        1,
+        "the caret sits at the seam after the kept whitespace"
+      );
+    }
+
+    // Backspace below an empty line just deletes that line, as in Docs/Word.
+    const intoEmpty = mergeParagraphValues(
+      "<align=right><space-after=6></space-after></align>",
+      "<align=center><space-before=8><indent=18>Text</indent></space-before></align>"
+    );
+    assert.equal(alignmentFromInlineMarks(intoEmpty.value), "center", "an empty upper paragraph keeps the lower alignment");
+    assert.equal(paragraphIndentFromInlineMarks(intoEmpty.value), 18, "an empty upper paragraph keeps the lower indent");
+    assert.deepEqual(
+      paragraphSpacingFromInlineMarks(intoEmpty.value),
+      { lineHeight: null, spaceBeforePt: 8, spaceAfterPt: null },
+      "an empty upper paragraph keeps the lower spacing"
+    );
+    assert.equal(
+      displayIndexForValueIndex(buildDisplayMap(intoEmpty.value), intoEmpty.index),
+      0,
+      "the caret stays at the start of the kept paragraph"
+    );
+  }
 
   // Any text inserted anywhere into literal text stays literal, with only
   // needed escapes (seeded, so failures reproduce).
@@ -1884,6 +2112,91 @@ assert.match(
       assert.ok(inlineMarkTagStartsAt(unescaped, index), `the escape at ${index} in ${JSON.stringify(next.value)} is needed`);
     }
   }
+}
+
+// A replaced document (New, Open, seed) never inherits the previous document's
+// saved selection: every reader ignores a range saved under another generation,
+// including while the replacement's pages wait on fonts.
+assert.match(editorSource, /const savedRangeIsCurrent = \(\) => savedRangeGenerationRef\.current === actions\.getDocumentGeneration\(\);/);
+assert.equal((editorSource.match(/savedRangeGenerationRef\.current = actions\.getDocumentGeneration\(\);/g) ?? []).length, 2, "both saved-range writes record their generation");
+assert.match(editorSource, /readSelection\(\) \?\? \(savedRangeIsCurrent\(\) \? lastRangeRef\.current : null\)/, "focusSelection ignores another document's range");
+assert.match(editorSource, /editorToolbarOwnsFocus\(\) && savedRangeIsCurrent\(\) \? lastRangeRef\.current : null/, "the caret overlay ignores another document's range");
+assert.match(editorSource, /const saved = savedRangeIsCurrent\(\);\s*const ranges = readRanges\(\) \?\? \(saved \? lastRangesRef\.current : null\);[\s\S]{0,120}?return saved && lastRangeRef\.current \?/, "toolbar commands ignore another document's ranges");
+
+// A plain-text edit can flip ANOTHER word into or out of link shape, changing
+// its display length (`–` ⇄ `--`). Link edges and the caret ride on the edited
+// characters, so neither slides: only the typed or deleted text changes.
+{
+  const L = "<link=https%3A%2F%2Fe.test%2F>";
+  // The header popover's input holds the stored text, so edits start there.
+  const plainEdit = (value, edit) => {
+    const before = dm(value);
+    const result = applyPlainTextInputEdit(value, edit(stripInlineMarks(value)));
+    const after = dm(result.value);
+    return {
+      before: before.display,
+      value: result.value,
+      caret: displayIndexForValueIndex(after, result.caretValueIndex)
+    };
+  };
+  // "q--r@x.orb@x" is no address, so its "--" shows as "–"; a space after "b"
+  // makes "q--r@x.orb" one, and its "--" shows as typed.
+  const straddle = "q--r@x.or" + L + "b@x</link>";
+  const spaced = plainEdit(straddle, (text) => text.slice(0, 10) + " " + text.slice(10));
+  assert.equal(spaced.before, "q–r@x.orb@x");
+  assert.equal(spaced.value, "q--r@x.or" + L + "b @x</link>", "the link start stays on \"b\"");
+  assert.equal(spaced.caret, 11, "the caret lands right after the typed space");
+  const deleted = plainEdit(straddle, (text) => text.slice(0, 10) + text.slice(11));
+  assert.equal(deleted.value, "q--r@x.or" + L + "bx</link>", "deleting \"@\" keeps \"r\" unlinked");
+  assert.equal(deleted.caret, 10, "the caret stays at the deletion point");
+
+  // A small-caps heading edited through the DOM diff flips the other way: "@"
+  // typed into "555--@x.co" unshapes it, so "--" collapses to "–".
+  const heading = "o  555--<link=https%3A%2F%2Fe.test%2Fo'n--x>@x.co</link>";
+  const unshaped = plainEdit(heading, (text) => text.slice(0, 10) + "@" + text.slice(10));
+  assert.equal(unshaped.value, "o  555--<link=https%3A%2F%2Fe.test%2Fo'n--x>@x@.co</link>");
+  assert.equal(unshaped.caret, 10, "the caret follows the typed \"@\", not the collapsed dash");
+  assert.equal(plainEdit(heading, (text) => text.slice(0, 9) + text.slice(10)).caret, 8);
+
+  // Typing "-" beside "-" inside a link: the link keeps its whole run.
+  const dashed = plainEdit(L + "x-y</link>", (text) => text.slice(0, 2) + "-" + text.slice(2));
+  assert.equal(dashed.value, L + "x--y</link>");
+  assert.equal(dashed.caret, 3);
+
+  // Re-applying a link run's href leaves each character's <nolink> state alone.
+  const suppressed = plainEdit(
+    "<nolink>" + L + "don't </link> </nolink>",
+    (text) => text.slice(0, 1) + "z" + text.slice(1)
+  );
+  assert.equal(
+    suppressed.value,
+    "<nolink>" + L + "dzon't </link></nolink><nolink> </nolink>",
+    "a link inside <nolink> stays suppressed after an edit"
+  );
+
+  // The popover input shows typed "'" and "--" where the page shows "’" and
+  // "–". Diffing against the page text stopped at the first of them and
+  // rewrote everything after it: marks spread and links swallowed text.
+  const typedAtEnd = (value) => applyPlainTextInputEdit(value, `${stripInlineMarks(value)}Z`);
+  assert.deepEqual(
+    typedAtEnd("<b>Jo's</b> site"),
+    { value: "<b>Jo's</b> siteZ", caretValueIndex: 17, historyIntent: "insert", historyText: "Z" },
+    "typing after an apostrophe word adds only Z, as one typing step"
+  );
+  assert.equal(typedAtEnd("<b>a--b</b> site").value, "<b>a--b</b> siteZ", "bold stays on a--b");
+  assert.equal(
+    typedAtEnd("Jo's " + L + "site</link> x").value,
+    "Jo's " + L + "site</link> xZ",
+    "the link keeps exactly its own text"
+  );
+  const trimmed = applyPlainTextInputEdit("<b>Jo's</b> site--x", "Jo's site-x");
+  assert.equal(trimmed.value, "<b>Jo's</b> site-x", "deleting one typed dash removes only it");
+  assert.equal(trimmed.historyIntent, "deleteBackward");
+  assert.equal(
+    applyPlainTextInputEdit("<b>it's</b>", "it''s").value,
+    "<b>it''s</b>",
+    "typed punctuation stays as typed"
+  );
 }
 
 console.log(

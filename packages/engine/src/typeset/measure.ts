@@ -4,7 +4,8 @@
 //
 // Shaping stages:
 //   1. display punctuation: --- → —, -- → –, ' → ’ (ResumeData stays ASCII;
-//      transformation happens during measurement and painting)
+//      runs carry the display form, from displayText, and every function here
+//      measures the text it is given as drawn)
 //   2. f-ligatures: longest-match ff/fi/fl/ffi/ffl → single ligature advance
 //   3. pair kerning between adjacent glyphs from the committed font tables
 //
@@ -25,6 +26,7 @@ import type {
   PenaltyItem
 } from "./types.ts";
 import {
+  INLINE_LITERAL_LESS_THAN,
   INLINE_MARK_TAG_PATTERN,
   isInlineFontSizePt,
   isInlineLiteralLessThan,
@@ -57,6 +59,64 @@ export function texLigatures(text: string): string {
   return text.replace(/---/g, "—").replace(/--/g, "–").replace(/'/g, "’");
 }
 
+// Display form: texLigatures for every word except a link word, shown as typed
+// (rule in the typeset guide; the editor and RoleFit mirror it).
+const isLinkWord = (word: string) => automaticLinkHref(word) !== null;
+
+// Display form of text with no inline-mark tags.
+export function displayText(text: string): string {
+  return text.replace(/\S+/g, (word) => (isLinkWord(word) ? word : texLigatures(word)));
+}
+
+// Each segment's display form, deciding link words across segment boundaries.
+function withDisplay(segments: Omit<StyledSegment, "display">[]): StyledSegment[] {
+  const full = segments.map((segment) => segment.text).join("");
+  const linked = new Uint8Array(full.length);
+  for (const word of full.matchAll(/\S+/g)) if (isLinkWord(word[0])) linked.fill(1, word.index, word.index + word[0].length);
+  let offset = 0;
+  return segments.map((segment) => {
+    const base = offset;
+    offset += segment.text.length;
+    const display = segment.href
+      ? segment.text
+      : segment.text.replace(/\S+/g, (piece, at: number) => (linked[base + at] ? piece : texLigatures(piece)));
+    return { ...segment, display };
+  });
+}
+
+// The value with each segment in display form and every tag kept, for a caller
+// that drops tags before layout; lay the result out with preDisplayed.
+export function displayInlineMarkedText(value: string): string {
+  const segments = segmentsFromInlineMarks(value);
+  let next = 0;
+  let out = "";
+  let text = "";
+  let cursor = 0;
+  const flush = () => {
+    if (text) out += segments[next++].display.replace(/</g, INLINE_LITERAL_LESS_THAN);
+    text = "";
+  };
+  for (const match of value.matchAll(INLINE_TAG_RE)) {
+    text += value.slice(cursor, match.index);
+    cursor = match.index + match[0].length;
+    if (isInlineLiteralLessThan(match[0])) {
+      text += "<";
+      continue;
+    }
+    flush();
+    out += match[0];
+  }
+  text += value.slice(cursor);
+  flush();
+  return out;
+}
+
+// A single-line field run's painted text: a tab or no-break space is one space,
+// as paragraph glue sets it; one character for one keeps editor offsets.
+export function paintedText(display: string): string {
+  return display.replace(/[\t\u00a0\u2007\u202f]/g, " ");
+}
+
 const F_LIGATURES = ["ffi", "ffl", "ff", "fi", "fl"] as const;
 
 // Decomposed input (e + U+0301, from some PDFs and pastes) is measured and
@@ -82,8 +142,15 @@ function borrowed(ch: string, own: FaceMetrics, fallback: FaceMetrics | null): b
   return own.adv[ch] === undefined && !own.unmeasured.includes(ch) && fallback?.adv[ch] !== undefined;
 }
 
+// Invisible format characters every renderer draws with no advance. A soft
+// hyphen never reaches the PDF shaper (pdfSafeText), so glyphs on either side
+// kern and ligate as if it were absent; fontkit kerns no pair across the rest.
+const SOFT_HYPHENS = /\u00ad/g;
+const ZERO_WIDTH = /^[\u200b-\u200f\u2060\ufeff]$/;
+
 // Advance width of an ALREADY-ligatured, composed string in font units (1000/em).
-function shapeUnits(text: string, style: FontStyle): { units: number; glyphs: number } {
+function shapeUnits(display: string, style: FontStyle): { units: number; glyphs: number } {
+  const text = display.replace(SOFT_HYPHENS, "");
   const own = fontFace(style.family, style.face).metrics;
   const fallback = fallbackMetrics(style);
   let units = 0;
@@ -119,6 +186,9 @@ function shapeUnits(text: string, style: FontStyle): { units: number; glyphs: nu
       if (prevFace === face) units += kern(face, prev, ch);
       prev = ch;
       prevFace = face;
+    } else if (ZERO_WIDTH.test(ch)) {
+      prev = "";
+      prevFace = null;
     } else {
       // Unknown glyph: fall back to the average of x-height-ish letters so a
       // stray character degrades measurement instead of crashing it.
@@ -132,9 +202,9 @@ function shapeUnits(text: string, style: FontStyle): { units: number; glyphs: nu
   return { units, glyphs };
 }
 
-// Width in bp of a text fragment at a style. Applies display punctuation first.
+// Width in bp of display-form text at a style.
 export function measure(text: string, style: FontStyle): number {
-  const shaped = shapeUnits(composed(texLigatures(text), fontFace(style.family, style.face).metrics), style);
+  const shaped = shapeUnits(composed(text, fontFace(style.family, style.face).metrics), style);
   return (shaped.units / 1000) * style.size + Math.max(0, shaped.glyphs - 1) * style.tracking;
 }
 
@@ -143,7 +213,7 @@ export function measure(text: string, style: FontStyle): number {
 export function runFamilies(text: string, style: FontStyle): DocumentFontFamily[] {
   const own = fontFace(style.family, style.face).metrics;
   const fallback = fallbackMetrics(style);
-  for (const ch of composed(texLigatures(text), own)) {
+  for (const ch of composed(text, own)) {
     if (borrowed(ch, own, fallback)) return [style.family, DOCUMENT_FONT_FAMILIES[style.family].fallback!];
   }
   return [style.family];
@@ -156,7 +226,7 @@ export type FaceSegment = { text: string; family: DocumentFontFamily; offset: nu
 
 export function faceSegments(text: string, style: FontStyle): FaceSegment[] {
   const own = fontFace(style.family, style.face).metrics;
-  const display = composed(texLigatures(text), own);
+  const display = composed(text, own);
   const fallback = fallbackMetrics(style);
   const fallbackFamily = DOCUMENT_FONT_FAMILIES[style.family].fallback;
   const segments: FaceSegment[] = [];
@@ -221,7 +291,7 @@ export function inkExtent(text: string, style: FontStyle): { height: number; dep
   const fallback = fallbackMetrics(style);
   let maxY = 0;
   let minY = 0;
-  for (const ch of composed(texLigatures(text), own)) {
+  for (const ch of composed(text, own)) {
     const b = (borrowed(ch, own, fallback) ? fallback! : own).bbox[ch];
     if (!b) continue;
     if (b[1] > maxY) maxY = b[1];
@@ -284,11 +354,13 @@ type StyledSegment = {
   lineHeight: number | null;
   href: string | null;
   linkSuppressed: boolean;
+  // The text as painted (displayText's rule, decided across segments).
+  display: string;
 };
 
 // Split the resume's inline-marks form (`a <b>c</b> d`) into styled segments.
 export function segmentsFromInlineMarks(value: string): StyledSegment[] {
-  const out: StyledSegment[] = [];
+  const out: Omit<StyledSegment, "display">[] = [];
   let bold = 0;
   let italic = 0;
   let underline = 0;
@@ -349,7 +421,7 @@ export function segmentsFromInlineMarks(value: string): StyledSegment[] {
   }
   text += value.slice(cursor);
   push();
-  return out;
+  return withDisplay(out);
 }
 
 // Build the box/glue/penalty item stream for one paragraph of inline-marked
@@ -361,7 +433,8 @@ export function paragraphItems(
   sizeBp: number,
   family: DocumentFontFamily,
   tracking: number,
-  faceOverride?: FaceOverride
+  faceOverride?: FaceOverride,
+  preDisplayed = false
 ): ParaItem[] {
   const items: ParaItem[] = [];
   const segments = segmentsFromInlineMarks(value);
@@ -373,7 +446,7 @@ export function paragraphItems(
   // change. This mirrors buildDisplayMap's word-processor preserve mode:
   // authored leading, interior, trailing, and hard-break-adjacent spaces all
   // remain caret-bearing glyphs.
-  let pending: { style: FontStyle; count: number; lineHeight: number | null } | null = null;
+  let pending: { style: FontStyle; count: number; lineHeight: number | null; tied: boolean } | null = null;
   let hasPrecedingBox = false; // a real word already sits on the current line
   const spaceBox = (n: number, style: FontStyle, lineHeight: number | null) => {
     if (n <= 0) return;
@@ -399,8 +472,10 @@ export function paragraphItems(
       tracking
     };
     // Preserve leading/trailing space significance across segment boundaries.
+    // Display form keeps every whitespace run, so the two splits align.
     const parts = seg.text.split(/(\r\n|\r|\n|[^\S\r\n]+)/);
-    for (const part of parts) {
+    const shown = (preDisplayed ? seg.text : seg.display).split(/(\r\n|\r|\n|[^\S\r\n]+)/);
+    for (const [index, part] of parts.entries()) {
       if (!part) continue;
       if (part === "\n" || part === "\r" || part === "\r\n") {
         // A hard break is structural, but authored spaces before it remain
@@ -415,8 +490,11 @@ export function paragraphItems(
       }
       if (/^\s+$/.test(part)) {
         // Accumulate consecutive whitespace, even across a tag boundary.
-        if (pending) pending.count += part.length;
-        else pending = { style, count: part.length, lineHeight: seg.lineHeight };
+        const tied = /^[\u00a0\u2007\u202f]+$/.test(part);
+        if (pending) {
+          pending.count += part.length;
+          pending.tied &&= tied;
+        } else pending = { style, count: part.length, lineHeight: seg.lineHeight, tied };
         continue;
       }
       if (pending) {
@@ -424,6 +502,9 @@ export function paragraphItems(
           // Interior run: N−1 literal spaces after the previous word, then one
           // break-opportunity glue that renders the Nth space.
           spaceBox(pending.count - 1, pending.style, pending.lineHeight);
+          // A run of only no-break spaces stays stretchable glue (the editor and
+          // PDF justify it alike), but a forbidding penalty before it is no break.
+          if (pending.tied) items.push({ kind: "penalty", penalty: 10000 } satisfies PenaltyItem);
           items.push(spaceGlue(pending.style));
         } else {
           // Authored line-leading spaces (including a Tab insertion represented
@@ -434,7 +515,7 @@ export function paragraphItems(
       }
       pushWord(
         items,
-        part,
+        shown[index],
         style,
         seg.linkSuppressed ? undefined : seg.href ?? automaticLinkHref(part) ?? undefined,
         seg.underline,
@@ -452,19 +533,18 @@ export function paragraphItems(
 
 // A word becomes one box, or — when it contains explicit hyphens with material
 // on both sides — hyphen-terminated fragments separated by penalty items.
-// CONTRACT: box/run text is stored in display form (– — ’), matching its
-// measured width. Renderers draw it verbatim and never re-transform it;
-// texLigatures is idempotent, so measure() re-applying it is safe.
+// CONTRACT: box/run text is stored in display form (displayText), matching
+// its measured width. Renderers and measure() take it verbatim and never
+// re-transform it: a link keeps the punctuation it was typed with.
 function pushWord(
   items: ParaItem[],
-  word: string,
+  display: string,
   style: FontStyle,
   href?: string,
   underline = false,
   lineHeight: number | null = null,
   linkSuppressed = false
 ) {
-  const display = texLigatures(word);
   const pieces = display.split(/(?<=-)(?=[^-])/); // split AFTER each hyphen run
   for (let i = 0; i < pieces.length; i += 1) {
     if (i > 0) items.push({ kind: "penalty", penalty: EXHYPHEN_PENALTY } satisfies PenaltyItem);

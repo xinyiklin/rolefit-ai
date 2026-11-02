@@ -114,6 +114,11 @@ unconfirmed feedback, but an invalid mutation target cannot authorize an edit.
   with a 9,000-character cap that budgets whole items across the long lists
   (required first, round-robin) rather than slicing the text, so a long duties
   list never drops the qualifications or tech stack and no item is cut.
+  The brief keeps every item at any count (a raw posting still yields at most
+  12 benefits); the title, Role context, and the tech, seniority, and domain
+  lists sit outside that budget, so a very long one of them can crowd out the
+  long lists. Prepare counts every brief item the budget leaves
+  out and says so under the brief instead of dropping it silently.
   Fit Assessment owns an independent provider/model/reasoning configuration;
   Prepare may combine it with Job analysis only when both resolved request
   configurations match exactly, otherwise it dispatches assessment-only after

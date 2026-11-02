@@ -37,6 +37,7 @@ import {
 import { clipboardBlocks } from "./documentPasteMapping.ts";
 import type { FieldRange } from "./multiFieldSelection.ts";
 
+import { edgeNavigation } from "./intentControl.ts";
 import { isWrappedEntryField, textStep } from "./wrappedFieldNavigation.ts";
 
 export type QueuedIntent =
@@ -443,16 +444,12 @@ export function useTypesetInputEvents({
         else moveVertical(vertical as -1 | 1, event.shiftKey);
         return;
       }
-      if (event.key === "Home" || (event.metaKey && event.key === "ArrowLeft")) {
+      const edgeMove = edgeNavigation(event);
+      if (edgeMove) {
         event.preventDefault();
         goalXRef.current = null;
-        moveLineEdge("start", event.shiftKey);
-        return;
-      }
-      if (event.key === "End" || (event.metaKey && event.key === "ArrowRight")) {
-        event.preventDefault();
-        goalXRef.current = null;
-        moveLineEdge("end", event.shiftKey);
+        if (edgeMove.scope === "document") moveDocumentEdge(edgeMove.edge, edgeMove.extend);
+        else moveLineEdge(edgeMove.edge, edgeMove.extend);
         return;
       }
       if (

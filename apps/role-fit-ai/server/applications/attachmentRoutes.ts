@@ -114,10 +114,9 @@ export async function handleUploadApplicationAttachment(
       );
       const attachment = {
         fileName,
-        label:
-          typeof body.label === "string" && body.label.trim()
-            ? body.label.trim().slice(0, 120)
-            : fileName,
+        // Cut then trimmed, as the record sanitizer stores it; a label that
+        // is blank once cut falls back the same way.
+        label: (typeof body.label === "string" ? body.label.slice(0, 120).trim() : "") || fileName,
         size: bytes.length,
         contentType: attachmentContentType(fileName),
         savedAt: new Date().toISOString()

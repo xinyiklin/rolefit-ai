@@ -18,7 +18,7 @@ import {
 } from "../applications/storage.ts";
 import { jobWorkspaceDir } from "../workspace.ts";
 import { cleanFrameUrls, resolveImportedJobText } from "../jobImport.ts";
-import { findMatchingApplication, extractJobMeta } from "./index.ts";
+import { findMatchingApplication, extractJobMeta, jobBoardHeader } from "./index.ts";
 
 // Pending browser-extension import. `status` is "preparing" while the server
 // prepares the raw captured text in the background (resolving the full JD for a
@@ -33,11 +33,12 @@ import { findMatchingApplication, extractJobMeta } from "./index.ts";
 // "preparing" → "done" lifecycle, so an import in one tab never pops the card
 // in another. A claim is refreshed on every poll (lastSeenAt) and released when
 // the owning tab goes quiet, so a claimed-then-closed import isn't stranded.
-// Entry: { id, text, url, frameUrls, status, claimedBy, claimToken, createdAt, lastSeenAt }.
+// Entry: { id, text, url, pageTitle, frameUrls, status, claimedBy, claimToken, createdAt, lastSeenAt }.
 type InboxEntry = {
   id: number;
   text: string;
   url: string;
+  pageTitle: string;
   frameUrls: string[];
   status: "preparing" | "done";
   claimedBy: string | null;
@@ -101,18 +102,23 @@ function releaseStaleExtensionClaims(now: number): void {
 // provider-backed AI job-analysis request remains in the receiving app tab.
 // Always settles to "done" (even on a resolve failure) so the owning tab never
 // polls forever; the tab then analyzes whatever raw text was captured.
-async function runExtensionPrepare({ id: importId, text, url, frameUrls }: InboxEntry): Promise<void> {
+async function runExtensionPrepare({ id: importId, text, url, pageTitle, frameUrls }: InboxEntry): Promise<void> {
   extensionPreparing = true;
+  // A job board's page title names the role and employer its description lacks.
+  const header = jobBoardHeader(url, pageTitle);
   try {
     const jobText = await resolveImportedJobText(text, url, {}, frameUrls);
     const done = extensionInbox.find((e) => e.id === importId);
     if (done) {
-      done.text = jobText.slice(0, 50_000);
+      done.text = (header + jobText).slice(0, 50_000);
       done.status = "done";
     }
   } catch {
     const failed = extensionInbox.find((e) => e.id === importId);
-    if (failed) failed.status = "done"; // keep the raw captured text → the tab analyzes it
+    if (failed) {
+      failed.text = (header + failed.text).slice(0, 50_000);
+      failed.status = "done"; // keep the raw captured text → the tab analyzes it
+    }
   } finally {
     extensionPreparing = false;
     // Chain to the next un-prepared import (the one we just finished is now
@@ -448,6 +454,7 @@ export async function handleExtensionRoutes(
       id: importId,
       text,
       url,
+      pageTitle: typeof body.pageTitle === "string" ? body.pageTitle.slice(0, 500) : "",
       frameUrls: cleanFrameUrls(body.frameUrls),
       status: "preparing",
       claimedBy: null,

@@ -62,7 +62,12 @@ function legitimatelyConsumed(piece: ConsumedPiece, spans: ReadonlyMap<string, P
   const chars = [...piece.text.replace(/\s/g, "")];
   if (!chars.length) return true;
   if (piece.role === "label-colon") return piece.text === ":";
-  if (piece.role === "separator") return chars.every((char) => SEPARATORS.has(char));
+  // A dingbat icon of at most two glyphs between items is a separator too;
+  // private-use glyphs never are, since they may be unmapped text.
+  if (piece.role === "separator") {
+    return chars.every((char) => SEPARATORS.has(char)) ||
+      (chars.length <= 2 && spans.get(piece.spanId)?.dingbat === true);
+  }
   if (chars.length > 2) return false;
   return spans.get(piece.spanId)?.dingbat === true || chars.every((char) => MARKERS.has(char) || PRIVATE_USE_RE.test(char));
 }

@@ -198,4 +198,54 @@ assert.deepEqual(
   "every pasted < is escaped; the editor keeps only the needed ones on insert"
 );
 
+// Inline text beside a nested block is its own paragraph (a browser's anonymous
+// block box), never fused onto the block's first or last line.
+assert.deepEqual(
+  paragraphFragmentsFromHtml('<div dir="ltr">Line one<div>Line two</div></div>'),
+  ["Line one", "Line two"],
+  "Gmail-style text before a nested div stays its own paragraph"
+);
+assert.deepEqual(
+  paragraphFragmentsFromHtml("<ul><li>Item<ul><li>Sub</li></ul></li></ul>"),
+  ["Item", "Sub"],
+  "a list item's text stays apart from its nested sub-item"
+);
+assert.deepEqual(
+  paragraphFragmentsFromHtml("<div>Intro<p>Para</p>Tail</div><p>Next</p>"),
+  ["Intro", "Para", "Tail", "Next"],
+  "text before and after a child block is separate from it and from the next block"
+);
+assert.equal(
+  inlineFragmentFromHtml('<div dir="ltr">Line one<div>Line two</div></div>'),
+  "Line one\nLine two",
+  "the inline form breaks the line between the text and the nested block"
+);
+
+// A <br> that ends its block paints no extra line; interior breaks still do.
+assert.deepEqual(
+  paragraphFragmentsFromHtml("<p><b>Built APIs<br></b></p>"),
+  ["<b>Built APIs</b>"],
+  "a trailing <br> adds no hard break"
+);
+assert.deepEqual(
+  paragraphFragmentsFromHtml("<div>Line one</div><div><br></div><div>Line two</div>"),
+  ["Line one", "", "Line two"],
+  "an empty <div><br></div> spacer is one empty paragraph, not a hard break"
+);
+assert.equal(
+  inlineFragmentFromHtml("<div>Line one</div><div><br></div><div>Line two</div>"),
+  "Line one\n\nLine two",
+  "the inline form of a spacer is one blank line"
+);
+assert.deepEqual(
+  paragraphFragmentsFromHtml("<p>x<br><br></p>"),
+  ["x\n"],
+  "of two trailing breaks, only the last is dropped"
+);
+assert.equal(
+  inlineFragmentFromHtml("<span>Line one</span><br>"),
+  "Line one",
+  "a trailing body-level <br> adds no hard break"
+);
+
 console.log("clipboard HTML whitespace probes: PASS");

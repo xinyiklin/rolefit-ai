@@ -131,6 +131,16 @@ assert.equal(
   evidence.length,
   "a blank answer contributes no evidence"
 );
+assert.equal(
+  buildCoverLetterEvidence({
+    resumeData,
+    candidateContext,
+    slotAnswers: { "slot:3:1:abc": "Morgan Rivera referred me.", "slot:9:1:gone": "An answer to a deleted slot." },
+    slotLabels: { "slot:3:1:abc": "Referral name" }
+  }).filter((item) => item.source === "user_answer").map((item) => item.text).join("|"),
+  "Morgan Rivera referred me.",
+  "an answer whose slot the letter no longer has is never sent as evidence"
+);
 
 // Attribution context vs. the name provenance shows. A resume field carries the
 // engine's inline-mark grammar; printing it raw is what put `<b>CareFlow</b>`

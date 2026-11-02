@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useReducer, useRef } from "react";
+import { useCallback, useMemo, useReducer, useRef, useSyncExternalStore } from "react";
 
 import {
   newBullet,
@@ -30,7 +30,7 @@ import {
   type EntryTextField,
   type StyleTextField
 } from "@typeset/engine/lib/styleFieldFormatting.ts";
-import { createHistoryClock, type HistoryClock } from "./historyClock.ts";
+import { createHistoryClock, historyGroupOf, type HistoryClock } from "./historyClock.ts";
 
 // New rows match the section's shape: skill row, summary paragraph, or entry.
 function newEntryForSection(section: ResumeSectionData): ResumeEntry {
@@ -790,7 +790,8 @@ export function rootReducer(
   // fresh group and pushes a snapshot. Within one burst the run still ends at a
   // word boundary and at the character cap, so undo gives the text back in
   // chunks the writer recognizes.
-  const key = coalesceKeyFor(action);
+  // A grouped gesture's step never merges with a neighbor.
+  const key = historyGroupOf(action) === undefined ? coalesceKeyFor(action) : null;
   const now = Date.now();
   // A shared clock prevents content edits from coalescing across a style edit.
   const sequence = historyClock.sequenceFor(state, action);
@@ -840,7 +841,7 @@ export function useResumeEditor(
       rootReducer(state, action, documentHistoryClock),
     [documentHistoryClock]
   );
-  const [state, dispatch] = useReducer(reducer, {
+  const [state, dispatchAction] = useReducer(reducer, {
     data: initialData,
     dirty: false,
     past: [],
@@ -850,15 +851,20 @@ export function useResumeEditor(
     coalesceEdge: null,
     coalesceCount: 0
   });
+  // Stamped at dispatch: the reducer runs after a grouped gesture has returned.
+  const dispatch = useCallback(
+    (action: Action) => dispatchAction(documentHistoryClock.stamp(action)),
+    [documentHistoryClock]
+  );
 
   const seedData = useCallback((data: ResumeData | null) => {
     dispatch({ type: "seed", data });
-  }, []);
+  }, [dispatch]);
 
   // Persistence clears only the dirty flag; the next edit re-arms it.
   const markClean = useCallback(() => {
     dispatch({ type: "markClean" });
-  }, []);
+  }, [dispatch]);
 
   const actions = useMemo(
     () => ({
@@ -956,9 +962,11 @@ export function useResumeEditor(
       undo: () => dispatch({ type: "undo" }),
       redo: () => dispatch({ type: "redo" })
     }),
-    [documentHistoryClock]
+    [dispatch, documentHistoryClock]
   );
 
+  // The style reducer can move the shared redo branch after this hook has read it.
+  useSyncExternalStore(documentHistoryClock.subscribe, documentHistoryClock.currentBranch);
   let undoIndex = state.past.length - 1;
   while (
     undoIndex >= 0 &&

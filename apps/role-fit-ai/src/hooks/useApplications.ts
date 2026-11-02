@@ -19,8 +19,10 @@ import {
 import type { NotApplyingReason } from "../lib/notApplying.ts";
 import type { StageHistoryEntry } from "../../shared/applicationStageHistoryContract.ts";
 import {
+  SKIP_DROPS_DOCUMENTS_MESSAGE,
   STAGE_HISTORY_FULL_MESSAGE,
   mergeStageHistories,
+  skipDropsDocuments,
   stageHistoryFits,
   withStatusChange
 } from "../lib/applicationStageHistory.ts";
@@ -31,6 +33,7 @@ import {
 } from "../lib/applicationStatusTransitions.ts";
 import { ghostedTimelineFullMessage, planGhostedMarks, type GhostedMark } from "../lib/ghostedMarks.ts";
 import { WORKSPACE_NEWER_CODE } from "../lib/workspaceBackupContract.ts";
+import { retriedCreateOverEarlier } from "../lib/preparationApplication.ts";
 
 export type { NotApplyingReason } from "../lib/notApplying.ts";
 
@@ -169,7 +172,7 @@ function canonicalizeApplicationAiUsage(application: Application): Application {
 // crypto.randomUUID exists only in secure contexts (https / localhost). Served
 // over a LAN IP or plain http it is undefined and would throw, so fall back to a
 // unique-enough id for these client-side pipeline keys.
-function newApplicationId(): string {
+export function newApplicationId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
   }
@@ -658,6 +661,10 @@ export function useApplications() {
         setError(STAGE_HISTORY_FULL_MESSAGE);
         return;
       }
+      if (skipDropsDocuments(existing, status)) {
+        setError(SKIP_DROPS_DOCUMENTS_MESSAGE);
+        return;
+      }
       const now = nextApplicationRevision(existing.updatedAt);
       const next = current.map((a) => a.id === id ? withStatusChange(a, status, now) : a);
       applicationsRef.current = next;
@@ -705,6 +712,16 @@ export function useApplications() {
     (id: string) => applicationsRef.current.find((application) => application.id === id),
     []
   );
+
+  // A create refused because its id exists is an earlier Apply/Skip attempt
+  // whose reply was lost: clear the refusal's banner and write over that row.
+  const confirmCreated = useCallback((retried: Application) => {
+    const earlier = applicationsRef.current.find((application) => application.id === retried.id);
+    if (!earlier) return Promise.resolve(false);
+    conflictMessage.current = "";
+    setError("");
+    return updateApplicationById(retriedCreateOverEarlier(earlier, retried));
+  }, [updateApplicationById]);
 
   // Layered duplicate scan (same-posting/repost/same-company-role, tiered
   // confidence) against every stored application — see src/lib/jobIdentity.ts.
@@ -1050,6 +1067,7 @@ export function useApplications() {
     markGhosted,
     remove,
     getApplication,
+    confirmCreated,
     findDuplicatesForTarget,
     linkPostingRecords,
     unlinkPostingRecord,

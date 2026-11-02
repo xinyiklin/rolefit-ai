@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
+import { EventEmitter } from "node:events";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import net from "node:net";
+import { tmpdir } from "node:os";
 import { join, resolve, win32 } from "node:path";
 import {
   ROLEFIT_DESKTOP_COMPATIBILITY_VERSION,
@@ -12,7 +15,8 @@ import {
 import {
   buildDesktopServerEnvironment,
   probeCompatibleDesktopServer,
-  probeDesktopServerLaunchKind
+  probeDesktopServerLaunchKind,
+  startOrReuseDesktopServer
 } from "../../dist-electron/desktop/server-process.cjs";
 import {
   buildCliProcessEnvironment
@@ -367,6 +371,67 @@ assert.throws(
     workspaceOverride: "relative-workspace"
   }),
   /ROLEFIT_WORKSPACE_DIR must be an absolute path/
+);
+
+// A reserved or exclusively held port (WinNAT excluded range) fails the bind
+// check with EACCES; startup must offer another port rather than crash.
+const reservedPortWorkspace = await mkdtemp(join(tmpdir(), "rolefit-reserved-port-"));
+const reservedPort = await new Promise((resolvePort) => {
+  const probe = net.createServer().listen(0, "127.0.0.1", () => {
+    const { port } = probe.address();
+    probe.close(() => resolvePort(port));
+  });
+});
+const realCreateNetServer = net.createServer;
+net.createServer = () => {
+  const reserved = new EventEmitter();
+  reserved.unref = () => reserved;
+  reserved.listen = () => {
+    queueMicrotask(() => reserved.emit("error", Object.assign(
+      new Error(`listen EACCES: permission denied 127.0.0.1:${reservedPort}`),
+      { code: "EACCES" }
+    )));
+    return reserved;
+  };
+  return reserved;
+};
+try {
+  assert.deepEqual(
+    await startOrReuseDesktopServer({
+      appRoot: reservedPortWorkspace,
+      serverEntry: "unused-server-entry",
+      serverCwd: reservedPortWorkspace,
+      workspaceDir: join(reservedPortWorkspace, "workspace"),
+      mode: "production",
+      host: "127.0.0.1",
+      port: reservedPort,
+      forkServer: () => {
+        throw new Error("a reserved port must not start the owned server");
+      }
+    }),
+    {
+      status: "conflict",
+      kind: "foreign-service",
+      origin: `http://127.0.0.1:${reservedPort}`,
+      port: reservedPort
+    },
+    "an EACCES port at startup offers another port instead of rejecting"
+  );
+} finally {
+  net.createServer = realCreateNetServer;
+  await rm(reservedPortWorkspace, { recursive: true, force: true });
+}
+
+const startupWindowSource = mainSource.slice(mainSource.indexOf("async function startDesktop()"));
+assert.match(
+  startupWindowSource,
+  /mainWindow = createMainWindow\([\s\S]*?\);\s*desktopStartupComplete = true;\s*\}/,
+  "startup marks completion only after it creates its own companion window"
+);
+assert.match(
+  mainSource,
+  /app\.on\("second-instance"[\s\S]*?else if \(desktopStartupComplete && desktopServer\)[\s\S]*?app\.on\("activate"[\s\S]*?if \(!mainWindow && desktopStartupComplete && desktopServer\)/,
+  "a relaunch or activate during startup cannot open a second, untrusted companion window"
 );
 
 console.log("desktop server contract probes: passed");

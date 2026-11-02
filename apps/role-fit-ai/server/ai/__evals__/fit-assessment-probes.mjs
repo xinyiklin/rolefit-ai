@@ -86,6 +86,73 @@ for (const verdict of ["STRONG", "REASONABLE", "STRETCH"]) {
   );
 }
 
+// A CLEAR is never displayed, but its snapshot is saved: a job quote that is
+// not in the posting is dropped (no general warning about an unseen finding),
+// while a located one is kept.
+{
+  const clearUnlocated = sanitizeFitAssessmentResponse(
+    { ...validRaw, eligibility: { status: "CLEAR", jobExcerpt: "Open to candidates on any visa worldwide." } },
+    { jobText, resumeText, candidateContext }
+  );
+  assert.ok(clearUnlocated, "a CLEAR with an unlocated quote is still usable");
+  assert.deepEqual(clearUnlocated.eligibility, { status: "CLEAR" }, "an unlocated CLEAR quote is not saved");
+  assert.ok(!clearUnlocated.warnings?.some((warning) => /^Eligibility:/.test(warning)), "and raises no warning about a finding nobody sees");
+  const clearLocated = sanitizeFitAssessmentResponse(
+    { ...validRaw, eligibility: { status: "CLEAR", jobExcerpt: "Must be authorized to work in the United States without sponsorship." } },
+    { jobText, resumeText, candidateContext }
+  );
+  assert.equal(clearLocated.eligibility.jobExcerpt, "Must be authorized to work in the United States without sponsorship.", "a located CLEAR quote is kept");
+
+  const clearUnlocatedCandidate = sanitizeFitAssessmentResponse(
+    { ...validRaw, eligibility: { status: "CLEAR", candidateExcerpt: "I hold permanent residency." } },
+    { jobText, resumeText, candidateContext }
+  );
+  assert.deepEqual(clearUnlocatedCandidate.eligibility, { status: "CLEAR" }, "an unlocated CLEAR candidate quote is not saved");
+  assert.ok(
+    !clearUnlocatedCandidate.warnings?.some((warning) => /^Eligibility:/.test(warning)),
+    "an unlocated CLEAR candidate quote raises no warning about a finding nobody sees"
+  );
+  const clearLocatedCandidate = sanitizeFitAssessmentResponse(
+    { ...validRaw, eligibility: { status: "CLEAR", candidateExcerpt: "I require employment sponsorship." } },
+    { jobText, resumeText, candidateContext }
+  );
+  assert.equal(clearLocatedCandidate.eligibility.candidateExcerpt, "I require employment sponsorship.", "a located CLEAR candidate quote is kept");
+  const checkUnlocatedCandidate = sanitizeFitAssessmentResponse(
+    {
+      ...validRaw,
+      eligibility: {
+        status: "CHECK",
+        jobExcerpt: "Must be authorized to work in the United States without sponsorship.",
+        candidateExcerpt: "I hold permanent residency."
+      }
+    },
+    { jobText, resumeText, candidateContext }
+  );
+  assert.ok(
+    checkUnlocatedCandidate.warnings?.includes("Eligibility: source reference could not be confirmed. Quoted text is unconfirmed."),
+    "a shown CHECK still reports its unlocated candidate quote"
+  );
+  assert.equal(checkUnlocatedCandidate.eligibility.candidateExcerpt, "I hold permanent residency.", "a shown CHECK keeps its quote as unconfirmed");
+}
+
+// An omitted candidate excerpt is unconfirmed, not a conflict: an empty quote
+// would otherwise match every resume sentence, including a negative one.
+{
+  const unquoted = sanitizeFitAssessmentResponse(
+    {
+      ...validRaw,
+      matches: [{ ...validRaw.matches[0], candidateExcerpt: "" }],
+      eligibility: { status: "CLEAR" }
+    },
+    { jobText, resumeText: `${resumeText}\nNo experience with Kubernetes.`, candidateContext }
+  );
+  assert.ok(
+    unquoted?.warnings?.includes("Match 1: source reference could not be confirmed. Quoted text is unconfirmed."),
+    "an empty candidate excerpt is flagged as unconfirmed"
+  );
+  assert.ok(!unquoted.warnings.some((warning) => /explicit conflict/.test(warning)), "and is not reported as an explicit conflict");
+}
+
 const multilineJobExcerpt = "Build accessible React workflows\nfor healthcare teams.";
 const multilineCandidateExcerpt = "Built accessible React workflows\nused by clinical operations teams.";
 const multiline = sanitizeFitAssessmentResponse(

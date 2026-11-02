@@ -83,6 +83,9 @@ export async function fetchFontBytes(doc: LayoutDocument, fontAssetBaseUrl: stri
   return new Map(entries);
 }
 
+// The printable ASCII a face is primed with before any document text.
+const PRINTABLE_ASCII = Array.from({ length: 0x7e - 0x21 + 1 }, (_, index) => String.fromCharCode(0x21 + index));
+
 export async function emitPdf(
   doc: LayoutDocument,
   fonts: FontBytes,
@@ -108,6 +111,10 @@ export async function emitPdf(
       const bytes = fonts.get(key);
       if (!bytes) throw new Error(`missing embedded font for ${key}`);
       f = { pdfFont: await pdf.embedFont(bytes, { subset: false }), shaper: fontkit.create(bytes) };
+      // ToUnicode keeps each glyph's first source text, so reach shared glyphs
+      // from their ASCII first (typeset guide); unmapped ones would hit .notdef.
+      const shaper = f.shaper;
+      f.pdfFont.encodeText(PRINTABLE_ASCII.filter((char) => shaper.hasGlyphForCodePoint(char.codePointAt(0)!)).join(" "));
       embedded.set(key, f);
     }
     return f;
@@ -212,9 +219,10 @@ export async function emitPdf(
 // Ids come from pdfFont.encodeText, as drawText's did: its shaping also records
 // each glyph's source text for the ToUnicode map, which keeps extraction exact.
 // The same control-character cleanup pdf-lib's drawText applied, so a pasted
-// tab or line separator never becomes a missing-glyph box.
+// tab or line separator never becomes a missing-glyph box. A soft hyphen is
+// dropped: shaped before "-", it zero-widths every later hyphen (typeset guide).
 function pdfSafeText(text: string): string {
-  return text.replace(/[\t\u0085\u2028\u2029]/g, "    ").replace(/[\b\v\n\r]/g, "");
+  return text.replace(/[\t\u0085\u2028\u2029]/g, "    ").replace(/[\b\v\n\r\u00ad]/g, "");
 }
 
 function kernedGlyphs(context: PDFContext, font: PDFFont, shaper: ShapingFont, text: string): PDFArray {

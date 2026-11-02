@@ -34,6 +34,7 @@ import { ApplicationsLoadingSkeleton, AnalyticsLoadingSkeleton } from "./section
 import { useDebouncedValue } from "./hooks/useDebouncedValue";
 import { useDocStyle } from "@typeset/editor/hooks/useDocStyle.ts";
 import { createHistoryClock } from "@typeset/editor/hooks/historyClock.ts";
+import { commitDetachedHistory } from "./lib/detachedHistory";
 import { FormattingToolbar } from "@typeset/editor/components/toolbar/FormattingToolbar.tsx";
 import { DocumentStructureControls } from "@typeset/editor/components/toolbar/DocumentStructureControls.tsx";
 import {
@@ -123,6 +124,7 @@ import {
   assemblePreparedJobApplicationText,
   assemblePreparedJobTailoringText,
   buildPreparedJobBrief,
+  buildSavedPreparedJobBrief,
   preparedJobBriefFieldFromText,
   preparedJobName,
   reconcilePreparedJobManualReviewFields,
@@ -712,6 +714,11 @@ function App() {
     actions: resumeEditorActions
   } = useResumeEditor(resumeHistoryClock);
   const typesetEditorRef = useRef<TypesetEditorHandle>(null);
+  const commitUnmountedResumeHistory = (direction: "undo" | "redo") => commitDetachedHistory(
+    direction,
+    { undoSequence: resumeUndoSequence, redoSequence: resumeRedoSequence, undo: resumeEditorActions.undo, redo: resumeEditorActions.redo },
+    docStyle
+  );
   const resumeFitViewportRef = useRef<HTMLDivElement>(null);
   const [inlineFormat, setInlineFormat] = useState<InlineFormatState>(EMPTY_INLINE_FORMAT);
   // The caret each editor was left at, held across the tab switch that unmounts
@@ -1105,6 +1112,7 @@ function App() {
     markGhosted,
     remove: removeApplication,
     getApplication,
+    confirmCreated,
     storagePath: applicationsPath,
     findDuplicatesForTarget,
     linkPostingRecords,
@@ -1941,7 +1949,7 @@ function App() {
     options: coverLetterEditor.coverLetterOptions,
     applicationOwned: applicationOfRecordId !== null,
     documentDirty: coverLetterEditor.dirty,
-    documentFingerprint: coverLetterEditor.draftPayload ?? "",
+    documentFingerprint: coverLetterEditor.sourcePayload ?? "",
     workspaceSaving: coverLetterEditor.isWorkspaceSaving,
     candidateRevision: coverLetterEditor.coverLetterCandidatesRevision,
     excludedVariants: excludedCoverLetterVariants
@@ -2279,7 +2287,7 @@ function App() {
     currentResumeSource,
     resumeDocumentVersion: resumeReplacementStateRef.current.version,
     coverLetterText: coverLetterEditor.text,
-    currentCoverLetterSource: coverLetterEditor.draftPayload ?? "",
+    currentCoverLetterSource: coverLetterEditor.sourcePayload ?? "",
     coverLetterDocumentVersion: coverReplacementStateRef.current.version,
     saveApplicationDocument: applicationFiles.saveDocument,
     getResumeArtifacts,
@@ -2330,6 +2338,7 @@ function App() {
     getCurrentPreparationId,
     getPreparationGeneration: () => preparationGenerationRef.current,
     getApplication,
+    confirmCreated,
     refreshApplications,
     createApplication,
     updateApplicationById,
@@ -2412,6 +2421,7 @@ function App() {
     getCurrentPreparationId,
     getPreparationGeneration: () => preparationGenerationRef.current,
     getApplication,
+    confirmCreated,
     refreshApplications,
     currentJobTracking,
     resolvePreparationDuplicate: duplicateGuard.resolveApplyDuplicate,
@@ -2492,7 +2502,7 @@ function App() {
     kind: "coverLetter",
     dirty: coverLetterEditor.recoveryDirty,
     currentVersion: coverReplacementStateRef.current.version,
-    recoveryDraftSaved: coverDraftAutosaveState === "saved",
+    recoveryDraftSaved: coverDraftAutosaveState === "saved" && !coverLetterEditor.overLimit,
     applicationId: preparationSession.applicationId,
     jobOnlyRecord: coverLetterApplicationSync.state === "job-only",
     receipt: applicationPersistenceReceipt
@@ -2592,7 +2602,7 @@ function App() {
         roleDescription: app.roleDescription
       });
       const storedBrief = removePreparedJobRoleSummary(
-        buildPreparedJobBrief(restoredJobDescription, restoredJobDescription),
+        buildSavedPreparedJobBrief(restoredJobDescription),
         app.roleDescription
       );
       const fallbackBrief = buildPreparedJobBrief(restoredExtraction.tailoringText, restoredSourceText);
@@ -3137,11 +3147,11 @@ function App() {
                 <FormattingToolbar
                   onUndo={() => {
                     if (typesetEditorRef.current) typesetEditorRef.current.undo();
-                    else resumeEditorActions.undo();
+                    else commitUnmountedResumeHistory("undo");
                   }}
                   onRedo={() => {
                     if (typesetEditorRef.current) typesetEditorRef.current.redo();
-                    else resumeEditorActions.redo();
+                    else commitUnmountedResumeHistory("redo");
                   }}
                   canUndo={canUndoResume || docStyle.canUndo}
                   canRedo={canRedoResume || docStyle.canRedo}
@@ -3198,14 +3208,17 @@ function App() {
                   docStyle={docStyle}
                   globalAlignments={globalAlignments ?? undefined}
                   onGlobalAlignmentChange={(scope, alignment) => {
-                    resumeEditorActions.clearAlignmentOverrides(scope);
+                    // Clearing the overrides and setting the default are one undo step.
+                    docStyle.groupHistory(() => {
+                      resumeEditorActions.clearAlignmentOverrides(scope);
+                      if (scope === "body") docStyle.set("bodyAlign", alignment);
+                      else if (scope === "header")
+                        docStyle.set("headerAlign", alignment === "justify" ? "left" : alignment);
+                      else docStyle.set("headingAlign", alignment === "justify" ? "left" : alignment);
+                    });
                     setInlineFormat((current) =>
                       current.alignmentScope === scope ? { ...current, alignment } : current
                     );
-                    if (scope === "body") docStyle.set("bodyAlign", alignment);
-                    else if (scope === "header")
-                      docStyle.set("headerAlign", alignment === "justify" ? "left" : alignment);
-                    else docStyle.set("headingAlign", alignment === "justify" ? "left" : alignment);
                   }}
                   styleMarkStates={styleMarkStates}
                   onStyleFieldMarkChange={(field, mark, on) => {

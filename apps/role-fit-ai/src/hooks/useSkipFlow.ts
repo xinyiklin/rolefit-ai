@@ -3,6 +3,7 @@ import type { JobAnalysisWarning } from "../../shared/jobAnalysisWarnings.ts";
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
   makeApplicationRecord,
+  newApplicationId,
   type Application,
   type NotApplyingReason
 } from "./useApplications.ts";
@@ -41,9 +42,10 @@ type UseSkipFlowArgs = {
   getCurrentPreparationId: () => string;
   getPreparationGeneration: () => number;
   getApplication: (id: string) => Application | undefined;
+  confirmCreated: (application: Application) => Promise<boolean>;
   refreshApplications: () => Promise<boolean>;
   currentJobTracking: () => ExtractedJobTracking;
-  resolvePreparationDuplicate: (isCurrent: () => boolean) => Promise<DuplicateResolution>;
+  resolvePreparationDuplicate: (isCurrent: () => boolean, ownApplicationId: string) => Promise<DuplicateResolution>;
   createApplication: (application: Application) => Promise<boolean>;
   updateApplicationById: (application: Application) => Promise<boolean>;
   linkPostingRecords: (applicationIds: string[], groupId?: string) => Promise<string | null>;
@@ -67,6 +69,7 @@ export function useSkipFlow({
   getCurrentPreparationId,
   getPreparationGeneration,
   getApplication,
+  confirmCreated,
   refreshApplications,
   currentJobTracking,
   resolvePreparationDuplicate,
@@ -85,6 +88,10 @@ export function useSkipFlow({
   const skipSessionRef = useRef<PreparationSession | null>(null);
   const unrelatedApplicationIdRef = useRef<string | null>(null);
   const skipCommitIdentityRef = useRef<string | null>(null);
+  // One record id per preparation until a Skip is saved, so a retry after a
+  // lost reply resolves to the row the earlier try may have created.
+  const skipAttemptRef = useRef<{ preparationId: string; id: string } | null>(null);
+  const skipAttemptIdRef = useRef<string | null>(null);
   const skipPreparationIdRef = useRef<string | null>(null);
   const skipPreparationGenerationRef = useRef<number | null>(null);
   const isSkipping = isResolvingSkip || isSavingSkip;
@@ -105,6 +112,7 @@ export function useSkipFlow({
     skipSessionRef.current = null;
     unrelatedApplicationIdRef.current = null;
     skipCommitIdentityRef.current = null;
+    skipAttemptIdRef.current = null;
     skipPreparationIdRef.current = null;
     skipPreparationGenerationRef.current = null;
   }
@@ -148,6 +156,10 @@ export function useSkipFlow({
       skipPreparationIdRef.current = currentPreparationId;
       skipPreparationGenerationRef.current = getPreparationGeneration();
       const isCurrent = () => capturedPreparationIsCurrent();
+      if (skipAttemptRef.current?.preparationId !== currentPreparationId) {
+        skipAttemptRef.current = { preparationId: currentPreparationId, id: newApplicationId() };
+      }
+      const attemptId = skipAttemptRef.current.id;
       let resolution: DuplicateResolution = { action: "continue", relationship: null };
       if (session.mode === "new") {
         if (!(await refreshApplications())) {
@@ -162,7 +174,7 @@ export function useSkipFlow({
           return;
         }
         try {
-          resolution = await resolvePreparationDuplicate(isCurrent);
+          resolution = await resolvePreparationDuplicate(isCurrent, attemptId);
         } catch {
           const message = "Duplicate checking failed. Retry Skip & save job.";
           setSkipError(message);
@@ -179,6 +191,7 @@ export function useSkipFlow({
         ? { ...session, pendingRelationship: resolution.relationship }
         : session;
       skipSessionRef.current = capturedSession;
+      skipAttemptIdRef.current = capturedSession.mode === "new" ? attemptId : null;
       unrelatedApplicationIdRef.current = resolution.unrelatedApplicationId ?? null;
       const relationship = capturedSession.pendingRelationship;
       setSkipPrompt(suggestSkipReasons({
@@ -217,12 +230,10 @@ export function useSkipFlow({
         : null;
       const now = new Date().toISOString();
       const tracking = currentJobTracking();
-      const baseRecord = makeApplicationRecord(
-        jobUrl,
-        preparedJobDescription,
-        "not_applying",
-        tracking
-      );
+      const baseRecord = {
+        ...makeApplicationRecord(jobUrl, preparedJobDescription, "not_applying", tracking),
+        ...(skipAttemptIdRef.current ? { id: skipAttemptIdRef.current } : {})
+      };
       const prepared = preparedApplicationRecord({
         base: baseRecord,
         existing: existingDraft ?? matchedNotApplying,
@@ -253,9 +264,10 @@ export function useSkipFlow({
         return false;
       }
 
-      const saved = commit.operation === "create"
+      let saved = commit.operation === "create"
         ? await createApplication(commit.application).catch(() => false)
         : await updateApplicationById(commit.application).catch(() => false);
+      if (!saved && commit.operation === "create") saved = await confirmCreated(commit.application).catch(() => false);
       if (!saved) {
         const message = "This decision could not be saved. The prepared job and your reasons are still here; retry Save as skipped.";
         setSkipError(message);
@@ -266,6 +278,7 @@ export function useSkipFlow({
         });
         return false;
       }
+      skipAttemptRef.current = null;
 
       let relationshipWarning = "";
       if (commit.operation === "create" && session.pendingRelationship) {

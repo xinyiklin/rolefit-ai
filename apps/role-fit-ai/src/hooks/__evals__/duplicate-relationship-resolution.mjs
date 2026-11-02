@@ -315,7 +315,7 @@ const trackerStore = readFileSync(new URL("../useApplications.ts", import.meta.u
 assert.doesNotMatch(applyFlow, /mergeTargetId|mergeApplications/, "normal Apply never merges attempts");
 assert.match(
   applyFlow,
-  /commit\.operation === "create"[\s\S]{0,320}?await createApplication\(app\)[\s\S]{0,900}?await linkPostingRecords/,
+  /commit\.operation === "create"[\s\S]{0,320}?await createApplication\(app\)[\s\S]{0,1200}?await linkPostingRecords/,
   "a new attempt is created by id before a separate atomic relationship write"
 );
 assert.match(
@@ -343,5 +343,17 @@ assert.match(
   /const unlinkPostingRecord = useCallback[\s\S]{0,2600}?affected\.map[\s\S]{0,500}?baseUpdatedAt: application\.updatedAt/,
   "unlinking an established posting group revision-checks every affected record in one mutation"
 );
+
+{
+  // A create whose reply was lost is already in the tracker under the
+  // attempt's id; the retry must not offer to link the record to itself.
+  const harness = createHarness(duplicate());
+  assert.deepEqual(
+    await harness.render().resolveApplyDuplicate(harness.isCurrent, "application-1"),
+    { action: "continue", relationship: null },
+    "an Apply or Skip retry never matches its own earlier attempt"
+  );
+  assert.equal(harness.render().duplicatePrompt, null, "and asks nothing");
+}
 
 console.log("Duplicate relationship resolution passed");

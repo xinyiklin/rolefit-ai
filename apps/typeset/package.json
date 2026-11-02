@@ -11,8 +11,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "eval:autosave": "node --experimental-strip-types src/__evals__/resume-autosave.mjs && node --experimental-strip-types src/__evals__/document-save-baseline.mjs",
-    "test": "npm run eval:autosave",
-    "check": "npm run build && npm run eval:autosave"
+    "eval:history": "node src/__evals__/grouped-style-history.mjs",
+    "test": "npm run eval:autosave && npm run eval:history",
+    "check": "npm run build && npm run eval:autosave && npm run eval:history"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",

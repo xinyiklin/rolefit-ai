@@ -33,6 +33,9 @@ export type CoverLetterPreflight = {
   authoredWordCount: number;
   hasCompletedGreeting: boolean;
   missingFields: MissingCoverLetterField[];
+  // Details the resume or brief does not supply. Their inputs stay shown while a
+  // typed value fills them, so typing never hides the field.
+  detailFields: MissingCoverLetterField[];
   // Template slots naming a private fact RoleFit cannot infer (a referral, a
   // prior personal relationship). They are optional guidance, not a Polish gate.
   privateSlots: CoverLetterTemplateSlot[];
@@ -138,9 +141,11 @@ export function buildCoverLetterPreflight({
   slotAnswers = {},
   date
 }: BuildCoverLetterPreflightInput): CoverLetterPreflight {
-  const resolvedCandidateName = clean(values.candidate_name) || clean(candidateName);
-  const resolvedRole = clean(values.role) || clean(role);
-  const resolvedCompany = clean(values.company) || clean(company);
+  const resolvedCandidateName = clean(candidateName) || clean(values.candidate_name);
+  // A typed detail only fills a field the resume or brief leaves empty, so a later
+  // correction there always wins over a value typed while the field was missing.
+  const resolvedRole = clean(role) || clean(values.role);
+  const resolvedCompany = clean(company) || clean(values.company);
   const recipientName = authoredRecipient(text);
   const resolvedDate =
     clean(date) ||
@@ -163,19 +168,13 @@ export function buildCoverLetterPreflight({
     date: resolvedDate,
     slotAnswers
   });
-  const missingFields: MissingCoverLetterField[] = [];
-
-  if (!resolvedCandidateName) {
-    missingFields.push(
-      field("candidate_name", "Your name", "No name was found in the resume for the sign-off.")
-    );
-  }
-  if (!resolvedRole) {
-    missingFields.push(field("role", "Role", "The job description did not resolve a role title."));
-  }
-  if (!resolvedCompany) {
-    missingFields.push(field("company", "Company", "The job description did not resolve a company."));
-  }
+  const detailFields: MissingCoverLetterField[] = [
+    ...(clean(candidateName) ? [] : [field("candidate_name", "Your name", "No name was found in the resume for the sign-off.")]),
+    ...(clean(role) ? [] : [field("role", "Role", "The job description did not resolve a role title.")]),
+    ...(clean(company) ? [] : [field("company", "Company", "The job description did not resolve a company.")])
+  ];
+  const resolvedByKey = { candidate_name: resolvedCandidateName, role: resolvedRole, company: resolvedCompany };
+  const missingFields = detailFields.filter((item) => !resolvedByKey[item.key]);
 
   const blockers = missingFields.filter((item) => item.key !== "candidate_name").map((item) => item.reason);
   const warnings: string[] = [
@@ -189,6 +188,7 @@ export function buildCoverLetterPreflight({
     authoredWordCount: template.authoredWordCount,
     hasCompletedGreeting: completedGreeting(text),
     missingFields,
+    detailFields,
     privateSlots: template.userInputSlots,
     blockers,
     warnings,

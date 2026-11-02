@@ -95,7 +95,10 @@ companion snapshot immediately before native API dispatch.
 
 The companion defaults the local site to port `5181`. Its compact setup page
 also exposes one non-secret `Local site port` setting. Applying a new integer
-from `1` through `65535` first checks numeric loopback availability, saves a
+from `1` through `65535` (never one of the Fetch standard's bad ports, which
+browsers and the companion's own health probe refuse; `ipc-contract.cts`
+owns the list, the extension's `settings.js` mirrors it, and the alternate-port
+scan skips them) first checks numeric loopback availability, saves a
 versioned document at
 `app.getPath("userData")/desktop-settings/settings.json`, and relaunches the
 companion through the normal quit path so the owned server shuts down cleanly.

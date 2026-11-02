@@ -387,7 +387,8 @@ move any Applied or Interviewing application there from the row menu (flagged
 rows also offer a direct Mark as Ghosted) or the stage control, mark flagged ones with
 Analytics' one-write bulk action (dated today), or opt in to **Mark as Ghosted
 automatically** (off by default, in Settings > Automation and Analytics), which
-dates each mark the day the threshold passed, never moves the application open
+dates each mark the day the threshold passed (or the day after a planned
+follow-up that held the record, if later), never moves the application open
 in Application Detail in the same tab (another tab's open record can be marked;
 saving there then reports the change instead of overwriting it), and never
 retries a record in the same session. The day
@@ -800,7 +801,10 @@ disappears into the task. Quiet competence, not salesmanship.
     Applied or Interviewing. Moving an applied record to Skipped preserves its
     application date and saved materials. A Skipped record without an
     application date remains job-only and gains one only when moved to an
-    active stage; stage changes never invent documents.
+    active stage; stage changes never invent documents. A record that holds
+    documents but no application date (a migrated submission) is refused a
+    move to Skipped until its application date is added, so the move never
+    drops them.
 11. Preserve safe extension intake: a claimed extension posting requests
     AI-backed Job analysis on Prepare like any other preparation; automatic
     Polish then follows only the Settings switches and thresholds, and the

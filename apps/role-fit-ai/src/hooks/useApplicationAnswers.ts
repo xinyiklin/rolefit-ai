@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ANSWER_FACTS_MAX, ANSWER_FACTS_MAX_CHARS, ANSWER_QUESTION_MAX_CHARS, ANSWER_REFINEMENT_MAX_CHARS, ANSWER_TEXT_MAX_CHARS,
-  extractAnswerConstraints, hasUnresolvedAnswerPlaceholder, normalizeAnswerText,
+  answerReadiness, extractAnswerConstraints, normalizeAnswerText,
   validateAnswerConstraints, type ApplicationAnswerRevision
 } from "../../shared/applicationAnswersContract.ts";
 import { parseApplicationAnswerRevision } from "../../shared/applicationAnswerStorage.ts";
@@ -229,7 +229,7 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
       return { ...message, edited: true, saveError: undefined,
         response: { ...message.response, id: crypto.randomUUID(), previousAnswerId: message.edited && !settled ? message.response.previousAnswerId : message.response.id, generation: undefined, sources: undefined, clarification: undefined,
           answer: text.replace(/\r\n?/g, "\n"), counts: validation.counts, compliant: validation.compliant,
-          status: text.trim() && validation.compliant && !hasUnresolvedAnswerPlaceholder(text) ? "ready" : "draft" } };
+          status: answerReadiness(text, validation.compliant) } };
     });
   }
   async function save(messageId: string, preserveDraft = false) {
@@ -271,7 +271,8 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
     const { savedAt: _savedAt, userFacts, ...savedRevision } = answer;
     const response: ApplicationAnswerRevision = { ...savedRevision, id, applicationId: answer.applicationId ?? applicationId ?? conversationId,
       questionId: question.id, questionRevision: question.revision, constraints, counts: validation.counts, compliant: validation.compliant,
-      status: answer.status ?? (validation.compliant ? "ready" : "draft") };
+      // Today's rules decide readiness: a stored "ready" never outlives a limit it now misses.
+      status: answer.status === "ready" || !answer.status ? answerReadiness(answer.answer, validation.compliant) : answer.status };
     const messageId = crypto.randomUUID();
     update(conversationId, (current) => ({ ...current, targetMessageId: messageId, editedQuestion: null, composer: "", composerMode: response.clarification ? "clarification" : "refinement", targetIntent: current.targetIntent + 1,
       messages: [...current.messages, { id: messageId, question, facts: [...(userFacts?.facts ?? [])], response, savedRevisionId: id }] }));

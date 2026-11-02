@@ -175,6 +175,7 @@ let workspaceOperationPending = false;
 let liveConnectionStatus = null;
 let connectionStatusLoaded = false;
 let connectionStatusGeneration = 0;
+let connectionStatusFailures = 0;
 let connectionPollTimer = 0;
 
 function storedTab() {
@@ -217,12 +218,17 @@ function activateTab(value, { persist = true, refresh = true } = {}) {
     window.clearTimeout(workspacePollTimer);
     workspacePollTimer = 0;
   }
-  if (tab === "settings") {
+  if (pollsConnectionStatus(tab)) {
     if (hasUsableBridge()) void refreshConnectionStatus();
   } else {
     window.clearTimeout(connectionPollTimer);
     connectionPollTimer = 0;
   }
+}
+
+// The extension tab gates Approve/Remove on server ownership, so it keeps that status live too.
+function pollsConnectionStatus(tab) {
+  return tab === "settings" || tab === "extension";
 }
 
 function storedExtensionBrowser() {
@@ -311,7 +317,8 @@ function announce(message) {
   });
 }
 
-function announceExtensionSetupCopy(message) {
+// This region sits outside the panels, so it announces from whichever tab is active.
+function announceStatus(message) {
   elements.extensionSetupStatus.textContent = "";
   window.requestAnimationFrame(() => {
     elements.extensionSetupStatus.textContent = message;
@@ -380,7 +387,7 @@ async function copyExtensionSetupValue(button) {
   if (!action || !hasUsableBridge()) return;
   if (extensionCopyPending) {
     showTemporaryExtensionSetupCopyFeedback(button, action, "Wait", "pending");
-    announceExtensionSetupCopy("Another copy is already in progress.");
+    announceStatus("Another copy is already in progress.");
     return;
   }
 
@@ -392,10 +399,10 @@ async function copyExtensionSetupValue(button) {
   try {
     await bridge.copyExtensionSetupValue(target);
     showTemporaryExtensionSetupCopyFeedback(button, action, "Copied", "success");
-    announceExtensionSetupCopy(target === "directory" ? extensionFolderFeedback("success") : action.success);
+    announceStatus(target === "directory" ? extensionFolderFeedback("success") : action.success);
   } catch {
     showTemporaryExtensionSetupCopyFeedback(button, action, "Try again", "error");
-    announceExtensionSetupCopy(target === "directory" ? extensionFolderFeedback("error") : action.error);
+    announceStatus(target === "directory" ? extensionFolderFeedback("error") : action.error);
   } finally {
     extensionCopyPending = false;
     button.removeAttribute("aria-busy");
@@ -430,7 +437,9 @@ function updateSitePortControls({ preserveStatus = false } = {}) {
     siteSettings?.warning === null;
   elements.sitePortInput.disabled = !siteSettings || locked || sitePortApplyPending;
   elements.sitePortApply.disabled = !siteSettings || locked || sitePortApplyPending || port === null || unchanged;
-  elements.sitePortApply.textContent = sitePortConfirmValue === port
+  // The confirm step exists only for a concrete new port; an empty or invalid
+  // field is not one awaiting confirmation.
+  elements.sitePortApply.textContent = port !== null && sitePortConfirmValue === port
     ? "Confirm & restart"
     : "Apply & restart";
   elements.sitePortInput.setCustomValidity(
@@ -670,6 +679,8 @@ async function loadExtensionPairingSettings() {
     window.clearTimeout(extensionPairingRetryTimer);
     extensionPairingRetryTimer = 0;
   } catch {
+    // After a successful load, a failed poll keeps the last rows; the next poll retries.
+    if (extensionPairingLoadState === "ok") return;
     // A just-started server can stall for seconds (dev mode compiles the app
     // on first load), so failures before any success keep Loading and retry.
     if (extensionPairingLoadState === "loading" && extensionPairingStartupRetriesLeft > 0) {
@@ -702,7 +713,18 @@ function localSitePortErrorMessage(error) {
   const message = error instanceof Error ? error.message : String(error);
   if (message.includes("already in use")) return "That port is already in use. Choose another port.";
   if (message.includes("ROLEFIT_DESKTOP_PORT")) return "Remove ROLEFIT_DESKTOP_PORT before changing this setting.";
+  // A refused port names its reason: RoleFit's own sentence, without the
+  // "Error invoking remote method" prefix Electron wraps around it.
+  const refused = message.match(/Port \d+ is one browsers refuse to connect to\. Choose another port\./);
+  if (refused) return refused[0];
   return "The port could not be saved. Check app permissions and try again.";
+}
+
+function providerMutationErrorMessage(error, fallback) {
+  const message = error instanceof Error ? error.message : String(error);
+  // A reused listener names its fix; Electron prefixes the message, so match the sentence.
+  const reused = message.match(/Restart RoleFit and let this companion start the local service[^.]*\./);
+  return reused ? reused[0] : fallback;
 }
 
 function connectionStatus(provider, record) {
@@ -755,6 +777,9 @@ function apiKeyForm(provider, replacing) {
     replacing ? "Save replacement" : "Add provider"
   );
   submit.type = "submit";
+  // Tagged like the action buttons so focus survives the provider poll.
+  submit.dataset.providerAction = replacing ? "save-replacement" : "add-provider";
+  submit.dataset.providerId = provider.id;
   submit.disabled = pendingProviders.has(provider.id);
   form.append(submit);
   if (replacing) {
@@ -809,14 +834,10 @@ function renderCliActions(provider, record, actions) {
 function renderProviders() {
   const fragment = document.createDocumentFragment();
   const isInitialRender = elements.providerList.dataset.rendered !== "true";
-  let configuredCount = 0;
-  let readyCount = 0;
 
   SUPPORTED_PROVIDERS.forEach((provider) => {
     const record = providerRecords.get(provider.id);
     const status = connectionStatus(provider, record);
-    if (record?.configured) configuredCount += 1;
-    if (record?.ready) readyCount += 1;
 
     const item = document.createElement("li");
     item.className = `provider-card${isInitialRender ? " is-entering" : ""}`;
@@ -845,19 +866,88 @@ function renderProviders() {
     fragment.append(item);
   });
 
+  // The visible-window poll re-renders this list while a key may be half
+  // typed: carry each key field's text and the focused field across the
+  // rebuild, or every poll wipes the entry and drops focus.
+  const typedKeys = new Map();
+  let focusedKey = null;
+  for (const field of elements.providerList.querySelectorAll('input[name="apiKey"]')) {
+    const providerId = field.closest("[data-provider-id]")?.dataset.providerId;
+    if (!providerId) continue;
+    if (field.value) typedKeys.set(providerId, field.value);
+    if (document.activeElement === field) {
+      focusedKey = { providerId, start: field.selectionStart, end: field.selectionEnd };
+    }
+  }
+  // A focused action button survives the rebuild by its action and provider.
+  const active = document.activeElement;
+  const focusedAction = active instanceof HTMLButtonElement && elements.providerList.contains(active) && active.dataset.providerAction
+    ? { action: active.dataset.providerAction, providerId: active.dataset.providerId }
+    : null;
   elements.providerList.replaceChildren(fragment);
+  if (focusedAction) {
+    const button = elements.providerList.querySelector(
+      `button[data-provider-action="${focusedAction.action}"][data-provider-id="${focusedAction.providerId}"]`
+    );
+    if (button && !button.disabled) button.focus({ preventScroll: true });
+  }
+  for (const field of elements.providerList.querySelectorAll('input[name="apiKey"]')) {
+    const providerId = field.closest("[data-provider-id]")?.dataset.providerId;
+    if (!providerId) continue;
+    if (typedKeys.has(providerId)) field.value = typedKeys.get(providerId);
+    if (focusedKey?.providerId === providerId && !field.disabled) {
+      field.focus({ preventScroll: true });
+      field.setSelectionRange(focusedKey.start, focusedKey.end);
+    }
+  }
   elements.providerList.dataset.rendered = "true";
   elements.providerList.setAttribute("aria-busy", "false");
-  elements.providerSummary.textContent = configuredCount === 0
-    ? "No providers added yet. Add a CLI or API provider to begin."
-    : `${configuredCount} added · ${readyCount} ready for RoleFit.`;
-  elements.overviewProviderSummary.textContent = configuredCount === 0
-    ? "No providers connected"
-    : `${readyCount} ready of ${configuredCount} connected`;
-  const providerAttention = configuredCount > 0 && readyCount === 0;
+  renderProviderSummary();
+  return false;
+}
+
+function renderProviderSummary() {
+  let configuredCount = 0;
+  let readyCount = 0;
+  for (const provider of SUPPORTED_PROVIDERS) {
+    const record = providerRecords.get(provider.id);
+    if (record?.configured) configuredCount += 1;
+    if (record?.ready) readyCount += 1;
+  }
+  // No records yet means the first status check is still running (a
+  // completed check holds every supported provider), not an empty setup.
+  const checking = providerRecords.size === 0;
+  // Only a service this companion started receives these providers; a reused
+  // one keeps its own, so "ready for RoleFit" would not describe the open app.
+  const serverState = checking || configuredCount === 0 ? "" : liveConnectionStatus?.serverState;
+  const notUsed = serverState === "reused-standalone"
+    ? {
+        summary: "RoleFit is running as a development server, which does not use the providers added here. Stop it and reopen RoleFit through this companion to use them.",
+        overview: "Not used by the dev server"
+      }
+    : serverState === "reused-companion"
+      ? {
+          summary: "RoleFit is using a service another companion session started, which does not use the providers added here. Stop that service and reopen RoleFit through this companion to use them.",
+          overview: "Not used by this service"
+        }
+      : null;
+  elements.providerSummary.textContent = checking
+    ? "Checking providers…"
+    : notUsed
+      ? notUsed.summary
+      : configuredCount === 0
+        ? "No providers added yet. Add a CLI or API provider to begin."
+        : `${configuredCount} added · ${readyCount} ready for RoleFit.`;
+  elements.overviewProviderSummary.textContent = checking
+    ? "Checking providers"
+    : notUsed
+      ? notUsed.overview
+      : configuredCount === 0
+        ? "No providers connected"
+        : `${readyCount} ready of ${configuredCount} connected`;
+  const providerAttention = Boolean(notUsed) || (configuredCount > 0 && readyCount === 0);
   elements.navProvidersAttention.hidden = !providerAttention;
   setCardTone(elements.overviewProvidersCard, providerAttention);
-  return false;
 }
 
 function renderCheckingProviders() {
@@ -940,8 +1030,8 @@ async function runProviderAction(providerId, task, successMessage, failureMessag
   try {
     await task();
     announce(successMessage);
-  } catch {
-    announce(failureMessage);
+  } catch (error) {
+    announce(providerMutationErrorMessage(error, failureMessage));
   } finally {
     pendingProviders.delete(providerId);
     await refreshProviders({ announceResult: false });
@@ -966,8 +1056,11 @@ async function saveApiProvider(providerId, form) {
     await request;
     replacingApiProviders.delete(providerId);
     announce(`${PROVIDER_BY_ID.get(providerId)?.name ?? "API provider"} added securely.`);
-  } catch {
-    announce("The API provider could not be saved. Check secure credential storage and try again.");
+  } catch (error) {
+    announce(providerMutationErrorMessage(
+      error,
+      "The API provider could not be saved. Check secure credential storage and try again."
+    ));
   } finally {
     input.value = "";
     pendingProviders.delete(providerId);
@@ -1125,6 +1218,9 @@ function renderServiceIndicators(status) {
 function renderConnectionStatus() {
   const status = liveConnectionStatus;
   renderServiceIndicators(status);
+  // Which service is open decides whether the provider summary holds; a
+  // provider-status error keeps its own message until the next refresh.
+  if (elements.companionRoot.dataset.status !== "error") renderProviderSummary();
   if (!status) {
     renderActiveExtensionPort();
     elements.connectionState.dataset.state = connectionStatusLoaded ? "error" : "unknown";
@@ -1173,7 +1269,7 @@ function renderConnectionStatus() {
 function scheduleConnectionPoll() {
   window.clearTimeout(connectionPollTimer);
   connectionPollTimer = 0;
-  if (!hasUsableBridge() || activeTabId !== "settings" || document.visibilityState === "hidden") {
+  if (!hasUsableBridge() || !pollsConnectionStatus(activeTabId) || document.visibilityState === "hidden") {
     return;
   }
   connectionPollTimer = window.setTimeout(() => {
@@ -1193,9 +1289,13 @@ async function refreshConnectionStatus() {
       throw new Error("Invalid connection status.");
     }
     liveConnectionStatus = status;
+    connectionStatusFailures = 0;
   } catch {
     if (generation !== connectionStatusGeneration) return;
-    liveConnectionStatus = null;
+    // One failed probe keeps the last ownership so the extension rows, an armed
+    // removal, and keyboard focus survive; a second consecutive failure clears it.
+    connectionStatusFailures += 1;
+    if (connectionStatusFailures >= 2) liveConnectionStatus = null;
   } finally {
     if (generation === connectionStatusGeneration) {
       connectionStatusLoaded = true;
@@ -1540,9 +1640,9 @@ async function openRoleFitInBrowser(button) {
   button.disabled = true;
   try {
     await bridge.openBrowserApp();
-    announce("RoleFit opened in your default browser.");
+    announceStatus("RoleFit opened in your default browser.");
   } catch {
-    announce("RoleFit could not be opened. Keep the desktop app running and try again.");
+    announceStatus("RoleFit could not be opened. Keep the desktop app running and try again.");
   } finally {
     button.disabled = false;
   }
@@ -1554,14 +1654,24 @@ for (const button of [elements.openRoleFit, elements.overviewOpenRoleFit]) {
   });
 }
 
+function setOpenExtensionDirectoryLabel(label, title = "") {
+  // The label is the button's leading text node, before its decorative arrow.
+  elements.openExtensionDirectory.firstChild.nodeValue = `${label} `;
+  elements.openExtensionDirectory.title = title;
+}
+
 elements.openExtensionDirectory.addEventListener("click", async () => {
   if (!hasUsableBridge()) return;
   elements.openExtensionDirectory.disabled = true;
+  setOpenExtensionDirectoryLabel("Open folder");
   try {
     await bridge.openExtensionDirectory();
-    announce(`Opened the bundled browser-extension folder for ${activeExtensionPortLabel()}.`);
+    announceStatus(`Opened the bundled browser-extension folder for ${activeExtensionPortLabel()}.`);
   } catch {
-    announce(`The browser-extension folder for ${activeExtensionPortLabel()} could not be opened. Restart RoleFit and try again.`);
+    const message = `The browser-extension folder for ${activeExtensionPortLabel()} could not be opened. Restart RoleFit and try again.`;
+    // The status region is visually hidden, so the control itself shows the failure until the next try.
+    setOpenExtensionDirectoryLabel("Couldn't open, try again", message);
+    announceStatus(message);
   } finally {
     elements.openExtensionDirectory.disabled = false;
   }

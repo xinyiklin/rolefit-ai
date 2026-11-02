@@ -10,6 +10,7 @@ import {
   displayRole,
   appFitVerdict,
   formatCompactDate,
+  formatMonthLabel,
   nextAction,
   noResponseLabel
 } from "../../lib/applicationDisplay";
@@ -44,22 +45,11 @@ const COLUMNS: Array<{ label: string; key: SortKey }> = [
   { label: "Fit", key: "fit" }
 ];
 
-// Returns "June 2026" for an ISO datetime/date string using local time.
-function monthLabel(iso: string): string {
-  if (!iso) return "";
-  try {
-    const [y, m] = iso.slice(0, 10).split("-").map(Number);
-    return new Date(y, m - 1, 1).toLocaleDateString([], { month: "long", year: "numeric" });
-  } catch {
-    return iso.slice(0, 7);
-  }
-}
-
 // Group rows by month label (caller already sorted chronologically).
 function groupByMonth(apps: Application[]): Array<{ month: string; rows: Application[] }> {
   const groups: Array<{ month: string; rows: Application[] }> = [];
   for (const app of apps) {
-    const label = monthLabel(applicationActivityDate(app));
+    const label = formatMonthLabel(applicationActivityDate(app));
     const last = groups[groups.length - 1];
     if (last && last.month === label) {
       last.rows.push(app);
@@ -263,8 +253,9 @@ export function TrackerTableView({
       >
         {visible.length ? (
           grouped ? (
-            groups.map(({ month, rows }) => (
-              <div className="applications-table__month-group" key={month} role="group" aria-label={month}>
+            groups.map(({ month, rows }, index) => (
+              // A legacy date-only entry can sort between two rows of one month.
+              <div className="applications-table__month-group" key={`${index}:${month}`} role="group" aria-label={month}>
                 <div className="applications-table__month-divider" aria-hidden="true">
                   <span className="table-eyebrow">{month}</span>
                 </div>

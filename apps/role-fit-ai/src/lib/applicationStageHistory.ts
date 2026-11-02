@@ -5,7 +5,7 @@ import {
   STAGE_HISTORY_MAX_ENTRIES,
   type StageHistoryEntry
 } from "../../shared/applicationStageHistoryContract.ts";
-import { todayIso } from "./dateInput.ts";
+import { toDateInput, todayIso } from "./dateInput.ts";
 
 // Plain record facts rather than the hook's Application type: the server's
 // status route imports this module.
@@ -18,6 +18,19 @@ type HistoryFacts = {
 
 export const STAGE_HISTORY_FULL_MESSAGE =
   "This application's timeline is full. Remove a timeline entry, then try again.";
+
+export const SKIP_DROPS_DOCUMENTS_MESSAGE =
+  "This application has no application date, so marking it Skipped would remove its saved documents. Add its application date and save, then mark it Skipped.";
+
+// A Skipped record without an application date holds no documents, so a record
+// that has some (a migrated submission saved without a date) cannot move there.
+export function skipDropsDocuments(
+  application: Pick<HistoryFacts, "status" | "appliedAt"> & { resumeArtifacts?: unknown; coverLetterArtifacts?: unknown; attachments?: readonly unknown[]; resumeUsed?: unknown },
+  nextStatus: ApplicationStatus
+): boolean {
+  return nextStatus === "not_applying" && application.status !== "not_applying" && !application.appliedAt
+    && Boolean(application.resumeArtifacts || application.coverLetterArtifacts || application.attachments?.length || application.resumeUsed);
+}
 
 export function newStageEntryId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -59,6 +72,19 @@ export function stageHistoryFits(
   return (next?.length ?? 0) <= STAGE_HISTORY_MAX_ENTRIES;
 }
 
+// Nothing on the timeline falls before the application, and only an interview
+// can be scheduled ahead. Compared by local calendar day.
+export function timelineDateProblem(
+  entry: Pick<StageHistoryEntry, "type" | "at">,
+  appliedAt: string | undefined,
+  now = new Date()
+): "before_application" | "future" | null {
+  const day = toDateInput(entry.at);
+  if (day < toDateInput(appliedAt)) return "before_application";
+  if (entry.type !== "interview" && day > toDateInput(todayIso(now))) return "future";
+  return null;
+}
+
 type StatusFacts = HistoryFacts & {
   updatedAt: string;
   notApplyingReasons?: NotApplyingReason[];
@@ -73,14 +99,16 @@ export function withStatusChange<T extends StatusFacts>(
   updatedAt: string,
   at?: string
 ): T {
+  // Only a first submission (from Draft or a job-only Skip) is dated now; a
+  // migrated submitted record without a date never gets one invented.
+  const submitting = status !== "draft" && status !== "not_applying"
+    && (application.status === "draft" || (application.status === "not_applying" && !application.appliedAt));
   return {
     ...application,
     status,
     updatedAt,
     stageHistory: withStageChange(application, status, application.stageHistory, at),
-    appliedAt: status === "draft"
-      ? undefined
-      : status !== "not_applying" && !application.appliedAt ? updatedAt : application.appliedAt,
+    appliedAt: status === "draft" ? undefined : submitting ? updatedAt : application.appliedAt,
     notApplyingAt: status === "not_applying" ? updatedAt : undefined,
     notApplyingReasons: status === "not_applying" ? application.notApplyingReasons : undefined,
     notApplyingNote: status === "not_applying" ? application.notApplyingNote : undefined
@@ -152,8 +180,10 @@ export function deriveTimeline(
     anchors.push({ key: "skipped", kind: "skipped", at: application.notApplyingAt });
   }
 
+  // Entries are day-granular while the Applied anchor keeps its instant, so
+  // same-day rows order by recording order, never by time of day.
   const byDate = (left: { at: string; order: number }, right: { at: string; order: number }) =>
-    Date.parse(left.at) - Date.parse(right.at) || left.order - right.order;
+    localDay(new Date(left.at)) - localDay(new Date(right.at)) || left.order - right.order;
   const interviewRounds = new Map(
     entries
       .map((entry, order) => ({ entry, at: entry.at, order }))

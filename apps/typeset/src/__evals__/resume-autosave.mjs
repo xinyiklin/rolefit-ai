@@ -7,8 +7,9 @@
 //
 //   node --experimental-strip-types src/__evals__/resume-autosave.mjs
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
-import { DOC_STYLE_DEFAULTS } from "@typeset/engine/lib/documentStyle.ts";
+import { DOC_STYLE_DEFAULTS, coerceDocStyle } from "@typeset/engine/lib/documentStyle.ts";
 import {
   ResumeFileError,
   parseResumeFile,
@@ -74,11 +75,11 @@ const storage = (entries) => {
 };
 
 const empty = storage({});
-assert.deepEqual(restoreAutosavedDraft(empty), { kind: "none" }, "no draft restores nothing");
+assert.deepEqual(restoreAutosavedDraft(() => empty), { kind: "none" }, "no draft restores nothing");
 assert.equal(empty.map.size, 0, "restoring nothing writes nothing");
 
 const titled = storage({ [AUTOSAVE_KEY]: autosave, [DOCUMENT_TITLE_KEY]: "Spring resume" });
-const restoredDraft = restoreAutosavedDraft(titled);
+const restoredDraft = restoreAutosavedDraft(() => titled);
 assert.equal(restoredDraft.kind, "restored");
 assert.equal(restoredDraft.title, "Spring resume", "a restored draft carries its title");
 assert.equal(restoredDraft.parsed.data.sections.length, buildStarterResume().sections.length);
@@ -86,27 +87,93 @@ assert.equal(titled.map.has(UNREADABLE_AUTOSAVE_KEY), false, "a readable draft i
 
 const refused = "Candidate Name\ncandidate@example.com";
 const broken = storage({ [AUTOSAVE_KEY]: refused });
-assert.deepEqual(restoreAutosavedDraft(broken), { kind: "unreadable", kept: true });
+assert.deepEqual(restoreAutosavedDraft(() => broken), { kind: "unreadable", kept: true });
 assert.equal(broken.map.get(UNREADABLE_AUTOSAVE_KEY), refused, "the refused draft is kept byte for byte");
 assert.equal(broken.map.get(AUTOSAVE_KEY), refused, "restoring does not itself rewrite the draft");
 
 const full = storage({ [AUTOSAVE_KEY]: refused });
 full.setItem = () => { throw new DOMException("quota", "QuotaExceededError"); };
 assert.deepEqual(
-  restoreAutosavedDraft(full),
+  restoreAutosavedDraft(() => full),
   { kind: "unreadable", kept: false },
   "a refused draft that storage will not keep is reported as lost, not thrown"
+);
+
+// Blocked site data throws on the localStorage getter or on getItem. No draft
+// was read, so the app must not claim one failed to restore.
+const blocked = () => { throw new DOMException("blocked", "SecurityError"); };
+assert.deepEqual(restoreAutosavedDraft(blocked), { kind: "unavailable" }, "a blocked storage getter reports storage as unavailable");
+assert.deepEqual(
+  restoreAutosavedDraft(() => ({ getItem: blocked, setItem: blocked })),
+  { kind: "unavailable" },
+  "a storage that refuses reads reports storage as unavailable"
 );
 
 // Tabs share the draft slot. Opening a second tab re-saves the draft it
 // restored byte for byte, which fires no storage event in the first tab.
 const reopened = parseResumeFile(autosave);
 assert.equal(serializeResumeFile(reopened.data, reopened.documentStyle), autosave, "a restored draft re-saves identically");
-assert.equal(draftReplacedElsewhere({ key: AUTOSAVE_KEY, newValue: autosave }, autosave), false, "this tab's own draft is still kept");
-assert.equal(draftReplacedElsewhere({ key: AUTOSAVE_KEY, newValue: `${autosave} ` }, autosave), true, "another tab's draft replaced this one");
-assert.equal(draftReplacedElsewhere({ key: AUTOSAVE_KEY, newValue: null }, autosave), true, "a removed draft is no longer kept");
-assert.equal(draftReplacedElsewhere({ key: AUTOSAVE_KEY, newValue: autosave }, null), true, "a tab that has not autosaved yet keeps nothing in the slot");
-assert.equal(draftReplacedElsewhere({ key: null, newValue: null }, autosave), true, "a cleared store keeps nothing");
-assert.equal(draftReplacedElsewhere({ key: DOCUMENT_TITLE_KEY, newValue: "Other" }, autosave), false, "other keys do not replace the draft");
+const ownTitle = "Spring resume";
+assert.equal(draftReplacedElsewhere({ key: AUTOSAVE_KEY, newValue: autosave }, autosave, ownTitle), false, "this tab's own draft is still kept");
+assert.equal(draftReplacedElsewhere({ key: AUTOSAVE_KEY, newValue: `${autosave} ` }, autosave, ownTitle), true, "another tab's draft replaced this one");
+assert.equal(draftReplacedElsewhere({ key: AUTOSAVE_KEY, newValue: null }, autosave, ownTitle), true, "a removed draft is no longer kept");
+assert.equal(draftReplacedElsewhere({ key: AUTOSAVE_KEY, newValue: autosave }, null, null), true, "a tab that has not autosaved yet keeps nothing in the slot");
+assert.equal(draftReplacedElsewhere({ key: null, newValue: null }, autosave, ownTitle), true, "a cleared store keeps nothing");
+// A title-only rename re-saves identical draft bytes (no event), so only the
+// title key reports it.
+assert.equal(draftReplacedElsewhere({ key: DOCUMENT_TITLE_KEY, newValue: ownTitle }, autosave, ownTitle), false, "this tab's own title is still kept");
+assert.equal(draftReplacedElsewhere({ key: DOCUMENT_TITLE_KEY, newValue: "Other" }, autosave, ownTitle), true, "another tab's title replaced this one");
+assert.equal(draftReplacedElsewhere({ key: DOCUMENT_TITLE_KEY, newValue: null }, autosave, ownTitle), true, "a removed title is no longer kept");
+assert.equal(draftReplacedElsewhere({ key: UNREADABLE_AUTOSAVE_KEY, newValue: "Other" }, autosave, ownTitle), false, "other keys do not replace the draft");
 
-console.log("Typeset resume autosave: strict round trip, 4 malformed-draft refusals, unreadable-draft keeping, and cross-tab replacement passed");
+// Mobile browsers and discarded tabs may skip beforeunload, so hiding the page
+// must write the pending draft instead of waiting out the debounce.
+const appSource = readFileSync(new URL("../App.tsx", import.meta.url), "utf8");
+assert.match(
+  appSource,
+  /pendingAutosaveRef\.current = \(\) => \{\s*window\.clearTimeout\(timer\);\s*save\(\);/,
+  "the autosave effect exposes its pending write as a synchronous flush"
+);
+assert.match(appSource, /const flush = \(\) => pendingAutosaveRef\.current\?\.\(\);/, "a flush runs the pending autosave");
+assert.match(appSource, /window\.addEventListener\("pagehide", flush\)/, "pagehide flushes the pending autosave");
+assert.match(
+  appSource,
+  /document\.visibilityState === "hidden"\) flush\(\)[\s\S]*?document\.addEventListener\("visibilitychange", onVisibilityChange\)/,
+  "a hidden visibilitychange flushes the pending autosave"
+);
+
+// A restored draft is not written back unchanged: another tab may have saved a
+// newer one since this tab read it. The restored bytes re-serialize exactly, so
+// the comparison holds through the editor's seed and style coercion.
+assert.equal(serializeResumeFile(restored.data, { ...DOC_STYLE_DEFAULTS, ...restored.documentStyle }), autosave, "a restored draft re-serializes to its stored bytes");
+for (const style of [DOC_STYLE_DEFAULTS, { ...DOC_STYLE_DEFAULTS, pageMarginTopPt: 50, pageMarginRightPt: 61, pageMarginBottomPt: 47, pageMarginLeftPt: 58 }]) {
+  const stored = serializeResumeFile(buildStarterResume(), style);
+  const parsed = parseResumeFile(stored);
+  // What useDocStyle's replace holds after the seed, with this tab's view preferences.
+  const seeded = coerceDocStyle({ ...parsed.documentStyle, zoom: 1.5, spellCheck: false });
+  assert.equal(serializeResumeFile(parsed.data, seeded), serializeResumeFile(parsed.data, { ...DOC_STYLE_DEFAULTS, ...parsed.documentStyle }), "the seeded editor style serializes as the restore did");
+}
+assert.match(
+  appSource,
+  /if \(draft\.kind === "restored"\) \{[\s\S]{0,300}?restoredDraftRef\.current = \{\s*draft: serializeResumeFile\(initialData, \{ \.\.\.DOC_STYLE_DEFAULTS, \.\.\.initialDocumentStyle \}\),\s*title: initialTitle\s*\};/,
+  "restoring a draft remembers what is already stored"
+);
+assert.match(
+  appSource,
+  /if \(restored && restored\.draft === draft && restored\.title === title\) \{[\s\S]{0,120}?commitDocumentSaveBaseline\(editor\.markClean, docStyle\.markClean\);\s*setSaveStatus\("saved"\);\s*return;\s*\}\s*restoredDraftRef\.current = null;\s*window\.localStorage\.setItem\(AUTOSAVE_KEY, draft\);/,
+  "an unchanged restored draft is not written back, and the first real change is"
+);
+assert.match(
+  appSource,
+  /if \(draftReplacedElsewhere\(event, lastWrittenDraftRef\.current, lastWrittenTitleRef\.current\)\) \{[\s\S]{0,120}?restoredDraftRef\.current = null;\s*setSaveStatus\(\{ state: "error", label: "Replaced by another tab" \}\);/,
+  "once another tab replaces the draft, this tab's next autosave writes its work again"
+);
+assert.match(
+  appSource,
+  /window\.localStorage\.setItem\(DOCUMENT_TITLE_KEY, title\);\s*lastWrittenTitleRef\.current = title;/,
+  "each autosave remembers the title it stored"
+);
+assert.match(appSource, /draft\.kind === "unavailable"[\s\S]{0,200}?unavailable in this browser/, "blocked storage says local saving is unavailable");
+assert.doesNotMatch(appSource, /could not be restored/, "no notice claims a draft failed to restore when none was read");
+
+console.log("Typeset resume autosave: strict round trip, 4 malformed-draft refusals, unreadable-draft keeping, cross-tab draft and title replacement, blocked-storage reporting, hidden-page flush, and no write-back of an unchanged restored draft passed");

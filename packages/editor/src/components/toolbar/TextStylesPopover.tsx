@@ -264,8 +264,11 @@ export function TextStylesPopover({
               className="style-popover__reset"
               disabled={docStyle.isStyleDefault && styleMarksAreDefault && styleFontsAreDefault && styleSizesAreDefault}
               onClick={() => {
-                docStyle.applyStyle(TEXT_STYLE_DEFAULTS);
-                onResetStyleFormatting?.();
+                // The style defaults and the host's per-field reset are one undo step.
+                docStyle.groupHistory(() => {
+                  docStyle.applyStyle(TEXT_STYLE_DEFAULTS);
+                  onResetStyleFormatting?.();
+                });
               }}
             >
               <RotateCcw size={14} aria-hidden="true" />

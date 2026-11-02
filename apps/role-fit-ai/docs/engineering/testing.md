@@ -393,7 +393,8 @@ All fixtures are synthetic and generated in memory; never commit a PDF.
   `__evals__/support/importCorpus.mjs`.
 - `pdf-import-units.mjs` covers the audit's mutation-style rejections (invented,
   duplicated, dropped, or smuggled-as-structure text), field rendering, separator
-  splitting, dates (alone or beside a place or duration), the font-family
+  splitting (private-use glyphs, even one per run, are never separators; a
+  private-use bulleted list of section words stays a list), dates (alone or beside a place or duration), the font-family
   table (upstream names, lookalike designs that fall back, and RoleFit's
   internal export names), columns, and bullet markers.
 - `pdf-import-edge-cases.mjs` holds layouts found in review: Symbol-font
@@ -402,7 +403,10 @@ All fixtures are synthetic and generated in memory; never commit a PDF.
   restored away by Q), and annotations that only draw, paint spaces, or show a
   ZapfDingbats or Wingdings check; one run per glyph (readable text, word
   count, and unmapped glyphs); unmapped glyphs alternating with readable runs,
-  and private-use bullets and icons that still import; formatting code split
+  and private-use bullets and icons that still import; an icon between
+  contact details and a run of three or more rating dots after a skill
+  (separator and Not placed, never text), and bold or ruled bulleted lists of
+  section words that stay bullets; formatting code split
   across runs; superscripts; a role title at a page break; right-aligned
   dates, flush-right years, and left-tab-stop values (places, single-word
   cities, GPAs, wide date-and-place values, numeric months with durations, a
@@ -875,7 +879,15 @@ Good server verification covers:
   a successful restore retains the previous saved workspace as a sibling
   safety copy and stages `source: "restore"` preferences, restore refuses with
   409 while live tab presence is reported, and a corrupt preference record
-  never blocks backing up resumes
+  never blocks backing up resumes. A pre-migration backup of
+  `tracker-v0-interested.json` with its bundled resume and attachment restores
+  the tracker alone, still integrity-checks those files, and refuses any other
+  untracked application file
+- workspace variant routes (`server/__evals__/workspace-route-errors-probes.mjs`)
+  answer a forced file-system failure on cover-letter save, select, and
+  candidates and resume select, candidates, and removal with a 500 and fixed
+  text, never Node's errno text or a workspace
+  path, log only the error code, and keep their 400 validation messages
 - workspace schema versions (D095): `tracker-version-probes.mjs` migrates every
   unversioned fixture in `server/applications/__evals__/fixtures/`, rewrites it
   once, survives a downgrade round trip, and refuses legacy shapes in a current
@@ -973,7 +985,9 @@ Good frontend verification covers:
   suggestion references. `src/lib/__evals__/settings-legacy-names-eval.mjs`
   converts every pre-2026-09-29 settings name through the cache, workspace
   file, and backup readers. `src/lib/__evals__/variant-candidate-reads-eval.mjs` pins ONE
-  request per candidate read at 1, 5, and 20 variants for both document kinds,
+  request per candidate read at 1, 5, 20, and 40 variants for both document
+  kinds, consecutive requests of at most 40 names in order past the route cap
+  (41 and 85), and a failed read when any one of them fails,
   and `server/__evals__/workspace-candidate-batch-probes.mjs` pins the batch
   routes' name guards, bounded size, skip-on-corrupt behavior, and that they
   return candidates and nothing else
@@ -1069,8 +1083,10 @@ Good frontend verification covers:
   history contract: every entry type round-trips through `applications.json`,
   each malformed, oversized, or misplaced (Draft, job-only Skipped) history
   refuses the whole record, invalid stored history fails closed without a
-  rewrite, and a stage change on a submitted record needs a new matching stage
-  entry. `src/lib/__evals__/application-stage-history-eval.mjs` runs the
+  rewrite, a stage change on a submitted record needs a new matching stage
+  entry, and an undated record with documents is refused a move to Skipped
+  unless the write adds its application date.
+  `src/lib/__evals__/application-stage-history-eval.mjs` runs the
   client's history helpers (per-entry save and removal, the interview stage
   move, the recovered Skip date of a pre-history record, the 60-entry limit
   including stage entries, merge limits, timeline order, rounds, scheduled
@@ -1220,7 +1236,8 @@ origins and product API paths, plus any `@font-face`, `@import`, `url()`, or
 The offline release probe covers valid complete signed and unsigned-preview
 releases, signed-release precedence, and malformed tags, mismatched
 draft/prerelease state, wrong origins, zero-sized, missing, duplicate, and
-unexpected assets.
+unexpected assets. The nav-focus probe checks that in-page navigation moves
+keyboard focus to the section it scrolls to.
 
 Real-browser QA must cover desktop and 390px widths, a clean console, keyboard
 focus, and both release states: the live empty/unavailable response links every

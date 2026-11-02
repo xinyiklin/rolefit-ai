@@ -246,8 +246,21 @@ function joinRaisedRuns(lines: PdfSpan[][]): PdfSpan[][] {
   return joined;
 }
 
-function buildLine(spans: readonly PdfSpan[], page: number, region: LineRegion): Omit<LayoutLine, "index" | "regionLeft" | "regionRight" | "gapAbove"> | null {
-  const pieces = spans.flatMap(spanPieces);
+// Icon or rating glyphs past the start of a line ("Python ●●●○○") are a
+// picture, never content; they are listed as not placed.
+const ICON_RUN_REASON = "Icon or rating glyphs, not text.";
+
+function buildLine(
+  spans: readonly PdfSpan[],
+  page: number,
+  region: LineRegion,
+  excluded: ExcludedPiece[]
+): Omit<LayoutLine, "index" | "regionLeft" | "regionRight" | "gapAbove"> | null {
+  const pieces = spans.flatMap(spanPieces).filter((piece, index) => {
+    if (index === 0 || !piece.span.dingbat || [...piece.text.trim()].length <= 2) return true;
+    excluded.push({ piece, reason: ICON_RUN_REASON });
+    return false;
+  });
   if (!pieces.length) return null;
   let marker: LinePiece | null = null;
   const first = pieces[0];
@@ -316,7 +329,7 @@ export function layoutLines(layout: PdfLayout): LayoutLines {
       : [["main", pageSpans]];
     for (const [region, spans] of regions) {
       const built = clusterLines(spans)
-        .map((members) => buildLine(members, pageIndex, region))
+        .map((members) => buildLine(members, pageIndex, region, excluded))
         .filter((line): line is NonNullable<typeof line> => line !== null)
         .filter((line) => {
           // Formatting code can also be split across runs ("Parsed <" + "b>").

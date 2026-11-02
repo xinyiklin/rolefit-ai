@@ -19,6 +19,7 @@ import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 
 import {
+  acceptedProposalDecision,
   clearProposalDecision,
   decisionsForProposal,
   proposalBaseline,
@@ -95,12 +96,13 @@ export function useResumeProposalDecisions({
     (suggestion: ResumeProposalSuggestion, value = proposalValue(suggestion)) => {
       if ((!suggestion.kind || suggestion.kind === "add") && !value.trim()) return;
       if (!isPending(suggestion)) return;
+      const replaced = currentTargetText(resume, suggestion);
       applyTarget(resume, actions, suggestion, value);
       setDecisionState((current) => recordProposalDecision(
         current,
         proposalKey,
         suggestion.id,
-        { kind: "accepted", text: value }
+        acceptedProposalDecision(suggestion, value, replaced)
       ));
     },
     [actions, proposalKey, isPending, resume]
@@ -124,6 +126,10 @@ export function useResumeProposalDecisions({
     const state = resumeProposalEditState(currentTargetText(resume, suggestion), suggestion, decision);
     if (state !== "accepted" && state !== "discarded") return;
     if (decision?.kind === "accepted") {
+      applyTarget(resume, actions, suggestion, decision.replaced ?? proposalBaseline(suggestion));
+    } else if (state === "accepted" && !decision) {
+      // Edited in the document to match the proposal (a bullet deleted or
+      // reordered by hand): Undo still restores the proposal's original.
       applyTarget(resume, actions, suggestion, proposalBaseline(suggestion));
     }
     setDecisionState((current) => clearProposalDecision(current, proposalKey, suggestion.id));
@@ -139,13 +145,14 @@ export function useResumeProposalDecisions({
   // Accept every pending row, or only `subset` (one operation group).
   const applyAll = useCallback((subset: readonly ResumeProposalSuggestion[] = suggestions) => {
     const pending = subset.filter(isPending).sort((left, right) => applyRank(left) - applyRank(right));
+    const replaced = pending.map((suggestion) => currentTargetText(resume, suggestion));
     for (const suggestion of pending) applyTarget(resume, actions, suggestion, proposalValue(suggestion));
     setDecisionState((current) => pending.reduce(
-      (next, suggestion) => recordProposalDecision(
+      (next, suggestion, index) => recordProposalDecision(
         next,
         proposalKey,
         suggestion.id,
-        { kind: "accepted", text: proposalValue(suggestion) }
+        acceptedProposalDecision(suggestion, proposalValue(suggestion), replaced[index])
       ),
       current
     ));

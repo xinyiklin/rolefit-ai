@@ -28,7 +28,10 @@ for provider, prompt, sanitizer, and review work.
   cover-letter storage separate from strict `.resume` storage and starter
   fallbacks. Workspace open, save, selection, and history restore accept only
   `.resume`; legacy text artifacts may remain recoverable on disk/backups but
-  never become editor documents.
+  never become editor documents. A save or restore stages the replacement
+  beside its target before the live file is archived into `.trash`, and puts
+  the archived file back if the install fails (`replaceWorkspaceFile`), so a
+  disk failure never leaves the live version only in history.
   Each kind exposes a bounded `/candidates` batch read beside its `/select`
   route: ranking saved variants needs several documents at once, and `/select`
   answers with a whole workspace snapshot under the workspace lock, so per-file
@@ -37,6 +40,10 @@ for provider, prompt, sanitizer, and review work.
   same name guards, and SKIPS an unreadable or invalid document rather than
   failing — the client ranker treats a short candidate list as "no
   recommendation", while a 500 would leave Prepare with no selection at all.
+  The per-request cap (`MAX_VARIANT_CANDIDATES_PER_REQUEST` in
+  `src/lib/variantCandidateRequests.ts`) is shared with the client, which reads
+  a larger eligible pool in consecutive capped requests; one failed request
+  fails the whole read.
 - `applications/` owns tracker persistence and routes. `schema.ts` validates the
   current record shape, `storage.ts` owns the serialized write queue,
   `reconcile.ts` applies sparse revision-checked mutations, and
@@ -54,7 +61,11 @@ for provider, prompt, sanitizer, and review work.
   `stageMenuMoveAllowed` and `withStatusChange` and saves a first submission's
   documents (validated by the commit's `commitDocuments`, resume required)
   and optional `resumeUsed` with the stage, restoring the files if the
-  tracker write fails (D101, D103); `updateService.ts` owns the agent's
+  tracker write fails (D101, D103). A same-stage request changes nothing (the
+  safe retry after a lost reply) but still validates its date and refuses
+  documents on a record with no saved resume, and a stage move never invents
+  `appliedAt`: only a first submission from Draft or a job-only Skip is dated
+  when written; `updateService.ts` owns the agent's
   field-level record repair (job snapshot, notes, `resumeUsed`, and a
   document a submitted record lacks, never a replacement; exact-as-sent like
   the commit, and a resent saved update is a no-op, D103); `answerService.ts` owns
@@ -70,8 +81,10 @@ for provider, prompt, sanitizer, and review work.
   and capped per application. Only the same original name (ignoring case, at
   most the label's 120 characters) replaces an attachment; any other name that
   folds to a taken stored name gets the first free `-2`, `-3`, ... variant.
-  Notes and interview preparation past `APPLICATION_NOTES_MAX_LENGTH` are
-  refused, never clipped. Every byte served back is a download (narrow content
+  Notes and interview preparation past `APPLICATION_NOTES_MAX_LENGTH`, and
+  more than `APPLICATION_CONTACTS_MAX` non-blank contacts or a contact field
+  past `APPLICATION_CONTACT_FIELD_MAX_LENGTH`, are refused, never clipped or
+  dropped. Every byte served back is a download (narrow content
   type, `nosniff`, no inline render).
   Draft and skipped records cannot mutate document packets; either may retain
   application answers:
@@ -81,7 +94,10 @@ for provider, prompt, sanitizer, and review work.
   strictly and refuses the whole record on any bad entry; Drafts and job-only
   Skipped records carry none. `reconcile.ts` refuses a stage change on a record
   with `appliedAt` unless the upsert adds a new stage entry naming the new
-  stage, so every write path keeps history honest.
+  stage, and refuses an upsert that drops a submitted record's `appliedAt`
+  (which would disarm that guard), so every write path keeps history honest.
+  It also refuses moving an undated record that holds documents to Skipped
+  (`skipDropsDocuments`), since a job-only Skipped record keeps none.
   Draft has no `appliedAt` and remains outside submitted metrics. Explicit answer
   saves create or update one revision-checked Draft; Apply/Skip promote that same
   ID. Enriched Q+A revisions use `shared/applicationAnswerStorage.ts` across
@@ -156,6 +172,11 @@ for provider, prompt, sanitizer, and review work.
   as browser pairing/authorization or as authority for privileged Electron
   IPC. Only the live private utility-process handle proves ownership.
 - Validate request boundaries, cap bodies, and return stable user-safe JSON.
+  A file-system error's own text names absolute paths. Base-resume select,
+  candidates, and removal (DELETE) and cover-letter save, select, and
+  candidates answer it through `sendWorkspaceRouteError` (500, fixed text,
+  code-only log) and keep their validation messages as 400s. Base-resume save
+  and both history-restore routes answer with their own fixed-text 400.
 - Keep file operations inside the configured RoleFit workspace. Defend against
   traversal, unsafe names, malformed JSON, and oversized data.
 - Never log keys, prompts, raw resumes/jobs, provider bodies, or broad envs.
@@ -178,10 +199,13 @@ for provider, prompt, sanitizer, and review work.
   monotonically. Preserve recoverable history/trash behavior.
 - Treat corrupt application JSON and malformed strict `.resume` content as
   visible fail-closed errors. Never erase, reseed, or guess over corrupt user
-  data. The one lenient read is the tracker list route (D103):
-  `readApplicationsSnapshot(dir, { allowInvalid: true })` serves the canonical
-  records and names the invalid ones without their values; every other read
-  and every write refuses while any record is invalid, so nothing can drop it. Tracker format changes go through `applications/trackerVersion.ts`
+  data. An unreadable saved default resume is an error on the workspace
+  snapshot's `baseResume`, never a failed snapshot, so its variants, history,
+  and cover letters stay reachable. The one lenient read is the tracker list
+  route (D103): `readApplicationsSnapshot(dir, { allowInvalid: true })` serves
+  the canonical records and names the invalid ones without their values; every
+  other read and every write refuses while any record is invalid, so nothing
+  can drop it. Tracker format changes go through `applications/trackerVersion.ts`
   (D095): a file without `schemaVersion` is version 0, each version step has one
   migration with a fixture, a migrated file is validated strictly and rewritten
   once at the current version, and a legacy shape inside a current-version file

@@ -13,6 +13,10 @@ for (const local of ["localhost:5181", "127.0.0.1:5181", "[::1]:5181", "LOCALHOS
   assert.equal(requestGuardError("127.0.0.1", port, local, undefined), null, local);
 }
 assert.equal(requestGuardError("127.0.0.1", port, "localhost:5181", "http://127.0.0.1:5181"), null);
+// Port 80 arrives without a port suffix in both Host and Origin.
+assert.equal(requestGuardError("127.0.0.1", 80, "localhost", "http://localhost"), null);
+assert.equal(requestGuardError("127.0.0.1", 80, "localhost:80", "http://127.0.0.1"), null);
+assert.equal(requestGuardError("127.0.0.1", 80, "localhost:8080", undefined), FORBIDDEN);
 assert.equal(requestGuardError("127.0.0.1", port, "attacker.example", undefined), FORBIDDEN);
 assert.equal(requestGuardError("127.0.0.1", port, "192.168.1.5:5181", undefined), FORBIDDEN, "a loopback bind never answers a LAN name");
 assert.equal(requestGuardError("127.0.0.1", port, "localhost:5182", undefined), FORBIDDEN);

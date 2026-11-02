@@ -106,6 +106,26 @@ D-entries in `docs/decisions.md`.
   state labels (user's call); unverified Firefox/Safari, print, forced colors,
   macOS, native window-control rendering, and real unpacked popup installs.
 
+## 2026-10-30
+
+- [TOOL] **Bug-hunt round fourteen** (five-area sweep, 18 confirmed, 17
+  fixed): invisible format characters measure zero and merged runs measure
+  whole, as the PDF draws them (engine, two reviewers); paragraph merges keep
+  the upper format, link Apply keeps edge spaces, nested-block and trailing-br
+  paste, quoted copied fonts (editor, two reviewers); Typeset warns on another
+  tab's rename and blocked storage; RoleFit restores pre-Interested-migration
+  backups, reads past 40 variants, hides fs errno text, and keeps closed
+  records out of next actions/Upcoming. Full check passed. Linked emails/URLs
+  now preserve typed punctuation (cdc2f68). Open: a .resume summary with no
+  bullets (codec change, needs [USER]); a "-" pair split by a mark or paragraph
+  tag shows an en dash.
+- [TOOL] **Bug-hunt round thirteen**: a vanished extension posting no longer
+  leaves Prepare on "Receiving"; narrow-window toolbar undo/redo follows the
+  editor's history rule (grouped steps move together); U+202F and U+2007 act
+  like U+00A0 (engine, two reviewers). Each reviewed; full checks 216/216.
+  Residual: other Unicode spaces (U+2009, U+3000) still keep their own glyph
+  in single-line fields; letter style has no undo history.
+
 ## 2026-11-01
 
 - [USER+CODE+TOOL] **Agent pipeline gaps** (D103, #289) and **0.25.0 prepared**
@@ -114,45 +134,11 @@ D-entries in `docs/decisions.md`.
   `make` + packaged smoke (only the workflow's; a failure burns beta.1), an
   agent client, live providers, browser QA of the tracker notice.
 
-## 2026-10-26
+## 2026-11-02
 
-- [USER+CODE+TOOL] **MCP agent tools** (D101, D102, #284) and **0.24.0
-  prepared** (minor). Windows x64, Node 24.22.1: check 204/204, `make`,
-  packaged smoke, release contract 14/14; Electron dev smoke 0/4, the same at
-  0.23.0's commit (Vite's watcher; fixed, below). [USER] The user's agent used
-  the package and cover reads and `draft_answer` live. Open: other AI stages
-  not run live; most tools not through a real client (`render_pdf` added by D103).
-
-## 2026-10-24
-
-- [USER+CODE+TOOL] **Agent commit: Drafts, duplicate guard, dry run; MCP
-  resume reads** (D100, #283). Verified: server tsc, probes, `npm run check`
-  (202/202), read tools over the real handlers. Real MCP clients not re-run.
-- [USER+CODE+TOOL] **Landing download buttons and resize guard**: equal-width
-  buttons with Apple/Windows glyphs; file type, size, and "Unsigned" moved to
-  a caption linked by `aria-describedby`. `resizeGuard.ts` drops the glass blur
-  while the width changes (user-confirmed it ends the blank-card glitch on drag).
-  Plus visual-QA polish (wrap and alignment fixes). Verified: landing build,
-  browser QA at 1440/1024/768/390/320 in light and dark, two independent
-  reviews. Unverified: forced colors, Firefox/Safari, a real screen reader.
-- [USER+CODE+TOOL] **Typeset brand refresh + Preview A touch-ups** (D098,
-  D099). Verified: browser 1280 to 390px, RoleFit tokens via the editor
-  harness, editor/Typeset/engine checks, RoleFit build, independent reviews.
-  Unverified: `npm run test:editor:browser` locally (Chrome refuses CDP attach),
-  the real RoleFit app and dark mode, Firefox/Safari, print, forced colors. The
-  shared default `--shadow-rest` (`packages/editor` tokens) still clips if a
-  host keeps it.
-- [USER+CODE+TOOL] **RoleFit rename, ribbon-R brand, landing redesign** (D097):
-  visible name, packaged app, and release assets are RoleFit (internal IDs
-  kept); `generate_icons.py` renders the vector mark (extension now ships PNG
-  icons); landing follows the user's mockup with brand ribbons, frosted glass
-  cards, Codex-generated accent art, and retaken synthetic screenshots.
-  Verified: `npm run check` (202/202), landing build guard, headless Chromium
-  at 1440/1280/1024/900/390 in light and dark (no overflow, AA contrast over
-  glass), three independent reviews. Unverified: reduced-transparency and
-  no-blur fallbacks in a real browser, Firefox/Safari rendering, Windows
-  installer, the new extension icon in an installed browser.
-
-## 2026-10-18
-
-- [TOOL] `draft/document-chat` is local-only at `../role-fit-ai-document-chat-draft`.
+- [USER+CODE+TOOL] **Header popover edits keep formatting** (266c068): a
+  header popover edit diffs the stored text, so marks, links, punctuation,
+  the caret and typing history survive. A review of the whole branch trimmed
+  over-long comments, guide history, dead code and duplicated helpers with no
+  behavior change, and merged main's #289/#290. Browser QA not run
+  (flag-first).

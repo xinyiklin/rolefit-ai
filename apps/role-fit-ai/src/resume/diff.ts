@@ -17,8 +17,8 @@ type DiffToken = { key: string; text: string };
 
 // Split text into word and newline tokens, folding each non-newline whitespace
 // run onto the following token's rendered text. `key` is the bare word (or "\n")
-// so reindentation alone does not register as a change, while `text` preserves
-// the spacing needed to rebuild the document.
+// so reindentation alone never misaligns words, while `text` preserves the
+// spacing; a spacing difference renders as a removed and an added space.
 function tokenizeForDiff(text: string): DiffToken[] {
   const raw = text.match(/\n|[^\S\n]+|\S+/g) ?? [];
   const tokens: DiffToken[] = [];
@@ -44,12 +44,16 @@ function tokenizeLinesForDiff(text: string): DiffToken[] {
   return text.split("\n").map((line) => ({ key: comparableLine(line), text: `${line}\n` }));
 }
 
+// An equal op also names its source token, whose leading spacing may differ.
+type DiffOp = { type: DiffSegment["type"]; index: number; sourceIndex?: number };
+const LEADING_SPACE = /^[^\S\n]*/;
+
 // Classic longest-common-subsequence alignment. Returns the merged op list
 // walking both sequences; `removed` indices point into `a`, `added` into `b`.
 function diffTokens(
   a: DiffToken[],
   b: DiffToken[]
-): Array<{ type: DiffSegment["type"]; index: number }> {
+): DiffOp[] {
   const n = a.length;
   const m = b.length;
   const width = m + 1;
@@ -62,12 +66,12 @@ function diffTokens(
           : Math.max(dp[(i + 1) * width + j], dp[i * width + (j + 1)]);
     }
   }
-  const ops: Array<{ type: DiffSegment["type"]; index: number }> = [];
+  const ops: DiffOp[] = [];
   let i = 0;
   let j = 0;
   while (i < n && j < m) {
     if (a[i].key === b[j].key) {
-      ops.push({ type: "equal", index: j });
+      ops.push({ type: "equal", index: j, sourceIndex: i });
       i++;
       j++;
     } else if (dp[(i + 1) * width + j] >= dp[i * width + (j + 1)]) {
@@ -84,7 +88,7 @@ function diffTokens(
 }
 
 function opsToSegments(
-  ops: Array<{ type: DiffSegment["type"]; index: number }>,
+  ops: DiffOp[],
   a: DiffToken[],
   b: DiffToken[]
 ): DiffSegment[] {
@@ -97,7 +101,19 @@ function opsToSegments(
   };
   for (const op of ops) {
     if (op.type === "removed") push("removed", a[op.index].text);
-    else push(op.type, b[op.index].text);
+    else if (op.type === "added" || op.sourceIndex === undefined) push(op.type, b[op.index].text);
+    else {
+      // Each side keeps its own spacing: after a dropped first word the source
+      // still had a space here and the proposal has none, or the reverse.
+      const before = a[op.sourceIndex].text.match(LEADING_SPACE)?.[0] ?? "";
+      const after = b[op.index].text.match(LEADING_SPACE)?.[0] ?? "";
+      if (before === after) push("equal", b[op.index].text);
+      else {
+        push("removed", before);
+        push("added", after);
+        push("equal", b[op.index].text.slice(after.length));
+      }
+    }
   }
   return segments;
 }

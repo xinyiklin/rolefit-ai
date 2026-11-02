@@ -90,6 +90,17 @@ check(
   false
 );
 check("normalizeJobUrl passes invalid urls through", normalizeJobUrl("not a url"), "not a url");
+check(
+  "normalizeJobUrl encodes the query the same way with or without a tracking param",
+  normalizeJobUrl("https://careers.acme.com/job?id=7&loc=New%20York&utm_source=linkedin"),
+  normalizeJobUrl("https://careers.acme.com/job?id=7&loc=New%20York")
+);
+check(
+  "normalizeJobUrl keeps hash routes distinct",
+  normalizeJobUrl("https://careers.acme.com/#/job/123") === normalizeJobUrl("https://careers.acme.com/#/job/456"),
+  false
+);
+check("normalizeJobUrl drops an in-page anchor", normalizeJobUrl("https://acme.com/jobs/1#apply"), "https://acme.com/jobs/1");
 
 // ── ATS posting keys ─────────────────────────────────────────────────────────
 check(
@@ -123,6 +134,16 @@ check(
   "workday:nvidia:JR-90210"
 );
 check(
+  "workday apply url → same req key",
+  atsPostingKey("https://nvidia.wd5.myworkdayjobs.com/en-US/External/job/US-CA-Santa-Clara/Software-Engineer_JR-90210/apply")?.key,
+  "workday:nvidia:JR-90210"
+);
+check(
+  "linkedin guest slug url → same id",
+  atsPostingKey("https://www.linkedin.com/jobs/view/senior-engineer-at-acme-3987654321")?.key,
+  "linkedin:3987654321"
+);
+check(
   "linkedin view url and currentJobId param agree",
   atsPostingKey("https://www.linkedin.com/jobs/view/3987654321/?refId=abc")?.key ===
     atsPostingKey("https://www.linkedin.com/jobs/collections/recommended/?currentJobId=3987654321")?.key,
@@ -131,6 +152,11 @@ check(
 check(
   "indeed jk param → key",
   atsPostingKey("https://www.indeed.com/viewjob?jk=abcdef0123456789&from=serp")?.key,
+  "indeed:abcdef0123456789"
+);
+check(
+  "indeed search-pane vjk param and viewjob jk agree",
+  atsPostingKey("https://www.indeed.com/jobs?q=backend+engineer&l=Remote&vjk=abcdef0123456789")?.key,
   "indeed:abcdef0123456789"
 );
 check("plain company page → no key", atsPostingKey("https://acme.com/careers/software-engineer"), null);
@@ -154,6 +180,28 @@ check("locations: unknown compatible", locationsCompatible("", "New York, NY"), 
 check("locations: remote compatible", locationsCompatible("Remote (US)", "Austin, TX"), true);
 check("locations: shared token compatible", locationsCompatible("New York, NY", "New York"), true);
 check("locations: different cities contradict", locationsCompatible("Austin, TX", "Seattle, WA"), false);
+check("company accents fold", normalizeCompanyName("Nestlé"), normalizeCompanyName("Nestle"));
+check("company non-Latin names stay distinct", normalizeCompanyName("株式会社メルカリ") === normalizeCompanyName("Яндекс"), false);
+check("company Devanagari vowel signs stay in the word", normalizeCompanyName("बिल").includes(" "), false);
+check("company Devanagari vowel signs distinguish names", normalizeCompanyName("बिल") === normalizeCompanyName("बुल"), false);
+check("company kana voicing marks distinguish names", normalizeCompanyName("ガ") === normalizeCompanyName("カ"), false);
+check("linkedin slug without a full-length id → no key", atsPostingKey("https://www.linkedin.com/jobs/view/engineer-team-123456"), null);
+check(
+  "workday site name never becomes a posting key",
+  atsPostingKey("https://acme.wd5.myworkdayjobs.com/en-US/Intern_2025/job/Boston/Senior-Engineer"),
+  null
+);
+check("locations: a country alone is unknown, not a contradiction", locationsCompatible("United States", "Seattle, WA, United States"), true);
+check("locations: a country alone is unknown either way", locationsCompatible("Bangalore, India", "India"), true);
+check("title accents fold", normalizeRoleTitle("Développeur Senior"), "developpeur senior");
+check(
+  "locations: a shared country word is not a shared place",
+  locationsCompatible("Seattle, WA, United States", "New York, NY, United States"),
+  false
+);
+check("locations: a shared compound prefix is not a shared place", locationsCompatible("San Francisco, CA", "San Diego, CA"), false);
+check("locations: same city with a country suffix compatible", locationsCompatible("New York, NY", "New York, United States"), true);
+check("locations: accents fold", locationsCompatible("Zürich, CH", "Zurich, Switzerland"), true);
 
 // ── Fingerprints ─────────────────────────────────────────────────────────────
 check("identical text similarity 1", jdSimilarity(jdFingerprint(JD_BODY), jdFingerprint(JD_BODY)), 1);
@@ -165,6 +213,23 @@ check(
   true
 );
 check("empty fingerprint never matches", jdSimilarity(jdFingerprint(""), jdFingerprint(JD_BODY)), 0);
+const legacyAsciiTokens = (text) => [...new Set(
+  text.toLowerCase().split(/[^a-z0-9+#.]+/).filter((token) => token.length >= 4 && !/^[\d.]+$/.test(token))
+)];
+check("ASCII descriptions tokenize exactly as before", [...jdFingerprint(JD_BODY)], legacyAsciiTokens(JD_BODY).slice(0, jdFingerprint(JD_BODY).size));
+const ASCII_STACK = "Build C++ and C# services on .NET 8, ASP.NET, Notepad++, Sharp#Lang, node.js, and snake_case_tools v1.2.3; build C++ again. Salary 120,000.";
+check("ASCII stack names tokenize exactly as before", [...jdFingerprint(ASCII_STACK)], legacyAsciiTokens(ASCII_STACK));
+check("a trademark sign or emoji selector never changes a word", [...jdFingerprint("Java™ ✔️Python Kotlin")], ["java", "python", "kotlin"]);
+const RU_BODY = "Мы ищем опытного разработчика для создания распределённых сервисов обработки платежей. Требования: опыт работы с Kubernetes, PostgreSQL и очередями сообщений, проектирование отказоустойчивых систем, наставничество младших инженеров.";
+const RU_OTHER = "Требуется менеджер по продажам для работы с ключевыми клиентами розничной сети. Обязанности: ведение переговоров, подготовка коммерческих предложений, выполнение плана продаж, развитие партнёрских отношений.";
+check("a Cyrillic posting yields a comparable fingerprint", jdFingerprint(RU_BODY).size >= 15, true);
+check("a Cyrillic repost matches itself", jdSimilarity(jdFingerprint(RU_BODY), jdFingerprint(RU_BODY)), 1);
+check("different Cyrillic roles stay distinct", jdSimilarity(jdFingerprint(RU_BODY), jdFingerprint(RU_OTHER)) < 0.2, true);
+check(
+  "accented and unaccented Latin words share tokens",
+  jdSimilarity(jdFingerprint("Développeur expérimenté pour équipe données"), jdFingerprint("Developpeur experimente pour equipe donnees")),
+  1
+);
 
 // ── Layered matcher ──────────────────────────────────────────────────────────
 const baseApp = {
@@ -300,6 +365,15 @@ const baseApp = {
   });
 }
 
+// A posting tracked from Indeed's viewjob page matches its search-pane capture.
+{
+  const matches = findDuplicateApplications(
+    { jobUrl: "https://www.indeed.com/jobs?q=engineer&vjk=00000000cafebabe", jobText: JD_BODY },
+    [{ ...baseApp, jobUrl: "https://www.indeed.com/viewjob?jk=00000000cafebabe" }]
+  );
+  check("indeed search pane and viewjob → exact same posting", matches[0]?.confidence, "exact");
+}
+
 // Conflicting ids plus ordinary similarity are still treated as different jobs.
 {
   const matches = findDuplicateApplications(
@@ -380,6 +454,13 @@ const baseApp = {
     [{ ...baseApp, jobUrl: "", location: "New York, NY" }]
   );
   check("no-id identical descriptions in different locations → no warning", matches.length, 0);
+}
+{
+  const matches = findDuplicateApplications(
+    { jobUrl: "", jobText: JD_BODY, company: "Acme", role: "Software Engineer II", location: "Seattle, WA, United States" },
+    [{ ...baseApp, jobUrl: "", location: "New York, NY, United States" }]
+  );
+  check("no-id identical descriptions in different cities of one country → no warning", matches.length, 0);
 }
 
 // Unknown company on the board side with an explicit different posting id does

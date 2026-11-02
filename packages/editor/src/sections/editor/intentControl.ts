@@ -15,6 +15,28 @@ export function indentReplacesSelection(
   return dStart > leading;
 }
 
+type EdgeNavigation = { scope: "line" | "document"; edge: "start" | "end"; extend: boolean };
+
+// Ctrl/Cmd+Home/End reach the document edge; Home/End and Cmd+Left/Right the line edge.
+export function edgeNavigation(event: {
+  key: string;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+  shiftKey: boolean;
+}): EdgeNavigation | null {
+  const extend = event.shiftKey;
+  if (event.key === "Home" || event.key === "End") {
+    const edge = event.key === "Home" ? "start" : "end";
+    const documentEdge = (event.ctrlKey || event.metaKey) && !event.altKey;
+    return { scope: documentEdge ? "document" : "line", edge, extend };
+  }
+  if (event.metaKey && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+    return { scope: "line", edge: event.key === "ArrowLeft" ? "start" : "end", extend };
+  }
+  return null;
+}
+
 export type ReplayHandlers<S> = {
   gateClosed: () => boolean;
   readSelection: () => S | null;

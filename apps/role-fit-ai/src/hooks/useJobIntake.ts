@@ -1143,7 +1143,6 @@ export function useJobIntake({
           errorHeadline: "Missing input",
           error: "Too little job text was found on that page. Paste the description instead."
         });
-        setImportedJob(null);
         return;
       }
       if (outcome.status === "duplicate-after") {
@@ -1161,8 +1160,9 @@ export function useJobIntake({
     } catch (error) {
       if (!request.isCurrent()) return;
       settlePreparationFit({ status: "failed" });
+      // A URL edit already released the prepared job, so a failed fetch of the
+      // same link keeps it and its brief edits, like a failed paste does.
       const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
-      setImportedJob(null);
       setLinkStatus(`Couldn't extract from the link: ${message}. Paste the description instead.`);
       const f = classifyFailure(error);
       setJobAnalysisProgress({
@@ -1495,7 +1495,20 @@ export function useJobIntake({
       setJobAnalysisProgress((prev) => (prev.status === "running" ? prev : { status: "running" }));
       setJobAnalysisProgressVisible(true);
     },
-    extensionImportsReady
+    extensionImportsReady,
+    () => {
+      // The posting vanished before delivery (e.g. a server restart); a link or
+      // paste run already in flight keeps its own card.
+      setExtensionImportPhase((phase) => (phase === "receiving" ? null : phase));
+      if (jobAnalysisBusyRef.current) return;
+      setJobAnalysisRetrySource(null);
+      setJobAnalysisProgress({
+        status: "failed",
+        errorHeadline: "Extension posting lost",
+        error: "The posting from the extension did not arrive. Send it again from the extension."
+      });
+      setJobAnalysisProgressVisible(true);
+    }
   );
 
   // Resolve the job analysis card's Retry to the live handler for the last action, so

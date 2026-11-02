@@ -136,7 +136,8 @@ kbd {
   outline-offset: 2px;
 }
 
-main:focus-visible {
+main:focus-visible,
+section[tabindex="-1"]:focus-visible {
   outline: none;
 }
 

@@ -200,7 +200,7 @@ function sanitizeMatches(
     }
     const key = dedupeKey(jobExcerpt);
     if (seen.has(key)) warnings.push(`Match ${matches.length + 1}: this requirement is repeated.`);
-    if (sourceConflicts(jobExcerpt, candidateSource, candidateText, candidateExcerpt).every(Boolean)) {
+    if (candidateExcerpt && sourceConflicts(jobExcerpt, candidateSource, candidateText, candidateExcerpt).every(Boolean)) {
       warnings.push(`Match ${matches.length + 1}: not supported by provided evidence; an explicit conflict was detected.`);
     }
     seen.add(key);
@@ -276,21 +276,23 @@ function sanitizeEligibility(
   const jobExcerpt = source.jobExcerpt === undefined || source.jobExcerpt === "" ? undefined : excerpt(source.jobExcerpt, sources);
   const candidateExcerpt = source.candidateExcerpt === undefined || source.candidateExcerpt === "" ? undefined : excerpt(source.candidateExcerpt, sources);
   if (jobExcerpt === null || candidateExcerpt === null) return reject("invalid-response");
-  if ((status === "CHECK" || status === "BLOCKED") && (!jobExcerpt || !sources.jobText.includes(jobExcerpt)) ||
-    candidateExcerpt && !sources.candidateContext.includes(candidateExcerpt)) {
+  const jobLocated = Boolean(jobExcerpt && sources.jobText.includes(jobExcerpt));
+  const candidateLocated = Boolean(candidateExcerpt && sources.candidateContext.includes(candidateExcerpt));
+  // A CLEAR is never displayed, but its snapshot is saved with the record: a
+  // quote not found in its source is dropped silently rather than kept.
+  const shown = status === "CHECK" || status === "BLOCKED";
+  if (shown && (!jobLocated || (candidateExcerpt && !candidateLocated))) {
     warnings.push("Eligibility: source reference could not be confirmed. Quoted text is unconfirmed.");
   }
-  const located = Boolean(jobExcerpt && sources.jobText.includes(jobExcerpt)
-    && candidateExcerpt && sources.candidateContext.includes(candidateExcerpt));
   const unprovenBlock = status === "BLOCKED"
-    && !(located && explicitEligibilityConflict(jobExcerpt ?? "", candidateExcerpt ?? ""));
+    && !(jobLocated && candidateLocated && explicitEligibilityConflict(jobExcerpt ?? "", candidateExcerpt ?? ""));
   if (unprovenBlock) {
     warnings.push("Eligibility: reported conflict was downgraded to Check; the supplied context does not establish a clear conflict.");
   }
   return {
     status: (unprovenBlock ? "CHECK" : status) as FitAssessmentEligibilityStatus,
-    ...(jobExcerpt ? { jobExcerpt } : {}),
-    ...(candidateExcerpt ? { candidateExcerpt } : {}),
+    ...(jobExcerpt && (shown || jobLocated) ? { jobExcerpt } : {}),
+    ...(candidateExcerpt && (shown || candidateLocated) ? { candidateExcerpt } : {}),
     ...(unprovenBlock
       ? { note: "Confirm this eligibility condition; the supplied context does not establish a clear conflict." }
       : note ? { note } : {})

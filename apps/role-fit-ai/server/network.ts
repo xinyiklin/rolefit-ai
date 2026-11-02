@@ -5,6 +5,7 @@ import { request as httpsRequest } from "node:https";
 import { lookup as dnsLookup } from "node:dns/promises";
 import type { LookupAddress } from "node:dns";
 import type { Readable } from "node:stream";
+import { TextDecoder } from "node:util";
 import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
 import { FetchTimeoutError } from "./http.ts";
 
@@ -26,8 +27,8 @@ type PinnedResponse = {
 type PinnedFetchOptions = {
   headers?: Record<string, string>;
   timeoutMs?: number;
-  pinnedAddress: string;
-  pinnedFamily: number;
+  // Every address the host resolved to, each already validated as public.
+  pinnedAddresses: readonly [LookupAddress, ...LookupAddress[]];
 };
 
 function isLocalHost(hostname: string): boolean {
@@ -204,6 +205,20 @@ export function isPublicHttpUrl(url: URL): boolean {
 
 const MAX_FETCH_BYTES = 5_000_000;
 
+// Decode by the declared charset — a windows-1252 careers page otherwise reads
+// every accented letter as U+FFFD — and drop a byte-order mark, which would
+// make a vendor's JSON response unparseable. An unknown label reads as UTF-8.
+function decodeBody(bytes: Buffer, contentType: string | undefined): string {
+  const label = /charset=["']?([A-Za-z0-9._:-]+)/i.exec(contentType ?? "")?.[1] ?? "utf-8";
+  let decoder: TextDecoder;
+  try {
+    decoder = new TextDecoder(label);
+  } catch {
+    decoder = new TextDecoder("utf-8");
+  }
+  return decoder.decode(bytes);
+}
+
 function decompressResponse(res: IncomingMessage): Readable {
   const encoding = String(res.headers["content-encoding"] || "").toLowerCase();
   if (encoding === "gzip") return res.pipe(createGunzip());
@@ -212,7 +227,7 @@ function decompressResponse(res: IncomingMessage): Readable {
   return res;
 }
 
-// Fetch `url`, connecting ONLY to `pinnedAddress` (already validated as public)
+// Fetch `url`, connecting ONLY to `pinnedAddresses` (already validated as public)
 // while keeping the real hostname for the Host header and TLS SNI. This closes
 // the DNS-rebinding TOCTOU: Node's global fetch re-resolves the hostname after
 // validation, so a short-TTL/rebinding host could swap in a private/metadata IP
@@ -221,7 +236,7 @@ function decompressResponse(res: IncomingMessage): Readable {
 // fetch-like response ({ status, ok, headers.get, text }).
 function pinnedFetch(
   url: URL,
-  { headers = {}, timeoutMs = 10_000, pinnedAddress, pinnedFamily }: PinnedFetchOptions,
+  { headers = {}, timeoutMs = 10_000, pinnedAddresses }: PinnedFetchOptions,
   // `requestOverride` defaults to undefined so production selects the real
   // node http/https request fn below; it exists only so offline probes can
   // supply a fake transport and exercise the real byte-cap/decompress/pin logic
@@ -245,22 +260,40 @@ function pinnedFetch(
         method: "GET",
         servername: url.protocol === "https:" ? url.hostname : undefined,
         headers: { "Accept-Encoding": "gzip, deflate, br", ...headers },
-        // Pin DNS to the pre-validated address; never re-resolve the name.
-        // Node's happy-eyeballs path calls lookup with { all: true } and expects
-        // the array form, so support both callback shapes.
+        // Pin DNS to the pre-validated addresses; never re-resolve the name.
+        // Node's happy-eyeballs path calls lookup with { all: true } and tries
+        // each in turn, so a dual-stack host can still fall back across them;
+        // the single-address form honors a requested family.
         lookup: (
           _hostname: string,
           options: Parameters<LookupFunction>[1],
           cb: Parameters<LookupFunction>[2]
-        ) =>
-          options && options.all
-            ? cb(null, [{ address: pinnedAddress, family: pinnedFamily }])
-            : cb(null, pinnedAddress, pinnedFamily)
+        ) => {
+          if (options && options.all) {
+            cb(null, pinnedAddresses.map(({ address, family }) => ({ address, family })));
+            return;
+          }
+          const family = options && typeof options === "object" ? options.family : undefined;
+          const chosen = pinnedAddresses.find((entry) => entry.family === family) ?? pinnedAddresses[0];
+          cb(null, chosen.address, chosen.family);
+        }
       },
       (res: IncomingMessage) => {
         const stream = decompressResponse(res);
         const chunks: Buffer[] = [];
         let total = 0;
+        let rawBytes = 0;
+        if (stream !== res) res.on("data", (chunk: Buffer) => { rawBytes += chunk.length; });
+        const respond = (bytes: Buffer): void => {
+          const status = res.statusCode ?? 0;
+          const body = decodeBody(bytes, res.headers["content-type"]);
+          finish(resolve, {
+            status,
+            ok: status >= 200 && status < 300,
+            headers: { get: (name: string): string | null => (res.headers[String(name).toLowerCase()] as string | undefined) ?? null },
+            text: async () => body
+          });
+        };
         stream.on("data", (chunk: Buffer) => {
           if (settled) return;
           total += chunk.length;
@@ -271,17 +304,14 @@ function pinnedFetch(
           }
           chunks.push(chunk);
         });
-        stream.on("end", () => {
-          const body = Buffer.concat(chunks).toString("utf8");
-          const status = res.statusCode ?? 0;
-          finish(resolve, {
-            status,
-            ok: status >= 200 && status < 300,
-            headers: { get: (name: string): string | null => (res.headers[String(name).toLowerCase()] as string | undefined) ?? null },
-            text: async () => body
-          });
-        });
+        stream.on("end", () => respond(Buffer.concat(chunks)));
         stream.on("error", (error: Error) => {
+          // A compression header over no bytes at all (how some CDNs answer a
+          // redirect) is an empty body, not a broken stream.
+          if (rawBytes === 0 && stream !== res) {
+            respond(Buffer.alloc(0));
+            return;
+          }
           req.destroy();
           finish(reject, error);
         });
@@ -318,13 +348,12 @@ export async function fetchPublicHtml(
     if (!isPublicHttpUrl(current)) {
       throw new BlockedHostError("Only public http or https URLs are allowed.");
     }
-    const [pinned] = await assertPublicHost(current.hostname, deps.lookup);
+    const pinnedAddresses = await assertPublicHost(current.hostname, deps.lookup);
 
     const response = await pinnedFetch(current, {
       headers: { "User-Agent": "Mozilla/5.0 ResumePolisher/0.1", ...extraHeaders },
       timeoutMs: 10_000,
-      pinnedAddress: pinned.address,
-      pinnedFamily: pinned.family
+      pinnedAddresses
     }, deps.request);
 
     if (response.status >= 300 && response.status < 400) {

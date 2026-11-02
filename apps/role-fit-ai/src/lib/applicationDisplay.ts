@@ -62,6 +62,12 @@ export function isInactiveApplication(app: Pick<Application, "status">): boolean
   return ACTIVITY_STATUS_GROUPS.inactive.includes(app.status);
 }
 
+// A submitted record still waiting on its next step: Analytics' Coming up lists
+// only these records' follow-ups and interviews.
+export function isOpenApplication(app: Pick<Application, "status">): boolean {
+  return app.status === "applied" || app.status === "interviewing" || app.status === "offer";
+}
+
 // Skipped is both the job-only decision made before applying and a later
 // inactive stage. An application date is the durable boundary between them.
 export function isJobOnlySkippedApplication(
@@ -188,20 +194,37 @@ export function noResponseLabel(noResponse: Pick<NoResponseCandidate, "silentDay
 }
 
 // A follow-up date is the user's own plan, so it outranks the derived
-// no-response flag; the flag replaces only the generic waiting actions.
+// no-response flag; the flag replaces only the generic waiting actions. A
+// closed record keeps its old follow-up date but has nothing left to do.
 export function nextAction(
   app: Application,
   noResponse: Pick<NoResponseCandidate, "silentDays"> | null = null
 ) {
   if (app.status === "draft") return "Finish application";
-  if (app.status === "not_applying") return "No action";
+  if (isInactiveApplication(app)) return "No action";
   if (app.followupAt) return `Follow up ${formatCompactDate(app.followupAt)}`;
   if (noResponse) return noResponseLabel(noResponse);
   if (app.status === "interviewing") return "Prepare interview";
   if (app.status === "offer") return "Review offer";
   if (app.status === "applied") return "Awaiting response";
-  if (isInactiveApplication(app)) return "No action";
   return "Review job details";
+}
+
+// Ascending Next action order. Follow-up labels carry no year and lead with a
+// month name, so two follow-ups compare by date; other pairs compare by label.
+export function compareNextAction(
+  a: Application,
+  b: Application,
+  noResponseA: Pick<NoResponseCandidate, "silentDays"> | null = null,
+  noResponseB: Pick<NoResponseCandidate, "silentDays"> | null = null
+): number {
+  const labelA = nextAction(a, noResponseA);
+  const labelB = nextAction(b, noResponseB);
+  const dueA = labelA.startsWith("Follow up ") ? parseDate(a.followupAt)?.getTime() : undefined;
+  const dueB = labelB.startsWith("Follow up ") ? parseDate(b.followupAt)?.getTime() : undefined;
+  if (dueA !== undefined && dueB !== undefined) return dueA - dueB;
+  // Numeric, so "No response · 100d" sorts after "· 34d".
+  return labelA.localeCompare(labelB, undefined, { numeric: true });
 }
 
 export function formatCompactDate(iso: string) {
@@ -210,6 +233,15 @@ export function formatCompactDate(iso: string) {
   return date
     ? date.toLocaleDateString([], { month: "short", day: "numeric" })
     : iso;
+}
+
+// "June 2026" on the same local calendar day formatCompactDate shows.
+export function formatMonthLabel(iso: string) {
+  if (!iso) return "";
+  const date = parseDate(iso);
+  return date
+    ? new Date(date.getFullYear(), date.getMonth(), 1).toLocaleDateString([], { month: "long", year: "numeric" })
+    : iso.slice(0, 7);
 }
 
 export function dateKey(date: Date) {
@@ -292,7 +324,8 @@ export function applicationSearchRank(
   if (!needle) return null;
 
   const company = displayCompany(app).toLowerCase();
-  const role = displayRole(app).toLowerCase();
+  // The stored role, never displayRole's "Role not set" placeholder.
+  const role = (app.role ?? "").trim().toLowerCase();
   const title = String(app.title ?? "").toLowerCase();
   const normalizedPostingId = postingId.toLowerCase();
 

@@ -113,12 +113,15 @@ import {
   removeLink,
   replaceWithParagraphFragments,
   replaceWithLink,
+  inPlaceLinkRange,
+  mergeParagraphValues,
   explicitLinkRunAt,
   autoLinkWordAt,
   expandToLinkRun,
   suppressedAutoLinkValue,
   clearFormatting,
   hasClearableFormatting,
+  normalizeFieldInsert,
   setEmptyFieldTypingFormat,
   toggleMark,
   typingFormatForDeletedRange,
@@ -810,6 +813,10 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   // keeps the selected text visible while the command commits.
   const lastRangeRef = useRef<TypesetSelection | null>(null);
   const lastRangesRef = useRef<FieldRange[] | null>(null);
+  // The document generation those ranges were read in: a replacement (New,
+  // Open, seed) must never inherit them as a command target.
+  const savedRangeGenerationRef = useRef(-1);
+  const savedRangeIsCurrent = () => savedRangeGenerationRef.current === actions.getDocumentGeneration();
   const typingFormatRef = useRef<TypingFormat | null>(null);
   const typingTargetRef = useRef<string | null>(null);
   // Focusing the page fires `focusin` BEFORE the saved range is re-applied, and
@@ -846,7 +853,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
 
   const focusSelection = useCallback(() => {
     const host = hostRef.current;
-    const selection = readSelection() ?? lastRangeRef.current;
+    const selection = readSelection() ?? (savedRangeIsCurrent() ? lastRangeRef.current : null);
     if (!host || !selection) return;
     const value = valueForField(dataRef.current, selection.src);
     const map = mapFor(selection.src, value);
@@ -965,6 +972,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       if (selection) {
         lastRangeRef.current = selection;
         lastRangesRef.current = null;
+        savedRangeGenerationRef.current = actions.getDocumentGeneration();
         // Kept in VALUE indexes, not display indexes: this outlives the painted
         // DOM it was read from, and a remount re-paints from the value.
         lastCaretRef.current = {
@@ -984,6 +992,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         const ranges = readRanges();
         lastRangesRef.current = ranges;
         lastRangeRef.current = null;
+        savedRangeGenerationRef.current = actions.getDocumentGeneration();
         setCaretOverlay(null);
         if (ranges) {
           typingFormatRef.current = null;
@@ -1246,7 +1255,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   useLayoutEffect(() => {
     const selection =
       readSelection() ??
-      (editorToolbarOwnsFocus() ? lastRangeRef.current : null);
+      (editorToolbarOwnsFocus() && savedRangeIsCurrent() ? lastRangeRef.current : null);
     syncCaretOverlay(selection, {
       fontFamily: inlineFormatState.fontFamily ?? docStyle.style.fontFamily,
       fontSizePt: inlineFormatState.fontSizePt ?? styleFieldDefaultSizePt("body"),
@@ -1301,11 +1310,13 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         direction === "undo" ? contentUndoSequenceRef.current : contentRedoSequenceRef.current;
       const styleSequence =
         direction === "undo" ? styleHistory.undoSequence : styleHistory.redoSequence;
-      if (historySourceFor(direction, contentSequence, styleSequence) === "style") {
+      const source = historySourceFor(direction, contentSequence, styleSequence);
+      // A grouped gesture moves both sources together.
+      if (source === "style" || source === "both") {
         if (direction === "undo") styleHistory.undo();
         else styleHistory.redo();
-        return;
       }
+      if (source === "style") return;
       const before = dataRef.current;
       pendingCaretRef.current = (after) => {
         if (direction === "undo") {
@@ -1371,9 +1382,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       insert: string,
       historyIntent?: TextHistoryIntent
     ) => {
-      const singleLine = sel.src.kind !== "bullet";
-      const normalized = insert.replace(/\r/g, "");
-      const text = singleLine ? normalized.replace(/\s*\n+\s*/g, " ") : normalized;
+      const text = normalizeFieldInsert(sel.src, insert);
       const typingFormat = dStart === dEnd ? typingFormatRef.current ?? undefined : undefined;
       const deletedTypingFormat = text.length === 0 ? typingFormatForDeletedRange(sel.map, dStart, dEnd) : null;
       // Emptying the name keeps its format for the next character. A format
@@ -1797,7 +1806,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
           : fragment;
       const head =
         inlineFragment === undefined
-          ? remainderOf(first, insert)
+          ? remainderOf(first, normalizeFieldInsert(first.src, insert))
           : applyInlineFragment(
               first.map,
               first.dStart,
@@ -2696,9 +2705,10 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     | null => {
     const selection = readSelection();
     if (selection) return { kind: "single", selection };
-    const ranges = readRanges() ?? lastRangesRef.current;
+    const saved = savedRangeIsCurrent();
+    const ranges = readRanges() ?? (saved ? lastRangesRef.current : null);
     if (ranges) return { kind: "cross", ranges };
-    return lastRangeRef.current ? { kind: "single", selection: lastRangeRef.current } : null;
+    return saved && lastRangeRef.current ? { kind: "single", selection: lastRangeRef.current } : null;
   }, [readRanges, readSelection]);
 
   const replaceHeaderPlainText = useCallback(
@@ -2961,11 +2971,11 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
           dStart = run.start;
           dEnd = run.end;
         }
-        const currentText = selection.map.display.slice(dStart, dEnd);
-        if (dStart !== dEnd && display === currentText) {
+        const inPlace = inPlaceLinkRange(selection.map, dStart, dEnd, display);
+        if (inPlace) {
           // Text unchanged over an existing range: just (re)apply the link and
           // keep the run's own per-character formatting.
-          commitLink(selection, dStart, dEnd, href);
+          commitLink(selection, inPlace.dStart, inPlace.dEnd, href);
         } else if (display) {
           commitReplaceWithLink(selection, dStart, dEnd, display, href);
         }
@@ -3204,7 +3214,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         if (!upper || !lower) return false;
         // A literal "<" ending the upper paragraph must not open a tag with
         // the lower one's text; the join escapes it and moves the caret.
-        const merged = joinInlineMarkText(upper.text, lower.text);
+        const merged = mergeParagraphValues(upper.text, lower.text);
         markPending();
         actions.mergeSummaryParagraphUp(sectionId, lowerEntry.id, merged.value);
         pendingCaretRef.current = () => ({
@@ -3220,7 +3230,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       if (!mergeId || !upperId) return false;
       const upper = entry.bullets.find((b) => b.id === upperId)!;
       const lower = entry.bullets.find((b) => b.id === mergeId)!;
-      const merged = joinInlineMarkText(upper.text, lower.text);
+      const merged = mergeParagraphValues(upper.text, lower.text);
       markPending();
       actions.mergeBulletUp(sectionId, entryId, mergeId, merged.value);
       const caretValue = merged.index;

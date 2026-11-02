@@ -311,9 +311,14 @@ export function useDuplicateGuard({
     return (await confirmDuplicateGate(currentTarget(), isCurrent, true)).proceed;
   }
 
-  async function resolveApplyDuplicate(isCurrent: () => boolean): Promise<DuplicateResolution> {
+  // A fresh Apply or Skip never matches its own attempt id: a create whose
+  // reply was lost is already in the tracker under that id.
+  async function resolveApplyDuplicate(
+    isCurrent: () => boolean,
+    ownApplicationId: string
+  ): Promise<DuplicateResolution> {
     const target = currentTarget();
-    const match = findDuplicatesForTarget(target)[0];
+    const match = findDuplicatesForTarget(target).find(({ application }) => application.id !== ownApplicationId);
     return match
       ? resolveMatch(match, target, isCurrent, true)
       : { action: "continue", relationship: null };

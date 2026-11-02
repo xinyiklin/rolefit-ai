@@ -167,6 +167,11 @@ try {
     assert.equal(res.json.application.appliedAt, undefined);
     assert.ok(res.json.application.notApplyingAt);
     assert.deepEqual(res.json.application.notApplyingReasons, ["location"]);
+    // A same-stage request carrying documents for a record with no saved
+    // resume is refused rather than silently dropped.
+    const sameStage = await changeStatus(res.json.application.id, { status: "not_applying", documents: resumeOnly });
+    assert.equal(sameStage.status, 400, sameStage.chunk);
+    assert.match(sameStage.json.error, /^documents: this record is already not_applying and has no saved resume/);
   }
   {
     const res = await commit({ application: { ...application, jobUrl: "https://example.test/jobs/4", status: "not_applying", notApplyingReasons: ["fit", "location"], resumeUsed: undefined } });
@@ -198,6 +203,7 @@ try {
     [{ application: { ...application, status: "not_applying", resumeUsed: undefined, notApplyingReasons: ["fit", "nope"] } }, "application.notApplyingReasons: not stored as sent"],
     [{ application, documents: { resume: { sourceText: resumeSource, fileName: "r".repeat(201) } } }, "documents.resume.fileName: must be a non-empty string of at most 200"],
     [{ application: { ...application, applicationAnswers: [{ question: "Q", answer: "A", savedAt: "yesterday" }] } }, "application.applicationAnswers[0].savedAt: must be a canonical ISO timestamp"],
+    [{ application: { ...application, applicationAnswers: [{ question: "Q", answer: " 	" }] } }, "application.applicationAnswers[0].answer: must not be blank"],
     [{ application: JSON.parse(`{"title":"Proto","status":"applied","__proto__":{"x":1}}`) }, "application.__proto__: dropped"],
     [{ application: { ...application, applicationAnswers: [staleRevision] } }, "application.applicationAnswers[0]: its counts or limits do not match its text"],
     [{ application: { ...application, extra: true }, dryRun: true }, "application.extra: dropped"],
@@ -293,6 +299,10 @@ try {
     const retried = await changeStatus(saved.id, { status: "applied", documents: resumeOnly });
     assert.equal(retried.json.changed, false, "a retried submission changes nothing");
     assert.match((await changeStatus(saved.id, { status: "interviewing", documents: resumeOnly })).json.error, /^documents: only a first submission/);
+    // A same-stage request still validates its date.
+    const badDate = await changeStatus(saved.id, { status: "applied", date: "1999-01-01" });
+    assert.equal(badDate.status, 400, badDate.chunk);
+    assert.match(badDate.json.error, /^date: must fall between/);
   }
 
   // A failed tracker write removes the document folder it created.
@@ -396,9 +406,16 @@ try {
     const mismatched = await addAnswers(applied.id, { answers: [revision] });
     assert.equal(mismatched.status, 400, mismatched.chunk);
     assert.match(mismatched.json.issues[0], /^answers\[0\]: its counts or limits do not match its text/);
+    const unfinished = "I admire [Company].";
+    const unfinishedReceipt = validateAnswerConstraints(unfinished, constraints);
+    const placeholder = await addAnswers(applied.id, { answers: [{ ...revision, answer: unfinished, counts: unfinishedReceipt.counts, compliant: unfinishedReceipt.compliant }] });
+    assert.equal(placeholder.status, 400, placeholder.chunk);
+    assert.match(placeholder.json.issues[0], /^answers\[0\]\.status: an answer holding a placeholder is a draft/, "an outside writer cannot store a placeholder answer as ready");
     assert.match((await addAnswers(applied.id, { answers: [], note: 1 })).json.issues[0], /^note: not an answers field/);
     assert.match((await addAnswers(applied.id, { answers: [] })).json.issues[0], /^answers: send 1 to 40/);
     assert.deepEqual((await addAnswers(applied.id, { answers: [{ question: "Q", answer: "A", savedAt: "yesterday" }] })).json.issues, ["answers[0].savedAt: must be a canonical ISO timestamp"]);
+    assert.deepEqual((await addAnswers(applied.id, { answers: [{ question: "Q", answer: "A" }, { question: "   ", answer: "	" }] })).json.issues,
+      ["answers[1].question: must not be blank", "answers[1].answer: must not be blank"], "a new plain pair must hold text");
     const oversized = await addAnswers(applied.id, JSON.stringify({ answers: [{ question: "Q", answer: "x".repeat(2_100_000) }] }));
     assert.equal(oversized.status, 413);
     assert.match(oversized.json.error, /larger than the supported limit/);
@@ -427,6 +444,8 @@ try {
       [{ type: "followup", note: "  " }, /^note: must be non-blank text/],
       [{ type: "followup", date: "2026-02-30" }, /^date: must be a YYYY-MM-DD/],
       [{ type: "followup", at: "2026-10-01" }, /^at: not an event field/],
+      [{ type: "followup", date: "2000-01-01" }, /^date: must not fall before the application date/],
+      [{ type: "response", date: "2099-01-15" }, /^date: a response or follow-up cannot be dated in the future/],
       [{ type: "followup", baseUpdatedAt: "2026-01-01T00:00:00.000Z" }, /changed since it was read/]
     ]) {
       const res = await logEvent(applied.id, payload);

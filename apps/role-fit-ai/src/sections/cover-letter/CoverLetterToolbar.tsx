@@ -424,9 +424,11 @@ export function CoverLetterToolbar({
               disabled={!hasLetter}
               globalAlignments={globalAlignmentState(editor.data, editor.docStyle.style)}
               onGlobalAlignmentChange={(scope, alignment) => {
-                editor.actions.clearAlignmentOverrides(scope);
-                if (scope === "body") editor.docStyle.set("bodyAlign", alignment);
-                else if (scope === "header") editor.docStyle.set("headerAlign", alignment === "justify" ? "left" : alignment);
+                editor.docStyle.groupHistory(() => {
+                  editor.actions.clearAlignmentOverrides(scope);
+                  if (scope === "body") editor.docStyle.set("bodyAlign", alignment);
+                  else if (scope === "header") editor.docStyle.set("headerAlign", alignment === "justify" ? "left" : alignment);
+                });
               }}
             />
             <PageStylePopover docStyle={editor.docStyle} disabled={!hasLetter} />

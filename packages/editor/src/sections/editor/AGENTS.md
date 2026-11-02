@@ -23,11 +23,22 @@ typesetting guide when a change affects painted output or layout provenance.
   disagree on which characters an outer size covers. The display map reads
   `<lt>` as one literal `<`, and `serializeChars` writes `<lt>` back only
   where a raw `<` would start a tag, so typed and pasted tag-shaped text stays
-  text. HTML and plain-text paste encode clipboard text with
-  `escapeInlineMarkText` before it reaches the grammar. Paragraph merges and
-  cross-field folds join values with `joinInlineMarkText`, and header or
-  document paste stores blocks through `canonicalInlineMarkText`; never join
-  stored values with `+`.
+  text. Display punctuation follows the engine's link-word rule (typeset
+  guide), including while an auto-link is deferred, so the map holds the
+  painted text character for character (`link-display.mjs`). One edit can flip
+  ANOTHER word into or out of link shape (`–` ⇄ `--`), so a pre-edit display
+  index is not a stable position: `applyPlainTextInputEdit` (the header
+  popover's inputs) diffs the stored text those inputs show
+  (`stripInlineMarks`), never the display, and carries link edges and the
+  caret on the edited character array (`editChars`); re-applying a link run's
+  href leaves each character's `<nolink>` state alone. HTML and plain-text
+  paste encode clipboard text with `escapeInlineMarkText` before it reaches the
+  grammar. Paragraph merges join through `mergeParagraphValues` and cross-field
+  folds with `joinInlineMarkText`, and header or document paste stores blocks
+  through `canonicalInlineMarkText`; never join stored values with `+`. A
+  merged paragraph keeps the UPPER paragraph's alignment, before/after
+  spacing, and block indent (the engine reads those marks first-match); an
+  upper paragraph with no visible text defers to the lower one's format.
 - `clipboardPrivateCodec.ts` owns the versioned same-editor payload.
   `clipboardHtmlImport.ts` owns the allowlisted HTML-to-inline-mark sanitizer,
   while `clipboardHtmlExport.ts` owns model-derived external HTML/plain copy.
@@ -38,7 +49,8 @@ typesetting guide when a change affects painted output or layout provenance.
   Effective line height is unitless CSS on both the paragraph and its inline
   runs; inbound unitless/percentage values, or physical values with a known
   font size, become explicit line-height marks. Explicit and
-  engine-auto-detected links both serialize as HTML anchors. On inbound rich
+  engine-auto-detected links both serialize as HTML anchors. Font families are
+  quoted, because an unquoted `Source Serif 4` is invalid CSS. On inbound rich
   paste, allowlisted block margins become explicit paragraph before/after
   marks, and multiple HTML blocks become separate bullet/summary fields
   through one structural editor action rather than hard breaks inside one
@@ -46,6 +58,8 @@ typesetting guide when a change affects painted output or layout provenance.
   unsupported fonts, and invalid links out of document state. Inbound HTML
   whitespace collapses as a browser renders it; only `PRE` and
   `pre`/`pre-wrap`/`break-spaces` (newlines for `pre-line`) keep source spacing.
+  Inline text beside a nested block is its own paragraph, as a browser's
+  anonymous block is, and a `<br>` that ends its block adds no line.
   Attach the private selection MIME only when every selected cover-letter field
   is representable. A header plus paragraphs is a full-document payload; never
   consume only its header or silently fall back to a lossy partial private
@@ -394,6 +408,11 @@ typesetting guide when a change affects painted output or layout provenance.
   labelled with the first link's href but reaching into the second, so Remove and
   Apply rewrote the neighbour's text. A selection spanning two links resolves to
   the first.
+- The link popover trims its Text field, but a double-click selection keeps its
+  trailing space. Apply with that text otherwise unchanged links the trimmed run
+  in place (`inPlaceLinkRange`), keeping the space and the run's formatting. An
+  existing link run is re-pointed whole instead, edge spaces included, so no
+  edge keeps the old URL as a second link.
 - Only an AUTOMATIC link is ever deferred. An explicit `<link=…>` is a hyperlink
   the user asked for; deferring it made a real link visibly lose its anchor while
   the caret rested at its end.

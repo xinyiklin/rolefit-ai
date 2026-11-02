@@ -59,10 +59,19 @@ const answerList = (description: string) => ({
 });
 
 // The newest saved answer to each question: a corrected answer is a later entry.
+// A revision replaces its questionId or a same-text plain pair; a plain pair, the latest same-text answer.
 function latestAnswers(answers: readonly SavedAnswer[] = []): SavedAnswer[] {
-  const latest = new Map<string, SavedAnswer>();
-  for (const answer of answers) latest.set(answer.questionId ?? answer.question.trim().toLowerCase(), answer);
-  return [...latest.values()];
+  const latest: { questionId?: string; answer: SavedAnswer; order: number }[] = [];
+  answers.forEach((answer, order) => {
+    const text = answer.question.trim().toLowerCase();
+    const sameText = (entry: (typeof latest)[number]) => entry.answer.question.trim().toLowerCase() === text;
+    const match = answer.questionId
+      ? latest.find((entry) => entry.questionId === answer.questionId) ?? latest.find((entry) => !entry.questionId && sameText(entry))
+      : latest.filter(sameText).sort((a, b) => b.order - a.order)[0];
+    if (match) Object.assign(match, { questionId: match.questionId ?? answer.questionId, answer, order });
+    else latest.push({ questionId: answer.questionId, answer, order });
+  });
+  return latest.map(({ answer }) => answer);
 }
 
 // `origin` says how the answer was saved: with RoleFit's answer-stage record

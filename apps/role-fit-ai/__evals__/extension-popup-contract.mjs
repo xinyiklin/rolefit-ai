@@ -71,6 +71,19 @@ const manifest = JSON.parse(
   readFileSync(new URL("../extension/manifest.json", import.meta.url), "utf8")
 );
 
+// ── Tracker row labels ─────────────────────────────────────────────────────
+
+// Every stored status reads as the app's label, never as a raw storage key.
+const trackerStatusSource = /^function trackerStatus\(app\) \{[\s\S]*?^\}$/m.exec(popup)?.[0];
+assert.ok(trackerStatusSource, "trackerStatus stays a top-level function this contract can read");
+const trackerStatus = new Function("formatDate", `${trackerStatusSource}; return trackerStatus;`)(() => "");
+for (const [status, label] of [
+  ["draft", "Draft"], ["not_applying", "Skipped"], ["applied", "Applied"], ["interviewing", "Interviewing"],
+  ["offer", "Offer"], ["rejected", "Not selected"], ["ghosted", "Ghosted"], ["withdrawn", "Withdrawn"]
+]) {
+  assert.equal(trackerStatus({ status }).label, label, `tracker status ${status} is labeled`);
+}
+
 // ── Popup states ───────────────────────────────────────────────────────────
 
 for (const state of [
@@ -158,8 +171,8 @@ const importFlow = bridge.slice(importStart, importEnd);
 assert.ok(importStart >= 0 && importEnd > importStart, "import flow is bounded");
 assert.match(
   importFlow,
-  /body:\s*JSON\.stringify\(\{\s*text:\s*pageData\.text,\s*url:\s*pageData\.url,\s*frameUrls:\s*pageData\.frameUrls,\s*claimToken\s*\}\)/,
-  "import wire body contains only text, url, frameUrls, and claimToken"
+  /body:\s*JSON\.stringify\(\{\s*text:\s*pageData\.text,\s*url:\s*pageData\.url,\s*pageTitle:\s*pageData\.title,\s*frameUrls:\s*pageData\.frameUrls,\s*claimToken\s*\}\)/,
+  "import wire body contains only text, url, pageTitle, frameUrls, and claimToken"
 );
 assert.match(
   bridge,
@@ -171,6 +184,18 @@ assert.match(bridge, /text\.slice\(0, 50000\)/, "page extraction keeps the 50,00
 for (const source of [popup, background]) {
   assert.match(source, /const claimToken = randomClaimToken\(\)/, "each import creates one claim token");
 }
+// A failed tab open is retried with the SAME claim token: the server reserves
+// the entry for that token, so a plain RoleFit tab could never deliver it.
+assert.match(popup, /controller\.requestRetry = \(\) => openTab\(\)\.catch\(tabOpenFailed\)/, "the tab-open retry reopens the token hand-off");
+assert.doesNotMatch(popup, /requestRetry = \(\) => \{ void openRoleFit\(\); \}/, "a plain RoleFit tab is never the import retry");
+// Page capture starts before the saved settings are read, so recovering from
+// unreadable settings still has a page to send.
+const mainStart = popup.indexOf("async function main()");
+assert.ok(mainStart >= 0, "the popup entry point is bounded");
+assert.ok(
+  popup.indexOf("beginPageLoad();", mainStart) < popup.indexOf("await loadExtensionSettings()", mainStart),
+  "the popup captures the page before reading its settings"
+);
 for (const [name, source] of [["popup", popup], ["background", background]]) {
   assert.doesNotMatch(source, /fetch\(/, `${name} does not open its own request path`);
   assert.doesNotMatch(source, /tabs\.update\(/, `${name} never replaces the current RoleFit tab`);
@@ -203,6 +228,11 @@ assert.match(
 );
 assert.match(background, /commands\?\.onCommand/, "the background listens for the shortcut command");
 assert.match(background, /command !== IMPORT_COMMAND/, "the background handles only its own command");
+assert.match(
+  background,
+  /importInFlight = true;[\s\S]{0,200}?await clearShortcutNotice\(\);[\s\S]{0,400}?const settings = await loadExtensionSettings\(\);/,
+  "a new shortcut import clears an earlier failure's notice before it runs"
+);
 assert.match(background, /importInFlight/, "a held shortcut cannot fan out duplicate imports");
 assert.match(background, /saveShortcutNotice/, "a headless failure is reported back to the popup");
 assert.match(popup, /readShortcutNotice[\s\S]*clearShortcutNotice/, "the popup shows the notice once and clears it");

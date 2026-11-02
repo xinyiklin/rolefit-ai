@@ -40,7 +40,8 @@ function closeServer(server) {
   });
 }
 
-assert.equal(validateLocalSitePort(1), 1);
+assert.equal(validateLocalSitePort(2), 2);
+assert.throws(() => validateLocalSitePort(1), /browsers refuse/, "port 1 is on the Fetch bad-port list");
 assert.equal(validateLocalSitePort(65_535), 65_535);
 for (const invalid of [0, 65_536, 5_181.5, "5181", null]) {
   assert.throws(() => validateLocalSitePort(invalid), /integer from 1 through 65535/);
@@ -91,6 +92,10 @@ try {
   });
 
   await assert.rejects(manager.saveLocalSitePort(0), /integer from 1 through 65535/);
+  // A port on the Fetch bad-port list can never pass the companion's own
+  // health probe, so it is refused before it is saved.
+  assert.throws(() => validateLocalSitePort(6_000), /browsers refuse/);
+  await assert.rejects(manager.saveLocalSitePort(6_000), /browsers refuse/);
   assert.deepEqual(probedPorts, []);
 
   portAvailable = false;
@@ -185,6 +190,13 @@ try {
       environmentPort: "not-a-port"
     }).load(),
     /ROLEFIT_DESKTOP_PORT must be an integer/
+  );
+  await assert.rejects(
+    createDesktopSettingsManager({
+      userDataDirectory: tempRoot,
+      environmentPort: "6000"
+    }).load(),
+    /ROLEFIT_DESKTOP_PORT 6000 is one browsers refuse/
   );
 
   const malformedDocuments = [

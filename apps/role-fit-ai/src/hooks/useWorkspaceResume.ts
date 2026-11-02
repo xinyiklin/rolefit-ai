@@ -43,6 +43,7 @@ export type WorkspaceBaseResume = {
   kind?: string;
   text?: string;
   paragraphs?: number;
+  error?: string;
 };
 
 export type BaseResumeOption = {
@@ -317,6 +318,22 @@ export function useWorkspaceResume({
       if (!loadOwnership.isCurrent(claim)) return;
 
       updateWorkspaceState(workspace);
+      if (workspace.baseResume?.error) {
+        // The saved default is unreadable: seed only the variant last open, and
+        // leave the published list and history for the user to choose from.
+        const rememberedName = applyBaseResume ? loadLastBaseResumeName() : "";
+        if (
+          rememberedName &&
+          rememberedName !== workspace.baseResume.fileName &&
+          (workspace.baseResumeOptions ?? []).some((option) => option.fileName === rememberedName) &&
+          !(await loadBaseResumeVersion(rememberedName, false))
+        ) {
+          setWorkspaceStatus(`${workspace.baseResume.error} ${rememberedName}, the version last open, could not be opened either.`);
+          return;
+        }
+        setWorkspaceStatus(workspace.baseResume.error);
+        return;
+      }
       if (workspace.baseResume?.exists) {
         if (applyBaseResume) {
           const rememberedName = loadLastBaseResumeName();
@@ -687,6 +704,7 @@ export function useWorkspaceResume({
   // existing guarded load path remains the sole document-replacement owner.
   // Results are cached against the authoritative candidate revision, so
   // resolving and then displaying the same ranking costs one request in total.
+  // A failed read is never cached: the revision only moves on the next snapshot.
   const readBaseResumeCandidates = useCallback(
     async (options: BaseResumeOption[]): Promise<VariantCandidate[]> => {
       const fileNames = [...new Set(options.map((option) => option.fileName).filter(Boolean))];
@@ -696,6 +714,7 @@ export function useWorkspaceResume({
       if (cached?.key === cacheKey) return cached.candidates;
 
       const candidates = await fetchBaseResumeCandidates(options);
+      if (candidates === null) return [];
       baseResumeCandidateCacheRef.current = { key: cacheKey, candidates };
       return candidates;
     },

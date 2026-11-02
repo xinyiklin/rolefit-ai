@@ -1,4 +1,5 @@
 // AI provider error types shared across the polish + application-answers routes.
+import { FetchTimeoutError } from "../http.ts";
 
 export class UserSafeAiError extends Error {
   status: number;
@@ -31,4 +32,9 @@ const SAFE_CONFIG_MESSAGES = new Set([
 // null. Lets each route surface a 400 with the exact remediation text.
 export function safeConfigErrorMessage(message: string): string | null {
   return SAFE_CONFIG_MESSAGES.has(message) ? message : null;
+}
+
+// A provider timeout needs a retry, not an AI-settings change.
+export function isProviderTimeout(error: unknown): boolean {
+  return error instanceof FetchTimeoutError || (error instanceof Error && /timed out|timeout/i.test(error.message));
 }
