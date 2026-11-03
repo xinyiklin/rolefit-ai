@@ -998,10 +998,9 @@ offers. A submitted application an agent records always carries the resume that
 was sent, or, when the employer asked for no resume and the agent says so, the
 cover letter that was sent: an Applied commit needs it, and a first submission
 of a Draft or a job-only Skip sends it with the stage move, saved together or
-not at all (D105). A
-commit whose posting matches a saved record is refused until the
-agent names each match as reviewed, as Prepare's duplicate check asks the user;
-a dry run reports the same outcome without saving. A value the tracker would
+not at all (D105). A commit whose posting matches a saved record is refused
+until the agent names each match as reviewed, as Prepare's duplicate check
+asks the user; a dry run reports the same outcome without saving. A value the tracker would
 drop or alter refuses the whole write with the field named; nothing is guessed.
 An agent may repair a saved record's job brief, posting, Fit Assessment, notes,
 or which resume was sent, and attach a document a submitted record never
@@ -1015,9 +1014,10 @@ Fit Assessment, both Polishes, application answers, final review). Each sends
 the app's own request for that stage on the provider saved for it, with the
 few differences D102 records, so the user's key or CLI is used and the stage's
 evidence rules, warnings, and checks apply unchanged. Given a saved
-application, a stage reads that application's posting or brief, company, role,
-saved documents, and Fit Assessment for whatever the agent does not pass
-(D104). Nothing is saved until the agent saves it, and accepted edits
+application, Fit Assessment, both Polishes, and application answers read its
+posting or brief, company, role, and saved documents for whatever the agent
+does not pass; Resume Polish also reads its Fit Assessment when it uses the
+saved brief (D104). Nothing is saved until the agent saves it, and accepted edits
 are applied as the editor applies them. Text the agent supplies as the
 candidate's (a resume it sends, facts, clarifications, cover-letter details) is
 treated as the user's own evidence, so the agent must take it from the user.
