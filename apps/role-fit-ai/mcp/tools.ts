@@ -316,7 +316,8 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
         "send documents with the .resume that was sent, and the .cover if one was, or, when the employer did not ask " +
         "for a resume, resumeNotRequested: true with the .cover; the stage and documents save together or not at " +
         "all, with `resumeUsed` if you send it. Any other move refuses documents, resumeUsed and resumeNotRequested. " +
-        "Setting the current stage again changes nothing and saves no documents, so a retry after a " +
+        "Setting the current stage again changes nothing and saves no documents (it ignores resumeUsed and " +
+        "resumeNotRequested, and refuses a document the record lacks), so a retry after a " +
         "lost reply is safe.",
       inputSchema: {
         type: "object",

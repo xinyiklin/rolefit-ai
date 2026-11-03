@@ -805,7 +805,8 @@ later entry wins.
   submission on `POST /api/applications/<id>/status` accept
   `resumeNotRequested: true`, which requires `documents.cover` and refuses a
   `.resume` or `resumeUsed` alongside it; without it the resume is still
-  required, so no submission saves without a document. The flag is an
+  required, so no agent submission saves without a document (the UI's Apply
+  may still exclude both). The flag is an
   attestation of the request, not stored: the record matches a UI Apply that
   excluded the resume, so the tracker schema is unchanged. A same-stage retry
   now refuses only a document kind the record lacks, so a cover-only record
