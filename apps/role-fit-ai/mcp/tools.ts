@@ -20,6 +20,11 @@ const SEARCH_LIMIT_MAX = 100;
 // Letters and digits only, so "JR-90210", "jr 90210" and "JR90210" match.
 const requisitionKey = (id: string | undefined) => (id ?? "").replace(/[^0-9A-Za-z]/g, "").toUpperCase();
 const OFFERED_SKIP_REASONS = NOT_APPLYING_REASONS.filter((reason) => !LEGACY_NOT_APPLYING_REASONS.includes(reason));
+const RESUME_NOT_REQUESTED = {
+  type: "boolean",
+  const: true,
+  description: "Only when the employer's application did not ask for a resume: the submission saves its .cover alone. Nothing records it, so say why in notes if it matters."
+};
 const timestamp = { type: "string", description: "Canonical ISO timestamp, e.g. 2026-10-23T14:05:00.000Z." };
 // These writes have no request id, so a lost reply must not become a blind retry.
 const CHECK_BEFORE_RETRY =
@@ -226,7 +231,8 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
         "Create one tracker record, with its tailored resume and cover letter, in a single atomic save. Use status " +
         "`applied` for a submitted application, `not_applying` for a job you decided to skip, or `draft` for one " +
         "you started but have not submitted (no documents, dates or resumeUsed; submit it later with " +
-        "update_application_status, sending its documents and resumeUsed then; fix other fields with update_application). An applied commit must include documents.resume, the .resume that was sent. " +
+        "update_application_status, sending its documents and resumeUsed then; fix other fields with update_application). An applied commit must include documents.resume, the .resume that was sent, " +
+        "unless the employer did not ask for one: then send resumeNotRequested: true with documents.cover and no resumeUsed. " +
         "The server runs the tracker's duplicate matcher and refuses with status 409 and `duplicates` while any " +
         "match is not listed in acknowledgedDuplicates; if the match is the same application (often your own " +
         "draft), change that record instead. Send dryRun: true to get the same answer without saving anything. " +
@@ -286,6 +292,7 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
             }
           },
           dryRun: { type: "boolean", description: "Validate everything, including documents and duplicates, and save nothing." },
+          resumeNotRequested: RESUME_NOT_REQUESTED,
           acknowledgedDuplicates: {
             type: "array",
             maxItems: MAX_ACKNOWLEDGED_DUPLICATES,
@@ -293,7 +300,7 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
             description: "Ids of matching records you reviewed and are keeping separate from this one."
           },
           documents: editableDocuments(
-            "Editable sources sent with an applied application; resume is required for applied. PDFs are not accepted here."
+            "Editable sources sent with an applied application; resume is required for applied unless resumeNotRequested. PDFs are not accepted here."
           )
         }
       },
@@ -306,9 +313,11 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
         "Move a tracker record to a new stage, as the tracker row's stage menu would: the server applies the change " +
         "to the latest saved record and adds the stage-history entry. Moves the menu does not offer are refused " +
         "with the allowed list. A first submission (a Draft, or a job-only Skip, moving to a submitted stage) must " +
-        "send documents with the .resume that was sent, and the .cover if one was; the stage and documents save " +
-        "together or not at all, with `resumeUsed` if you send it. Any other move refuses documents and " +
-        "resumeUsed. Setting the current stage again changes nothing and saves no documents, so a retry after a " +
+        "send documents with the .resume that was sent, and the .cover if one was, or, when the employer did not ask " +
+        "for a resume, resumeNotRequested: true with the .cover; the stage and documents save together or not at " +
+        "all, with `resumeUsed` if you send it. Any other move refuses documents, resumeUsed and resumeNotRequested. " +
+        "Setting the current stage again changes nothing and saves no documents (it ignores resumeUsed and " +
+        "resumeNotRequested, and refuses a document the record lacks), so a retry after a " +
         "lost reply is safe.",
       inputSchema: {
         type: "object",
@@ -324,8 +333,9 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
             ...timestamp,
             description: "The updatedAt you read; if the record changed since, the change is refused and the current record returned."
           },
-          documents: editableDocuments("Only for a first submission, where resume is required."),
-          resumeUsed: { type: "string", enum: [...RESUME_USED_VALUES], description: "Which resume was sent; only for a first submission." }
+          documents: editableDocuments("Only for a first submission, where resume is required unless resumeNotRequested."),
+          resumeUsed: { type: "string", enum: [...RESUME_USED_VALUES], description: "Which resume was sent; only for a first submission." },
+          resumeNotRequested: RESUME_NOT_REQUESTED
         }
       },
       run: ({ id, ...body }) => typeof id === "string"

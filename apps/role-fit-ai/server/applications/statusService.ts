@@ -16,7 +16,7 @@ import {
   type ApplicationStatus
 } from "../../src/lib/applicationStatusTransitions.ts";
 import { exactDayIso, toDateInput, todayIso } from "../../src/lib/dateInput.ts";
-import { commitDocuments } from "./commitService.ts";
+import { commitDocuments, submittedDocumentsIssue } from "./commitService.ts";
 import { documentArtifacts } from "./documentService.ts";
 import { DOCUMENT_SOURCE_EXTENSION, writeApplicationFile } from "./documents.ts";
 import { reconcileApplicationMutations } from "./reconcile.ts";
@@ -33,7 +33,7 @@ import {
   writeApplicationsSnapshot
 } from "./storage.ts";
 
-const STATUS_REQUEST_KEYS = ["status", "date", "baseUpdatedAt", "documents", "resumeUsed"];
+const STATUS_REQUEST_KEYS = ["status", "date", "baseUpdatedAt", "documents", "resumeUsed", "resumeNotRequested"];
 export const RESUME_USED_VALUES = ["base", "tailored"] as const;
 
 const statusDependencies = { writeApplicationsSnapshot };
@@ -61,6 +61,10 @@ export async function changeApplicationStatus(workspaceDir: string, id: string, 
   const { resumeUsed } = request;
   if (resumeUsed !== undefined && !(RESUME_USED_VALUES as readonly unknown[]).includes(resumeUsed)) {
     throw new ApplicationsStorageError(`resumeUsed: must be ${RESUME_USED_VALUES.join(" or ")} when given.`, 400);
+  }
+  const { resumeNotRequested } = request;
+  if (resumeNotRequested !== undefined && resumeNotRequested !== true) {
+    throw new ApplicationsStorageError("resumeNotRequested: send true, and only when the employer did not ask for a resume.", 400);
   }
   const documentIssues: string[] = [];
   const documents = commitDocuments(request.documents, documentIssues);
@@ -93,11 +97,12 @@ export async function changeApplicationStatus(workspaceDir: string, id: string, 
     }
     if (current.status === nextStatus) {
       // Setting the current stage again is the safe retry after a lost reply:
-      // the documents it carries are already saved. Documents for a record
-      // that has none are not silently dropped.
-      if (request.documents !== undefined && !current.resumeArtifacts) {
+      // the documents it carries are already saved. A document kind the record
+      // lacks is refused, never silently dropped.
+      const unsaved = documents.find(({ kind }) => !(kind === "resume" ? current.resumeArtifacts : current.coverLetterArtifacts));
+      if (unsaved) {
         throw new ApplicationsStorageError(
-          `documents: this record is already ${current.status} and has no saved resume; documents are saved only with a first submission.`,
+          `documents: this record is already ${current.status} and has no saved ${unsaved.kind === "cover" ? "cover letter" : "resume"}; documents are saved only with a first submission.`,
           400
         );
       }
@@ -124,8 +129,12 @@ export async function changeApplicationStatus(workspaceDir: string, id: string, 
     if (resumeUsed !== undefined && !submitting) {
       throw new ApplicationsStorageError("resumeUsed: only a first submission takes it here; use the record update otherwise.", 400);
     }
-    if (submitting && !documents.some((document) => document.kind === "resume")) {
-      throw new ApplicationsStorageError("documents.resume: a first submission needs the .resume source that was sent.", 400);
+    if (resumeNotRequested && !submitting) {
+      throw new ApplicationsStorageError("resumeNotRequested: only a first submission takes it.", 400);
+    }
+    if (submitting) {
+      const sentIssue = submittedDocumentsIssue("a first submission", documents, resumeNotRequested === true, resumeUsed !== undefined);
+      if (sentIssue) throw new ApplicationsStorageError(`${sentIssue}.`, 400);
     }
     if (!stageHistoryFits(current, nextStatus)) {
       throw new ApplicationsStorageError(STAGE_HISTORY_FULL_MESSAGE, 400);

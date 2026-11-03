@@ -915,6 +915,12 @@ Good server verification covers:
   default names the argument to pass; `mcp-probes.mjs` checks
   `requisitionId` search (posting text and every ATS job or source URL,
   punctuation ignored, no prefix match) and the package's notes and pay range
+- cover-only submissions (D105): `application-commit-probes.mjs` commits and
+  submits a Draft with `resumeNotRequested: true` and its `.cover` alone,
+  refuses the flag without a cover, with a resume or `resumeUsed`, on a
+  non-submission move or a non-Applied commit, and when not `true`, stores no
+  flag, and retries a cover-only record without change; `mcp-probes.mjs`
+  checks both tools take the flag
 - routine AI logs remain shape-only and exclude model-authored target IDs,
   free-form error text, provider bodies, and private prompt content
 
