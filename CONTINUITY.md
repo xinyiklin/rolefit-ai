@@ -33,10 +33,9 @@ recorded here; see `docs/git-workflow.md`). Release history:
   main bundle fell 5.8 → 0.5 MB and a two-page resume's first page paints in
   290 ms instead of 715 (production, cold). Open: exercise RoleFit's editor and
   exports in a browser; only its build and offline suite were run.
-- 2026-11-02 [USER] 0.25.0: tag `rolefit-preview-v0.25.0-beta.1` once the
-  release-notes PR merges (it lists #292's fixes and the live agent use, and
-  moves the extension to 1.5.3 for #292's changes) and confirm the workflow
-  (it runs the native smokes).
+- 2026-11-03 [USER] Open for the user: a structured pipeline-block reason
+  (captcha, sign-in wall, dead posting). Drafts have no timeline, so it needs a
+  stored-data change and a release; until then block reasons stay in notes.
 
 ## Deferred backlog
 
@@ -144,3 +143,10 @@ recorded here; see `docs/git-workflow.md`). Release history:
   over-long comments, guide history, dead code and duplicated helpers with no
   behavior change, and merged main's #289/#290. Browser QA not run
   (flag-first).
+
+## 2026-11-03
+
+- [USER+CODE+TOOL] **Agent tools read record defaults** (D104): `assess_fit`
+  and both polishes take a record `id`, `search_applications` takes
+  `requisitionId`, and `get_submission_package` adds notes and pay. MCP only.
+  Not run: an agent client and live providers.

@@ -36,6 +36,7 @@ const records = [
     id: "a1", title: "Backend Engineer at Acme", company: "Acme, Inc.", role: "Backend Engineer", status: "applied",
     jobUrl: "https://boards.greenhouse.io/acme/jobs/4012345", createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-01T00:00:00.000Z",
     appliedAt: "2026-10-01T00:00:00.000Z", jobDescription: "private text", resumeUsed: "tailored",
+    notes: "Form asks for a portfolio link.", salaryMin: 150000, salaryMax: 180000, salaryCurrency: "USD", salaryPeriod: "yr",
     resumeArtifacts: artifacts("Acme Resume.resume"), coverLetterArtifacts: artifacts("Acme Cover.cover"),
     fitAssessment: { resumeLabel: "Base resume", result: { status: "ASSESSED", verdict: "REASONABLE" } },
     applicationAnswers: [
@@ -50,9 +51,13 @@ const records = [
   {
     id: "b2", title: "Data Analyst at Globex", company: "Globex", role: "Data Analyst", status: "rejected", jobUrl: "https://globex.example/jobs/9",
     createdAt: "2026-10-05T00:00:00.000Z", updatedAt: "2026-10-06T00:00:00.000Z", resumeArtifacts: artifacts("resume.pdf", false),
+    rawJobDescription: "Globex Data Analyst. Requisition ID: JR-90210. Build dashboards.",
     applicationAnswers: [{ question: "Why data?", answer: "I like reliable pipelines.", savedAt: "2026-10-05T00:00:00.000Z" }]
   },
-  { id: "c3", title: "Broken at Initech", company: "Initech", role: "Engineer", status: "applied", createdAt: "2026-10-07T00:00:00.000Z", updatedAt: "2026-10-07T00:00:00.000Z", resumeArtifacts: artifacts("resume.resume") }
+  {
+    id: "c3", title: "Broken at Initech", company: "Initech", role: "Engineer", status: "applied", createdAt: "2026-10-07T00:00:00.000Z", updatedAt: "2026-10-07T00:00:00.000Z", resumeArtifacts: artifacts("resume.resume"),
+    jobUrl: "https://initech.example/careers/engineer", sourceUrls: [{ url: "https://initech.wd5.myworkdayjobs.com/External/job/Remote/Engineer_JR-77777", addedAt: "2026-10-07T00:00:00.000Z" }]
+  }
 ];
 const resumeSource = await readFile(new URL("../../server/starter.resume", import.meta.url), "utf8");
 const coverSource = serializeCoverLetterFile({
@@ -158,6 +163,12 @@ const call = async (name, args) => (await rpc("tools/call", { name, arguments: a
   assert.equal((await call("search_applications", { company: "ACME corp" })).structuredContent.total, 1);
   assert.equal((await call("search_applications", { query: "analyst", status: "rejected" })).structuredContent.applications[0].id, "b2");
   assert.equal((await call("search_applications", { status: "offer" })).structuredContent.total, 0);
+  const byRequisition = async (requisitionId) => (await call("search_applications", { requisitionId })).structuredContent.applications.map(({ id }) => id);
+  assert.deepEqual(await byRequisition("jr 90210"), ["b2"], "the id printed in the posting, punctuation and case ignored");
+  assert.deepEqual(await byRequisition("4012345"), ["a1"], "the job id in an ATS URL");
+  assert.deepEqual(await byRequisition("JR-77777"), ["c3"], "or in any source URL, as the duplicate matcher reads them");
+  assert.deepEqual(await byRequisition("JR-9021"), [], "an exact id, not a prefix");
+  assert.match((await rpc("tools/list", {})).result.tools.find((tool) => tool.name === "search_applications").description, /"General Motors" does not find "GM"/);
   assert.equal((await call("search_applications", { limit: 1 })).structuredContent.applications.length, 1);
   for (const posting of [{ jobUrl: 123 }, ["x"], { jobText: null }]) {
     const bad = await call("search_applications", { posting });
@@ -263,6 +274,8 @@ const call = async (name, args) => (await rpc("tools/call", { name, arguments: a
   const pkg = full.structuredContent;
   assert.equal(pkg.application.resumeUsed, "tailored");
   assert.equal(pkg.jobDescription, "private text");
+  assert.equal(pkg.notes, "Form asks for a portfolio link.");
+  assert.deepEqual([pkg.application.salaryMin, pkg.application.salaryMax, pkg.application.salaryCurrency, pkg.application.salaryPeriod], [150000, 180000, "USD", "yr"]);
   assert.equal(pkg.resume.fileName, "Acme Resume.resume");
   assert.equal(pkg.resume.text, serializeResumeData(parseResumeFile(resumeSource).data));
   assert.equal(pkg.coverLetter.sourceText, coverSource);
@@ -272,6 +285,7 @@ const call = async (name, args) => (await rpc("tools/call", { name, arguments: a
   const sparse = (await call("get_submission_package", { id: "b2" })).structuredContent;
   assert.deepEqual(sparse.resume, { fileName: "resume.pdf", savedAt: "2026-10-01T00:00:00.000Z", pdfOnly: true });
   assert.equal(sparse.coverLetter, null);
+  assert.equal(sparse.notes, "", "a record without notes reads as empty, never missing");
   assert.deepEqual(sparse.missing, ["coverLetter", "fitAssessment", "jobDescription"]);
   const broken = await call("get_submission_package", { id: "c3" });
   assert.equal(broken.isError, true);

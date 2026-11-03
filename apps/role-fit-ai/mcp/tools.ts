@@ -10,13 +10,15 @@ import { RESUME_USED_VALUES } from "../server/applications/statusService.ts";
 import { INTERVIEW_KINDS, STAGE_HISTORY_NOTE_MAX_LENGTH } from "../shared/applicationStageHistoryContract.ts";
 import { FIT_ASSESSMENT_VERDICTS } from "../shared/fitAssessmentContract.ts";
 import { APPLICATION_STATUSES } from "../src/lib/applicationStatusTransitions.ts";
-import { findDuplicateApplications, normalizeCompanyName } from "../src/lib/jobIdentity.ts";
+import { atsPostingKey, findDuplicateApplications, normalizeCompanyName, requisitionIdFromText } from "../src/lib/jobIdentity.ts";
 import { LEGACY_NOT_APPLYING_REASONS, NOT_APPLYING_REASONS } from "../src/lib/notApplying.ts";
 import { createAiTools } from "./aiTools.ts";
 import { createRenderTool } from "./renderTool.ts";
 import { candidateProfile, createClient, isToolResult, type SavedAnswer, type Tool, type TrackerRecord } from "./client.ts";
 
 const SEARCH_LIMIT_MAX = 100;
+// Letters and digits only, so "JR-90210", "jr 90210" and "JR90210" match.
+const requisitionKey = (id: string | undefined) => (id ?? "").replace(/[^0-9A-Za-z]/g, "").toUpperCase();
 const OFFERED_SKIP_REASONS = NOT_APPLYING_REASONS.filter((reason) => !LEGACY_NOT_APPLYING_REASONS.includes(reason));
 const timestamp = { type: "string", description: "Canonical ISO timestamp, e.g. 2026-10-23T14:05:00.000Z." };
 // These writes have no request id, so a lost reply must not become a blind retry.
@@ -108,7 +110,9 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
       description:
         "Find tracker records before committing a new one or changing a stage. `posting` runs the tracker's own " +
         "duplicate matcher (posting id, requisition id, URL, company + role, description similarity) and returns " +
-        "matches strongest first with their evidence; `company`, `query` and `status` filter. Returns summaries, " +
+        "matches strongest first with their evidence; `company`, `query`, `requisitionId` and `status` filter. " +
+        "`company` and `query` match text only (\"General Motors\" does not find \"GM\"), so to check whether a job " +
+        "is already tracked use `posting` or `requisitionId`. Returns summaries, " +
         "including each record's id and updatedAt. If the tracker holds records RoleFit cannot read safely, they are " +
         "left out and named in `invalidRecords` (no duplicate check covers them, and RoleFit refuses every tracker " +
         "write until they are repaired or a backup is restored).",
@@ -129,6 +133,10 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
           },
           company: { type: "string", description: "Company name; legal suffixes and case are ignored." },
           query: { type: "string", description: "Case-insensitive text in title, company, role, or job URL." },
+          requisitionId: {
+            type: "string",
+            description: "A requisition or job id (e.g. JR-90210): matches the id printed in a record's posting or in any of its ATS job URLs; punctuation and case are ignored."
+          },
           status: { type: "string", enum: [...APPLICATION_STATUSES] },
           limit: { type: "integer", minimum: 1, maximum: SEARCH_LIMIT_MAX, default: 20 }
         },
@@ -158,6 +166,15 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
           results = results.filter(({ record }) =>
             [record.title, record.company, record.role, record.jobUrl].some((field) => field?.toLowerCase().includes(query))
           );
+        }
+        const requisition = typeof args.requisitionId === "string" ? requisitionKey(args.requisitionId) : "";
+        if (requisition) {
+          results = results.filter(({ record }) =>
+            [
+              requisitionIdFromText(record.rawJobDescription),
+              requisitionIdFromText(record.jobDescription),
+              ...[record.jobUrl, ...(record.sourceUrls ?? []).map(({ url }) => url)].map((url) => atsPostingKey(url)?.jobId)
+            ].some((id) => requisitionKey(id) === requisition));
         }
         if (typeof args.status === "string") results = results.filter(({ record }) => record.status === args.status);
         const limit = Number.isInteger(args.limit) ? Math.min(Math.max(args.limit as number, 1), SEARCH_LIMIT_MAX) : 20;
@@ -474,8 +491,8 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
       name: "get_submission_package",
       title: "Get submission package",
       description:
-        "Everything saved for one application in a single read, for a final review: the record's essentials and " +
-        "job brief, the resume and cover letter it saved (plain text and .resume/.cover source; a PDF-only upload " +
+        "Everything saved for one application in a single read, for a final review: the record's essentials " +
+        "(pay range included), notes, and job brief, the resume and cover letter it saved (plain text and .resume/.cover source; a PDF-only upload " +
         "has pdfOnly and no text), the newest answer to each question, and the Fit Assessment snapshot. `missing` " +
         "names what the record does not have (resume, coverLetter, applicationAnswers, fitAssessment, " +
         "jobDescription); whether each is needed for this job is your call.",
@@ -500,11 +517,18 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
           fitAssessment: record.fitAssessment !== undefined,
           jobDescription: Boolean(record.jobDescription?.trim())
         };
-        const { title, company, role, status, jobUrl, location, appliedAt, updatedAt, resumeUsed } = record;
+        const {
+          title, company, role, status, jobUrl, location, appliedAt, updatedAt, resumeUsed,
+          salaryMin, salaryMax, salaryCurrency, salaryPeriod
+        } = record;
         return {
           ok: true,
           value: {
-            application: { id: record.id, title, company, role, status, jobUrl, location, appliedAt, updatedAt, resumeUsed },
+            application: {
+              id: record.id, title, company, role, status, jobUrl, location, appliedAt, updatedAt, resumeUsed,
+              salaryMin, salaryMax, salaryCurrency, salaryPeriod
+            },
+            notes: record.notes ?? "",
             jobDescription: record.jobDescription,
             resume: resume?.value ?? null,
             coverLetter: coverLetter?.value ?? null,

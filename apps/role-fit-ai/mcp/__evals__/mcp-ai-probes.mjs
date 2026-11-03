@@ -15,6 +15,8 @@
 // the provider, model and effort that ran (`providerRun`); polish_resume's
 // `apply` returns exactly what apply_resume_edits would; draft_answer answers
 // against a passed brief, so a record without one can still be answered.
+// Given a record id, assess_fit and both polishes read its job text, company,
+// role, saved documents and Fit snapshot unless the call passes its own.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
@@ -278,6 +280,55 @@ const aiCalls = () => calls.filter(({ path }) => !["/api/workspace/preferences",
   reply["/api/cover-polish"] = () => json(422, { error: "Polish blocked.", status: "blocked", issues: [{ code: "unsupported-claim", message: "An unsupported claim.", excerpt: "x" }], reasons: ["x"] });
   const blocked = await call("polish_cover_letter", { coverLetter: { sourceText: coverSource }, resume: { sourceText: resumeSource }, jobDescription: brief, details: { company: "Acme", role: "Engineer" } });
   assert.equal(blocked.ok, false);
+}
+
+// Given a record id, assess_fit and both polishes default to its posting or
+// brief, company, role, saved documents and Fit snapshot; passed arguments win.
+{
+  reply["/api/job-analysis"] = () => json(200, { fitAssessment: fitResult });
+  calls.length = 0;
+  const assessed = await call("assess_fit", { id: "a1" });
+  assert.equal(assessed.ok, true, JSON.stringify(assessed.value));
+  assert.equal(aiCalls()[0].body.text, posting, "Fit reads the record's posting, not its brief");
+  assert.equal(aiCalls()[0].body.resumeText, resumeText, "the record's saved resume");
+  assert.equal(assessed.value.fitAssessment.resumeLabel, "resume.resume");
+  calls.length = 0;
+  await call("assess_fit", { id: "a1", jobText: "A passed posting for another version of the job." });
+  assert.equal(aiCalls()[0].body.text, "A passed posting for another version of the job.");
+  assert.match((await call("assess_fit", { id: "b2" })).value.error, /no posting \(rawJobDescription\); pass `jobText`/);
+  assert.match((await call("assess_fit", { id: "b2", jobText: posting })).value.error, /no saved \.resume source; pass `resume`/, "a Draft has no saved documents");
+  assert.match((await call("assess_fit", { id: "zz" })).value.error, /No application has id zz/);
+  assert.match((await call("assess_fit", {})).value.error, /^jobText: required/);
+
+  records[0].fitAssessment = { result: fitResult, resumeLabel: "Base resume" };
+  calls.length = 0;
+  const polished = await call("polish_resume", { id: "a1" });
+  assert.equal(polished.ok, true, JSON.stringify(polished.value));
+  assert.equal(aiCalls()[0].body.jobText, brief);
+  assert.equal(aiCalls()[0].body.fitFindings.earlierVersion, true, "the record's Fit snapshot");
+  calls.length = 0;
+  await call("polish_resume", { id: "a1", jobDescription: `${brief} Passed.` });
+  assert.equal(aiCalls()[0].body.jobText, `${brief} Passed.`);
+  assert.equal(aiCalls()[0].body.fitFindings, undefined, "the record's snapshot assessed another job text, as the app drops it");
+  delete records[0].fitAssessment;
+  assert.match((await call("polish_resume", { id: "b2" })).value.error, /job brief \(jobDescription\) is missing .* pass `jobDescription`/);
+  assert.match((await call("polish_resume", {})).value.error, /^jobDescription: the job brief is required/);
+
+  reply["/api/cover-polish"] = () => json(200, {
+    status: "ready", coverLetterText: "Dear Acme Hiring Team,\n\nI build reliable Python services.\n\nSincerely,\nSynthetic Applicant",
+    bodyParagraphs: ["I build reliable Python services."], evidenceUsed: ["resume-1"], warnings: [], concerns: []
+  });
+  calls.length = 0;
+  const letter = await call("polish_cover_letter", { id: "a1" });
+  assert.equal(letter.value.status, "ready", JSON.stringify(letter.value));
+  const sent = aiCalls()[0].body;
+  assert.equal(sent.jobText, brief);
+  assert.deepEqual([sent.resolvedContext.company, sent.resolvedContext.role], ["Acme", "Backend Engineer"], "no needs-input for facts the record has");
+  calls.length = 0;
+  await call("polish_cover_letter", { id: "a1", role: "Platform Engineer" });
+  assert.equal(aiCalls()[0].body.resolvedContext.role, "Platform Engineer", "a passed role wins");
+  const draft = await call("polish_cover_letter", { id: "b2", jobDescription: brief, resume: { fileName: "default.resume" } });
+  assert.match(draft.value.error, /no saved \.cover source; pass `coverLetter`/);
 }
 
 // draft_answer: the record's sources, a checked revision.

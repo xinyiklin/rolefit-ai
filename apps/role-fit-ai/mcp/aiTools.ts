@@ -64,7 +64,8 @@ import {
   type ReadDocument,
   type RoleFitClient,
   type Tool,
-  type ToolResult
+  type ToolResult,
+  type TrackerRecord
 } from "./client.ts";
 
 // A provider run can take minutes (one CLI attempt may take four, and Fit retries).
@@ -97,6 +98,11 @@ const documentInput = (noun: string, extension: string, lister: string) => ({
   }
 });
 
+const recordInput = (defaults: string) => ({
+  type: "string",
+  description: `A tracker record id (search_applications). ${defaults} default to the record's; anything you pass wins.`
+});
+
 const resumeConcernsInput = {
   type: "array",
   items: { type: "string" },
@@ -125,6 +131,10 @@ function providerRun(body: unknown, fields: ReturnType<typeof buildStageRequestF
     ...(typeof value.attempts === "number" && Number.isFinite(value.attempts) ? { attempts: Math.max(1, Math.min(9, Math.round(value.attempts))) } : {})
   };
 }
+
+const briefRequired = (passed: unknown, record: TrackerRecord | null) => passed === undefined && record
+  ? "This record's job brief (jobDescription) is missing or under 40 characters; pass `jobDescription` from analyze_job."
+  : "jobDescription: the job brief is required (at least 40 characters).";
 
 const PROVIDER_RUN_NOTE = " `providerRun` names the provider, model and effort that ran.";
 
@@ -176,6 +186,19 @@ export function createAiTools(client: RoleFitClient): Tool[] {
     if (!text.ok) return text;
     const named = typeof label === "string" && label.trim() ? label.trim() : `${kind}.${kind}`;
     return { fileName: named, label: named, text: text.value as string, sourceText };
+  }
+
+  async function savedRecord(id: unknown): Promise<TrackerRecord | ToolResult | null> {
+    return id === undefined ? null : client.getApplication(id);
+  }
+
+  // The document passed, else the editable source saved on the record.
+  async function documentOrSaved(kind: DocumentKind, input: unknown, name: string, record: TrackerRecord | null): Promise<ReadDocument | ToolResult> {
+    if (input !== undefined || !record) return readDocument(kind, input, name);
+    const saved = await client.applicationDocument(record.id, kind, kind === "resume" ? record.resumeArtifacts : record.coverLetterArtifacts);
+    if (saved && !saved.ok) return saved;
+    const document = saved?.value as Partial<ReadDocument> | undefined;
+    return document?.sourceText ? document as ReadDocument : fail(`This record has no saved .${kind} source; pass \`${name}\`.`);
   }
 
   let providerRuns = 0;
@@ -330,21 +353,26 @@ export function createAiTools(client: RoleFitClient): Tool[] {
         "model and effort that ran." + RUNS_PROVIDER,
       inputSchema: {
         type: "object",
-        required: ["jobText", "resume"],
         additionalProperties: false,
         properties: {
+          id: recordInput("The posting (rawJobDescription) and saved resume"),
           jobText: { type: "string", description: "The raw posting text (rawJobDescription), not the brief." },
           resume: documentInput("resume", "resume", "list_resumes")
         }
       },
-      async run({ jobText, resume }, signal) {
-        if (typeof jobText !== "string" || !jobText.trim()) return fail("jobText: required posting text");
-        const document = await readDocument("resume", resume, "resume");
+      async run({ id, jobText, resume }, signal) {
+        const record = await savedRecord(id);
+        if (isToolResult(record)) return record;
+        const posting = jobText ?? record?.rawJobDescription;
+        if (typeof posting !== "string" || !posting.trim()) {
+          return fail(jobText === undefined && record ? "This record has no posting (rawJobDescription); pass `jobText`." : "jobText: required posting text");
+        }
+        const document = await documentOrSaved("resume", resume, "resume", record);
         if (isToolResult(document)) return document;
         const context = await stage("fit-assessment");
         if (isToolResult(context)) return context;
         const assessed = await post("/api/job-analysis", {
-          text: jobText,
+          text: posting,
           mode: "fit-assessment",
           resumeText: document.text,
           candidateContext: context.candidateContext,
@@ -383,9 +411,9 @@ export function createAiTools(client: RoleFitClient): Tool[] {
         PROVIDER_RUN_NOTE + RUNS_PROVIDER,
       inputSchema: {
         type: "object",
-        required: ["resume", "jobDescription"],
         additionalProperties: false,
         properties: {
+          id: recordInput("The job brief, saved resume and (with the record's brief) Fit Assessment snapshot"),
           resume: documentInput("resume", "resume", "list_resumes"),
           jobDescription: { type: "string", description: "The job brief from analyze_job (or the record's jobDescription)." },
           fitAssessment: { type: "object", description: "A fitAssessment snapshot from assess_fit or a record, for the same posting." },
@@ -396,18 +424,23 @@ export function createAiTools(client: RoleFitClient): Tool[] {
           }
         }
       },
-      async run({ resume, jobDescription, fitAssessment, resumeConcerns, apply }, signal) {
-        if (typeof jobDescription !== "string" || jobDescription.trim().length < 40) return fail("jobDescription: the job brief is required (at least 40 characters).");
+      async run({ id, resume, jobDescription, fitAssessment, resumeConcerns, apply }, signal) {
         if (apply !== undefined && apply !== "all" && !(Array.isArray(apply) && apply.length && apply.every((id) => typeof id === "string"))) {
           return fail("apply: \"all\" or a list of suggestion ids.");
         }
         const concerns = textList(resumeConcerns, "resumeConcerns");
         if (isToolResult(concerns)) return concerns;
-        const document = await readDocument("resume", resume, "resume");
+        const record = await savedRecord(id);
+        if (isToolResult(record)) return record;
+        const jobText = jobDescription ?? record?.jobDescription;
+        if (typeof jobText !== "string" || jobText.trim().length < 40) return fail(briefRequired(jobDescription, record));
+        const document = await documentOrSaved("resume", resume, "resume", record);
         if (isToolResult(document)) return document;
         let fitResult = null;
-        if (fitAssessment !== undefined) {
-          fitResult = sanitizeFitAssessment((fitAssessment as { result?: unknown } | null)?.result);
+        // The record's snapshot assessed the record's posting, so it rides only with the record's brief.
+        const snapshot = fitAssessment ?? (jobDescription === undefined ? record?.fitAssessment : undefined);
+        if (snapshot !== undefined) {
+          fitResult = sanitizeFitAssessment((snapshot as { result?: unknown } | null)?.result);
           if (!fitResult) return fail("fitAssessment: must be a snapshot from assess_fit or a saved record.");
         }
         const context = await stage("resume-polish");
@@ -423,7 +456,7 @@ export function createAiTools(client: RoleFitClient): Tool[] {
           ...context.fields,
           mode: "resume-proposal",
           resumeScope: scope,
-          jobText: jobDescription,
+          jobText,
           candidateContext: context.candidateContext,
           ...(fitFindings ? { fitFindings } : {}),
           sourceWarnings: concerns.length ? [RESUME_POLISH_SOURCE_WARNING] : undefined,
@@ -444,7 +477,7 @@ export function createAiTools(client: RoleFitClient): Tool[] {
         }
         if (wire.status === "PROPOSAL" && !suggestions.length) return fail("Resume Polish returned no usable proposal edits.");
         const proposalId = randomUUID();
-        const terminology = jobTerminology(jobDescription);
+        const terminology = jobTerminology(jobText);
         const supportedText = flattenResumeTargets(scope).map((target) => target.currentText).join("\n");
         const proposal: ResumeProposal = {
           resume: parsed,
@@ -525,9 +558,9 @@ export function createAiTools(client: RoleFitClient): Tool[] {
         "submit." + PROVIDER_RUN_NOTE + RUNS_PROVIDER,
       inputSchema: {
         type: "object",
-        required: ["coverLetter", "resume", "jobDescription"],
         additionalProperties: false,
         properties: {
+          id: recordInput("The job brief, company, role, and saved cover letter and resume"),
           coverLetter: documentInput("current cover letter", "cover", "list_cover_letters"),
           resume: documentInput("resume the letter draws on", "resume", "list_resumes"),
           jobDescription: { type: "string", description: "The job brief from analyze_job (or the record's jobDescription)." },
@@ -539,8 +572,7 @@ export function createAiTools(client: RoleFitClient): Tool[] {
           coverConcerns: { type: "array", items: { type: "string" }, description: "The `concerns` of an earlier polish_cover_letter result this letter came from." }
         }
       },
-      async run({ coverLetter, resume, jobDescription, company, role, details, slotAnswers, resumeConcerns, coverConcerns }, signal) {
-        if (typeof jobDescription !== "string" || jobDescription.trim().length < 40) return fail("jobDescription: the job brief is required (at least 40 characters).");
+      async run({ id, coverLetter, resume, jobDescription, company, role, details, slotAnswers, resumeConcerns, coverConcerns }, signal) {
         for (const [name, value] of Object.entries({ company, role })) {
           if (value !== undefined && typeof value !== "string") return fail(`${name}: must be a string`);
         }
@@ -553,9 +585,13 @@ export function createAiTools(client: RoleFitClient): Tool[] {
         if (isToolResult(resumeNotes)) return resumeNotes;
         const letterNotes = textList(coverConcerns, "coverConcerns");
         if (isToolResult(letterNotes)) return letterNotes;
-        const letter = await readDocument("cover", coverLetter, "coverLetter");
+        const record = await savedRecord(id);
+        if (isToolResult(record)) return record;
+        const jobText = jobDescription ?? record?.jobDescription;
+        if (typeof jobText !== "string" || jobText.trim().length < 40) return fail(briefRequired(jobDescription, record));
+        const letter = await documentOrSaved("cover", coverLetter, "coverLetter", record);
         if (isToolResult(letter)) return letter;
-        const resumeDocument = await readDocument("resume", resume, "resume");
+        const resumeDocument = await documentOrSaved("resume", resume, "resume", record);
         if (isToolResult(resumeDocument)) return resumeDocument;
         const context = await stage("cover-polish");
         if (isToolResult(context)) return context;
@@ -569,8 +605,8 @@ export function createAiTools(client: RoleFitClient): Tool[] {
             stripInlineMarks(current.data.header?.name ?? "").trim() ? current.data.header?.name : resumeData.header?.name,
             resumeDocument.text
           ),
-          role: role as string | undefined,
-          company: company as string | undefined,
+          role: (role as string | undefined) ?? (record?.role || undefined),
+          company: (company as string | undefined) ?? (record?.company || undefined),
           values,
           slotAnswers: answers
         });
@@ -606,7 +642,7 @@ export function createAiTools(client: RoleFitClient): Tool[] {
         const polished = await post("/api/cover-polish", {
           ...context.fields,
           sourceCoverLetterText: letter.text.trim(),
-          jobText: jobDescription,
+          jobText,
           customInstructions: context.customInstructions,
           sourceWarnings,
           detailValues: values,
@@ -710,18 +746,8 @@ export function createAiTools(client: RoleFitClient): Tool[] {
         if (isToolResult(record)) return record;
         const jobText = (jobDescription as string | undefined) ?? record.jobDescription ?? "";
         if (!jobText.trim()) return fail("This record has no job brief (jobDescription) to answer against; pass `jobDescription` from analyze_job.");
-        let resumeText: string;
-        if (resume !== undefined) {
-          const document = await readDocument("resume", resume, "resume");
-          if (isToolResult(document)) return document;
-          resumeText = document.text;
-        } else {
-          const saved = await client.applicationDocument(record.id, "resume", record.resumeArtifacts);
-          if (saved && !saved.ok) return saved;
-          const text = (saved?.value as { text?: string } | undefined)?.text;
-          if (!text) return fail("This record has no saved .resume source; pass `resume`.");
-          resumeText = text;
-        }
+        const document = await documentOrSaved("resume", resume, "resume", record);
+        if (isToolResult(document)) return document;
         const context = await stage("application-answers");
         if (isToolResult(context)) return context;
         const turn = {
@@ -741,7 +767,7 @@ export function createAiTools(client: RoleFitClient): Tool[] {
           refinement,
           clarification,
           explicitFacts,
-          resumeText,
+          resumeText: document.text,
           jobText,
           rawJobText: record.rawJobDescription ?? "",
           candidateContext: context.candidateContext,
