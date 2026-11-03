@@ -33,6 +33,9 @@ recorded here; see `docs/git-workflow.md`). Release history:
   main bundle fell 5.8 → 0.5 MB and a two-page resume's first page paints in
   290 ms instead of 715 (production, cold). Open: exercise RoleFit's editor and
   exports in a browser; only its build and offline suite were run.
+- 2026-11-03 [USER] 0.26.0: tag `rolefit-preview-v0.26.0-beta.1` once the
+  release PR merges (agent changes #294/#295; extension stays 1.5.3, desktop
+  API 13) and confirm the workflow (it runs the native smokes).
 - 2026-11-03 [USER] Open for the user: a structured pipeline-block reason
   (captcha, sign-in wall, dead posting). Drafts have no timeline, so it needs a
   stored-data change and a release; until then block reasons stay in notes.
