@@ -149,6 +149,11 @@ const call = async (name, args) => (await rpc("tools/call", { name, arguments: a
   assert.deepEqual(statusSchema.properties.documents.properties, commitSchema.properties.documents.properties, "one documents shape");
   assert.match(listed.find((tool) => tool.name === "update_application_status").description, /first submission .* must send documents/);
   assert.match(listed.find((tool) => tool.name === "commit_application").description, /applied commit must include documents\.resume/);
+  for (const name of ["commit_application", "update_application_status"]) {
+    const tool = listed.find((item) => item.name === name);
+    assert.deepEqual(tool.inputSchema.properties.resumeNotRequested.const, true, `${name} takes the cover-only attestation (D105)`);
+    assert.match(tool.description, /resumeNotRequested: true with/);
+  }
 }
 
 // search_applications.

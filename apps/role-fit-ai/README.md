@@ -706,9 +706,10 @@ another port; only loopback origins are accepted. Tools:
   tracker write until `applications.json` is repaired or a backup restored.
 - `get_application` — one record in full: notes, answers, Fit snapshot,
   timeline, and saved documents.
-- `commit_application` — one Applied record with its `.resume` (required) and
-  optional `.cover` sources, a Skipped record, or a Draft without documents,
-  saved atomically. A value the
+- `commit_application` — one Applied record with its `.resume` and optional
+  `.cover` sources (or, with `resumeNotRequested: true` when the employer did
+  not ask for a resume, its `.cover` alone), a Skipped record, or a Draft
+  without documents, saved atomically. A value the
   tracker would drop, clip, or normalize refuses the whole commit with
   field-level `issues`. A posting that matches a saved record is refused with
   the matches until the agent lists their ids in `acknowledgedDuplicates`.
@@ -720,8 +721,8 @@ another port; only loopback origins are accepted. Tools:
 - `update_application_status` — a stage change, applied by the server with the
   same history entry the tracker row's stage menu adds. A first submission (a
   Draft or a job-only Skip moving to a submitted stage) must send the `.resume`
-  that was sent, plus any `.cover` and `resumeUsed`; the stage and documents
-  save together.
+  that was sent, plus any `.cover` and `resumeUsed`, or the `.cover` alone with
+  `resumeNotRequested: true`; the stage and documents save together.
 - `update_application` — repair a saved record: set its job brief, posting,
   Fit snapshot, notes, or `resumeUsed`, and attach a `.resume` or `.cover` a
   submitted record never received. Values are stored exactly as sent or

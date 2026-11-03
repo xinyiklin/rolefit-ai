@@ -54,16 +54,18 @@ for provider, prompt, sanitizer, and review work.
   transaction; the focused document, attachment, and tracker route modules own
   only their HTTP workflows. `commitService.ts` owns the atomic agent commit
   (record + editable sources, folder removed if the tracker write fails; a
-  Draft carries no dates or documents and an Applied commit needs its resume;
+  Draft carries no dates or documents and an Applied commit needs its resume,
+  or its cover letter with `resumeNotRequested`;
   the tracker's duplicate matcher refuses unacknowledged matches under the
-  lock; a dry run stops before any write, D100, D101) and
+  lock; a dry run stops before any write, D100, D101, D105) and
   `statusService.ts` the server-side stage change, which shares the row menu's
   `stageMenuMoveAllowed` and `withStatusChange` and saves a first submission's
-  documents (validated by the commit's `commitDocuments`, resume required)
-  and optional `resumeUsed` with the stage, restoring the files if the
-  tracker write fails (D101, D103). A same-stage request changes nothing (the
-  safe retry after a lost reply) but still validates its date and refuses
-  documents on a record with no saved resume, and a stage move never invents
+  documents (validated by the commit's `commitDocuments` and
+  `submittedDocumentsIssue`) and optional `resumeUsed` with the stage,
+  restoring the files if the tracker write fails (D101, D103, D105). A
+  same-stage request changes nothing (the safe retry after a lost reply) but
+  still validates its date and refuses a document the record has not saved,
+  and a stage move never invents
   `appliedAt`: only a first submission from Draft or a job-only Skip is dated
   when written; `updateService.ts` owns the agent's
   field-level record repair (job snapshot, notes, `resumeUsed`, and a

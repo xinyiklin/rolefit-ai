@@ -682,7 +682,7 @@ later entry wins.
   and server-side PDF rendering are undecided.
   (D103: field-level updates, a missing document on a submitted record, and
   PDF rendering are decided.)
-- 2026-10-26 [USER+CODE+TOOL] D101 AMENDED by D102: **An agent-recorded submission
+- 2026-10-26 [USER+CODE+TOOL] D101 AMENDED by D102, D105: **An agent-recorded submission
   always carries its resume.** `POST /api/applications/commit` refuses
   `status: "applied"` without `documents.resume`. `POST
   /api/applications/<id>/status` accepts `documents` (the commit's shape and
@@ -696,7 +696,8 @@ later entry wins.
   answer per question across records; no separate answers library), and
   `get_candidate_profile` over existing routes, with no server change. The
   user chose this after an agent's gap review (2026-10-24); AI stages over MCP
-  and server-side PDF rendering remain undecided.
+  and server-side PDF rendering remain undecided. (D105: a submission whose
+  employer asked for no resume carries its cover letter instead.)
 - 2026-10-26 [USER+CODE+TOOL] D102 AMENDED by D103: **RoleFit's AI stages are MCP
   tools that save nothing.** `analyze_job`, `assess_fit`, `polish_resume`
   with `apply_resume_edits`, `polish_cover_letter`, `draft_answer`, and
@@ -795,6 +796,22 @@ later entry wins.
   only (the MCP server reports 1.3.0); the server, schema, and prompts are
   unchanged. Left open: a structured
   block reason for Drafts, which would change stored data.
+- 2026-11-03 [USER+CODE+TOOL] D105 ACTIVE: **An agent-recorded submission
+  carries its resume, or its cover letter when the employer asked for no
+  resume.** A live run had to store a resume that was never sent to mark a
+  cover-only application applied, while the UI's Apply may already exclude the
+  resume; the user chose this amendment of D101 from the same proposals as
+  D104 (2026-11-03). `POST /api/applications/commit` (Applied only) and a first
+  submission on `POST /api/applications/<id>/status` accept
+  `resumeNotRequested: true`, which requires `documents.cover` and refuses a
+  `.resume` or `resumeUsed` alongside it; without it the resume is still
+  required, so no submission saves without a document. The flag is an
+  attestation of the request, not stored: the record matches a UI Apply that
+  excluded the resume, so the tracker schema is unchanged. A same-stage retry
+  now refuses only a document kind the record lacks, so a cover-only record
+  retries safely. One check (`submittedDocumentsIssue` in `commitService.ts`)
+  serves both routes; MCP `commit_application` and
+  `update_application_status` take the flag.
 
 ### Extension
 

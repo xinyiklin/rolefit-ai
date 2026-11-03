@@ -37,7 +37,7 @@ import {
 
 export const COMMIT_STATUSES = ["applied", "not_applying", "draft"] as const;
 export const MAX_ACKNOWLEDGED_DUPLICATES = 100;
-const COMMIT_FIELDS = ["application", "documents", "dryRun", "acknowledgedDuplicates"];
+const COMMIT_FIELDS = ["application", "documents", "dryRun", "acknowledgedDuplicates", "resumeNotRequested"];
 
 // The server assigns identity, revisions and file metadata; posting groups and
 // history are separate, revision-checked mutations of existing records.
@@ -122,6 +122,18 @@ export function commitDocuments(raw: unknown, issues: string[]): CommitDocument[
   return documents;
 }
 
+// A submission records what was sent: its resume, or its cover letter when the
+// employer did not ask for a resume (D105). `sent` names the documents sent.
+export function submittedDocumentsIssue(subject: string, sent: readonly { kind: string }[], resumeNotRequested: boolean, hasResumeUsed: boolean) {
+  const has = (kind: string) => sent.some((document) => document.kind === kind);
+  if (!resumeNotRequested) {
+    return has("resume") ? null : `documents.resume: ${subject} needs the .resume source that was sent, or resumeNotRequested: true when the employer did not ask for one`;
+  }
+  if (has("resume")) return "resumeNotRequested: a .resume was sent; omit resumeNotRequested";
+  if (hasResumeUsed) return "resumeUsed: no resume was sent; omit it";
+  return has("cover") ? null : `documents.cover: ${subject} without a resume needs the .cover source that was sent`;
+}
+
 // The tracker keeps skip reasons in one canonical order; a list that differs
 // only in order is reordered, while an unknown or repeated reason stays as sent
 // so the strict check names it.
@@ -175,8 +187,12 @@ function prepareCommit(body: unknown, now: string) {
   if (status === "draft" && documents.length) {
     issues.push("documents: a Draft cannot store application documents");
   }
-  if (status === "applied" && !(isObject(body.documents) && Object.hasOwn(body.documents, "resume"))) {
-    issues.push("documents.resume: an Applied commit needs the .resume source that was sent");
+  if (body.resumeNotRequested !== undefined && (body.resumeNotRequested !== true || status !== "applied")) {
+    issues.push("resumeNotRequested: send true, and only with an Applied commit whose employer did not ask for a resume");
+  } else if (status === "applied") {
+    const sent = isObject(body.documents) ? Object.keys(body.documents).map((kind) => ({ kind })) : [];
+    const issue = submittedDocumentsIssue("an Applied commit", sent, body.resumeNotRequested === true, application.resumeUsed !== undefined);
+    if (issue) issues.push(issue);
   }
   if (issues.length) throw new ApplicationCommitError(issues);
 

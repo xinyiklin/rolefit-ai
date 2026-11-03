@@ -230,7 +230,8 @@ try {
   for (const payload of [{ application }, { application, dryRun: true }, { application, documents: { cover: { sourceText: coverSource } } }]) {
     const res = await commit(payload);
     assert.equal(res.status, 400, res.chunk);
-    assert.deepEqual(res.json.issues, ["documents.resume: an Applied commit needs the .resume source that was sent"]);
+    assert.equal(res.json.issues.length, 1);
+    assert.match(res.json.issues[0], /^documents\.resume: an Applied commit needs the \.resume source that was sent, or resumeNotRequested: true/);
   }
   assert.equal(await trackerText(), before, "an Applied commit without a resume writes nothing");
 
@@ -303,6 +304,45 @@ try {
     const badDate = await changeStatus(saved.id, { status: "applied", date: "1999-01-01" });
     assert.equal(badDate.status, 400, badDate.chunk);
     assert.match(badDate.json.error, /^date: must fall between/);
+  }
+
+  // D105: a submission whose employer asked for no resume saves its cover letter only.
+  {
+    const coverOnly = { cover: { sourceText: coverSource } };
+    const job = { ...application, title: "Writer at Letter Co", company: "Letter Co", role: "Writer", jobUrl: "https://letter.example.test/jobs/1", resumeUsed: undefined };
+    const before = await trackerText();
+    for (const [payload, expected] of [
+      [{ application: job, documents: coverOnly }, /^documents\.resume: an Applied commit needs .* or resumeNotRequested: true/],
+      [{ application: job, resumeNotRequested: true }, /^documents\.cover: an Applied commit without a resume needs/],
+      [{ application: job, resumeNotRequested: true, documents: { ...resumeOnly, ...coverOnly } }, /^resumeNotRequested: a \.resume was sent/],
+      [{ application: { ...job, resumeUsed: "base" }, resumeNotRequested: true, documents: coverOnly }, /^resumeUsed: no resume was sent/],
+      [{ application: job, resumeNotRequested: false, documents: resumeOnly }, /^resumeNotRequested: send true/],
+      [{ application: { ...job, status: "draft" }, resumeNotRequested: true }, /^resumeNotRequested: send true, and only with an Applied commit/]
+    ]) {
+      const res = await commit(payload);
+      assert.equal(res.status, 400, res.chunk);
+      assert.ok(res.json.issues.some((issue) => expected.test(issue)), `${expected} not in ${JSON.stringify(res.json.issues)}`);
+    }
+    assert.equal(await trackerText(), before, "refused cover-only commits write nothing");
+    const res = await commit({ application: job, resumeNotRequested: true, documents: coverOnly });
+    assert.equal(res.status, 201, res.chunk);
+    const saved = res.json.application;
+    assert.equal(saved.resumeArtifacts, undefined);
+    assert.equal(saved.coverLetterArtifacts.fileName, "cover.cover");
+    assert.equal(saved.resumeNotRequested, undefined, "the attestation is not stored");
+    assert.deepEqual(strictApplicationIssues(JSON.parse(JSON.stringify(saved))).issues, []);
+    assert.equal((await changeStatus(saved.id, { status: "applied", documents: coverOnly })).json.changed, false, "a retry with the saved cover changes nothing");
+    assert.match((await changeStatus(saved.id, { status: "applied", documents: resumeOnly })).json.error, /^documents: this record is already applied and has no saved resume/);
+
+    const draft = (await commit({ application: { ...job, status: "draft", company: "Quill Co", title: "Writer at Quill Co", jobUrl: "https://quill.example.test/jobs/2" } })).json.application;
+    assert.match((await changeStatus(draft.id, { status: "applied", resumeNotRequested: true })).json.error, /^documents\.cover: a first submission without a resume needs/);
+    assert.match((await changeStatus(draft.id, { status: "not_applying", resumeNotRequested: true })).json.error, /^resumeNotRequested: only a first submission/);
+    assert.match((await changeStatus(draft.id, { status: "applied", resumeNotRequested: "yes", documents: coverOnly })).json.error, /^resumeNotRequested: send true/);
+    assert.match((await changeStatus(draft.id, { status: "applied", resumeNotRequested: true, resumeUsed: "base", documents: coverOnly })).json.error, /^resumeUsed: no resume was sent/);
+    const submitted = await changeStatus(draft.id, { status: "applied", resumeNotRequested: true, documents: coverOnly });
+    assert.equal(submitted.status, 200, submitted.chunk);
+    assert.equal(submitted.json.application.resumeArtifacts, undefined);
+    assert.equal(submitted.json.application.coverLetterArtifacts.fileName, "cover.cover");
   }
 
   // A failed tracker write removes the document folder it created.

@@ -150,3 +150,6 @@ recorded here; see `docs/git-workflow.md`). Release history:
   and both polishes take a record `id`, `search_applications` takes
   `requisitionId`, and `get_submission_package` adds notes and pay. MCP only.
   Not run: an agent client and live providers.
+- [USER+CODE+TOOL] **Cover-only agent submissions** (D105, amends D101):
+  `resumeNotRequested: true` lets a commit or first submission save its
+  `.cover` alone; the flag is not stored. Not run: an agent client.
