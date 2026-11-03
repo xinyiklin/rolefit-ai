@@ -97,8 +97,8 @@ export async function changeApplicationStatus(workspaceDir: string, id: string, 
     }
     if (current.status === nextStatus) {
       // Setting the current stage again is the safe retry after a lost reply:
-      // the documents it carries are already saved. Documents for a record
-      // that has none are not silently dropped.
+      // the documents it carries are already saved. A document kind the record
+      // lacks is refused, never silently dropped.
       const unsaved = documents.find(({ kind }) => !(kind === "resume" ? current.resumeArtifacts : current.coverLetterArtifacts));
       if (unsaved) {
         throw new ApplicationsStorageError(
