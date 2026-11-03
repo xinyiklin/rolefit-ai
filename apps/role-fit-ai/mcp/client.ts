@@ -43,6 +43,11 @@ export type TrackerRecord = DuplicateCandidate & {
   jobDescription?: string;
   rawJobDescription?: string;
   resumeUsed?: string;
+  notes?: string;
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  salaryCurrency?: string;
+  salaryPeriod?: string;
   fitAssessment?: unknown;
   applicationAnswers?: SavedAnswer[];
   resumeArtifacts?: DocumentArtifacts;

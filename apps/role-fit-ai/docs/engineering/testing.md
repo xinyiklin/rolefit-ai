@@ -909,6 +909,12 @@ Good server verification covers:
   refused) and checks answer origin and unreadable-record reporting;
   `mcp-ai-probes.mjs` checks `providerRun`, `polish_resume`'s `apply`, and
   `draft_answer`'s passed brief
+- agent record defaults (D104): `mcp-ai-probes.mjs` checks that `assess_fit`
+  and both polishes read a record's posting or brief, company, role, saved
+  documents and Fit snapshot, that passed arguments win, and that a missing
+  default names the argument to pass; `mcp-probes.mjs` checks
+  `requisitionId` search (posting text and every ATS job or source URL,
+  punctuation ignored, no prefix match) and the package's notes and pay range
 - routine AI logs remain shape-only and exclude model-authored target IDs,
   free-form error text, provider bodies, and private prompt content
 

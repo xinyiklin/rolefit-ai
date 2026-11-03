@@ -775,6 +775,26 @@ later entry wins.
   in-app repair or delete action for an invalid record (repair is still a file
   edit or backup restore), replacing a saved document, persisting proposals
   across MCP restarts beyond `apply`, and choosing a provider per tool call.
+- 2026-11-03 [USER+CODE+TOOL] D104 ACTIVE: **The AI-stage tools read a
+  record's defaults, search finds requisition ids, and the submission package
+  carries notes and pay.** The user chose these from an agent's five pipeline
+  proposals (2026-11-03). `assess_fit`, `polish_resume`, and
+  `polish_cover_letter` take an optional record `id`, as `draft_answer` does:
+  an omitted posting (Fit reads `rawJobDescription`), brief (`jobDescription`),
+  company and role (the letter's), saved `.resume`/`.cover` source, and Fit
+  snapshot (`polish_resume`, only with the record's brief, as the app drops Fit
+  findings when the job text changes) come from the record; passed arguments
+  win, and a
+  missing default is refused naming the argument to pass (a Draft has no saved
+  documents). `search_applications` adds `requisitionId`, compared on letters
+  and digits with the id `requisitionIdFromText` finds in the record's posting
+  or brief and the job id in its ATS job or source URLs; `company` and `query` stay text
+  filters without aliases, and the description steers duplicate sweeps to
+  `posting` or `requisitionId`. `get_submission_package` adds `notes` and the
+  record's `salaryMin`, `salaryMax`, `salaryCurrency`, and `salaryPeriod`. MCP
+  only (the MCP server reports 1.3.0); the server, schema, and prompts are
+  unchanged. Left open: a structured
+  block reason for Drafts, which would change stored data.
 
 ### Extension
 

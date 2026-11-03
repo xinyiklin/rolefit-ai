@@ -699,7 +699,9 @@ Set `ROLEFIT_URL` (default `http://127.0.0.1:5181`) when the companion uses
 another port; only loopback origins are accepted. Tools:
 
 - `search_applications` — duplicate check with the tracker's own matcher,
-  plus company, text, and stage filters. Records RoleFit cannot read safely
+  plus company, text, requisition-id, and stage filters. The company and text
+  filters match text only (no aliases), so a duplicate sweep uses the matcher
+  or a requisition id. Records RoleFit cannot read safely
   are listed in `invalidRecords`; while any exists, RoleFit refuses every
   tracker write until `applications.json` is repaired or a backup restored.
 - `get_application` — one record in full: notes, answers, Fit snapshot,
@@ -730,8 +732,8 @@ another port; only loopback origins are accepted. Tools:
   — the saved base resumes and cover letters, each as its `.resume`/`.cover`
   source and the plain text RoleFit reads.
 - `get_submission_package` — one application's saved resume and cover letter
-  (text and source), newest answers, Fit snapshot, and job brief, with a
-  `missing` list.
+  (text and source), newest answers, Fit snapshot, job brief, notes, and pay
+  range, with a `missing` list.
 - `get_answers` — the newest saved answer to each question across every
   application, searchable by words and company, with the application it came
   from, when it was saved, and its `origin` (an answer saved with RoleFit's
@@ -752,7 +754,11 @@ names the provider, model, and effort that ran. Pass the
 `concerns`, to later stages as `resumeConcerns` and `coverConcerns`, so they
 know that wording is unverified, as the app does. A resume sent as source is
 read as the candidate's own evidence, so it should be a saved resume or
-`apply_resume_edits` output:
+`apply_resume_edits` output. `assess_fit`, `polish_resume`,
+`polish_cover_letter`, and `draft_answer` take a record `id`: the record's
+posting or brief, company, role, saved documents, and (for `polish_resume`
+with the record's brief) Fit snapshot fill whatever the call leaves out. A Draft has no saved
+documents, so its resume and letter are still passed:
 
 - `analyze_job` — the job brief from a posting, with the local extractor as
   fallback.
