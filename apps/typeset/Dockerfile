@@ -1,7 +1,7 @@
 # Builds the Typeset editor (apps/typeset) from the workspace root. The build
 # context is the repository root because npm workspaces resolve from the root
 # manifest and lockfile.
-FROM node:24.22.1-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS build
+FROM node:24.22.2-alpine@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8 AS build
 
 WORKDIR /repo
 
@@ -29,7 +29,7 @@ COPY packages/editor packages/editor
 COPY apps/typeset apps/typeset
 RUN npm run build --workspace apps/typeset
 
-FROM nginxinc/nginx-unprivileged:1.31.3-alpine@sha256:59ccf0943b0b8e8d9e6ea9039a39555730f544701a655c596f7df7d096c593f5
+FROM nginxinc/nginx-unprivileged:1.31.7-alpine@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e
 
 COPY --from=build /repo/apps/typeset/dist /usr/share/nginx/html
 COPY apps/typeset/nginx.conf /etc/nginx/conf.d/default.conf
