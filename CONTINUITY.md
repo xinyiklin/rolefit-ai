@@ -148,3 +148,12 @@ recorded here; see `docs/git-workflow.md`). Release history:
 - [USER+CODE+TOOL] **Cover-only agent submissions** (D105, amends D101):
   `resumeNotRequested: true` lets a commit or first submission save its
   `.cover` alone; the flag is not stored. Not run: an agent client.
+
+## 2026-11-19
+
+- [USER+CODE+TOOL] **0.26.0 prepared** (minor: #294, #295, #297's catalog and
+  default change). Extension 1.5.3 and desktop API 13 unchanged. 0.25.0 refuses
+  preferences and backups naming the new models (probed); the notes say so.
+  macOS arm64, Node 24.22.1: release contract 14/14, native package built. Not
+  valid yet: app check, Electron dev smoke, packaged smoke (the Mac slept on
+  battery mid-run); rerun before tagging. Not run: an agent client, live API.
