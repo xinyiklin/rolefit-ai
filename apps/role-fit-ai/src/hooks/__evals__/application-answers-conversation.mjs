@@ -22,7 +22,7 @@ const bundle = await build({
 const { useApplicationAnswers, extractAnswerConstraints, validateAnswerConstraints, parseApplicationAnswerRevision, render, unmount } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
 let args = {
   conversationId: "preparation-a", resumeText: "Built a clinic app.", resumeReady: true, jobDescription: "Build accessible apps.", jobReady: true, rawJobText: "Original accessible app role.", jobUrl: "https://example.test/job", candidateContext: "Clinic software project.", profileLimitMessage: null, customInstructions: "", sourceWarnings: [],
-  aiRequest: { provider: "codex-cli", selectedModel: "gpt-6.1-sol", cliReasoningEffort: "low" }, providerReady: true, providerMessage: "", savedAnswers: [],
+  aiRequest: { provider: "codex-cli", selectedModel: "gpt-6.2-sol", cliReasoningEffort: "low" }, providerReady: true, providerMessage: "", savedAnswers: [],
   onSaveAnswer: (answer, conversationId, preserveDraft) => new Promise((resolve, reject) => saves.push({ answer, conversationId, preserveDraft, resolve, reject }))
 };
 const saves = [];
@@ -47,14 +47,14 @@ try {
   state = hook();
   const first = state.send();
   assert.equal(requests[0].body.question.text, question, "question longer than 400 characters and trailing limit survive");
-  args = { ...args, aiRequest: { ...args.aiRequest, selectedModel: "gpt-6-astra" } };
+  args = { ...args, aiRequest: { ...args.aiRequest, selectedModel: "gpt-6.2-astra" } };
   state = hook();
   assert.equal(requests[0].options.signal.aborted, false, "model changes affect the next request only");
   respond(requests[0]);
   await first;
   state = hook();
   const messageId = state.conversation.messages[0].id;
-  assert.equal(state.conversation.messages[0].response.generation.model, "gpt-6.1-sol");
+  assert.equal(state.conversation.messages[0].response.generation.model, "gpt-6.2-sol");
   assert.equal(state.conversation.targetMessageId, messageId);
   state.editAnswer(messageId, "one two three four five");
   state = hook();

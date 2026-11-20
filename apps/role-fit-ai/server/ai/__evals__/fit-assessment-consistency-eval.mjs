@@ -8,8 +8,8 @@
 //
 // Usage:
 //   npm run eval:live:fit-assessment --workspace apps/role-fit-ai -- [fixture-id[,fixture-id]|all] [runs:1-5]
-//   EVAL_PROVIDER=codex-cli EVAL_MODEL=gpt-6.1-sol EVAL_REASONING_EFFORT=medium npm run eval:live:fit-assessment --workspace apps/role-fit-ai
-//   EVAL_MATRIX='[{"provider":"claude-cli","model":"opus","reasoningEffort":"high","fit":{"provider":"codex-cli","model":"gpt-6.1-sol","reasoningEffort":"medium"}}]' ...
+//   EVAL_PROVIDER=codex-cli EVAL_MODEL=gpt-6.2-sol EVAL_REASONING_EFFORT=medium npm run eval:live:fit-assessment --workspace apps/role-fit-ai
+//   EVAL_MATRIX='[{"provider":"claude-cli","model":"opus","reasoningEffort":"high","fit":{"provider":"codex-cli","model":"gpt-6.2-sol","reasoningEffort":"medium"}}]' ...
 //   EVAL_REPORT_ONLY=1 EVAL_REPORT_DIR=workspace/fit-assessment-eval/<receipt-dir> ...
 //
 // A matrix entry is one Prepare configuration: the Job analysis request, plus an

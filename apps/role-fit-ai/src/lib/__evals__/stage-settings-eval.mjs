@@ -83,8 +83,8 @@ assert.deepEqual(
 assert.deepEqual(fresh, {
   "job-analysis": { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" },
   "fit-assessment": { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" },
-  "resume-polish": { provider: "codex-cli", selectedModel: "gpt-6.1-sol", cliReasoningEffort: "medium" },
-  "cover-polish": { provider: "codex-cli", selectedModel: "gpt-6.1-sol", cliReasoningEffort: "medium" },
+  "resume-polish": { provider: "codex-cli", selectedModel: "gpt-6.2-sol", cliReasoningEffort: "medium" },
+  "cover-polish": { provider: "codex-cli", selectedModel: "gpt-6.2-sol", cliReasoningEffort: "medium" },
   "application-answers": { provider: "claude-cli", selectedModel: "claude-opus-5-5", cliReasoningEffort: "high" },
   "application-review": { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" },
   "resume-import": { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" }
@@ -106,7 +106,7 @@ assert.deepEqual(
 
 const partialSettings = {
   resumePolishProvider: "openai",
-  resumePolishSelectedModel: "gpt-6.1-sol",
+  resumePolishSelectedModel: "gpt-6.2-sol",
   resumePolishCliReasoningEffort: "medium",
   jobAnalysisProvider: "anthropic",
   jobAnalysisSelectedModel: "claude-opus-5-5",
@@ -222,10 +222,10 @@ assert.deepEqual(
   repairedAntigravity,
   {
     resumePolishProvider: "codex-cli",
-    resumePolishSelectedModel: "gpt-6.1-sol",
+    resumePolishSelectedModel: "gpt-6.2-sol",
     resumePolishCliReasoningEffort: "medium",
     coverPolishProvider: "codex-cli",
-    coverPolishSelectedModel: "gpt-6.1-sol",
+    coverPolishSelectedModel: "gpt-6.2-sol",
     coverPolishCliReasoningEffort: "medium",
     applicationAnswersProvider: "claude-cli",
     applicationAnswersSelectedModel: "claude-opus-5-5",
@@ -234,7 +234,7 @@ assert.deepEqual(
     applicationReviewSelectedModel: "claude-sonnet-5-5",
     applicationReviewCliReasoningEffort: "low",
     fitAssessmentProvider: "openai",
-    fitAssessmentSelectedModel: "gpt-6-astra"
+    fitAssessmentSelectedModel: "gpt-6.2-astra"
   },
   "retired Antigravity stages take their own defaults; other stages keep theirs"
 );
@@ -409,24 +409,28 @@ for (const stage of AI_STAGES) {
       assert.deepEqual(Object.keys(repaired).sort(), Object.keys(saved).sort(), "absent stages stay absent");
     }
   }
-  for (const model of ["gpt-6-astra", "gpt-6.1-sol"]) {
+  for (const model of ["gpt-6.2-astra", "gpt-6.2-sol", "gpt-6.1-terra"]) {
     const saved = { [keys.provider]: "codex-cli", [keys.model]: model, [keys.effort]: "ultra" };
     assert.deepEqual(normalizeSettings(saved), saved, "a saved Codex Ultra stage stays valid");
     assert.equal(normalizeSettings({ ...saved, [keys.provider]: "openai" })[keys.effort], "medium", "the API has no Ultra; it takes the vendor default");
   }
+  for (const [retired, effort, provider] of [["gpt-6.1-sol", "ultra", "codex-cli"], ["gpt-6-astra", "max", "openai"]]) {
+    const repaired = normalizeSettings(migrateStoredSettings({ [keys.provider]: provider, [keys.model]: retired, [keys.effort]: effort }));
+    assert.equal(repaired[keys.effort], effort, `${retired} keeps ${effort} on its successor`);
+  }
   const luna = normalizeSettings({ [keys.provider]: "codex-cli", [keys.model]: "gpt-6-luna", [keys.effort]: "ultra" });
   assert.equal(luna[keys.effort], "medium");
   assert.equal(seedStage(stage.id, { [keys.provider]: "claude-cli", [keys.model]: "claude-haiku-5-5" }).cliReasoningEffort, "low");
-  assert.equal(seedStage(stage.id, { [keys.provider]: "codex-cli" }).selectedModel, "gpt-6.1-sol");
+  assert.equal(seedStage(stage.id, { [keys.provider]: "codex-cli" }).selectedModel, "gpt-6.2-sol");
   // API stages saved before effort parity carry an empty effort; they take the vendor default.
   assert.equal(normalizeSettings({ [keys.provider]: "anthropic", [keys.model]: "claude-sonnet-5-5", [keys.effort]: "" })[keys.effort], "low");
-  assert.equal(normalizeSettings({ [keys.provider]: "openai", [keys.model]: "gpt-6.1-sol", [keys.effort]: "" })[keys.effort], "medium");
+  assert.equal(normalizeSettings({ [keys.provider]: "openai", [keys.model]: "gpt-6.2-sol", [keys.effort]: "" })[keys.effort], "medium");
 }
 const mixedStages = normalizeSettings(migrateStoredSettings({
   resumePolishProvider: "codex-cli", resumePolishSelectedModel: "gpt-5.4", resumePolishCliReasoningEffort: "high",
   coverPolishProvider: "claude-cli", coverPolishSelectedModel: "claude-opus-5", coverPolishCliReasoningEffort: "max"
 }));
-assert.equal(mixedStages.resumePolishSelectedModel, "gpt-6.1-sol");
+assert.equal(mixedStages.resumePolishSelectedModel, "gpt-6.2-sol");
 assert.equal(mixedStages.coverPolishSelectedModel, "claude-opus-5-5");
 assert.equal(mixedStages.coverPolishCliReasoningEffort, "max");
 

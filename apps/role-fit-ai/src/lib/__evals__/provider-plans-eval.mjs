@@ -30,9 +30,9 @@ for (const plan of Object.keys(PROVIDER_PLANS)) {
 assert.equal(vendorTransport(applyProviderPlan("claude", CLI).stages, "openai"), "unused", "Claude only leaves OpenAI unused");
 
 // Switching transport keeps each stage's model and effort; Codex Ultra steps down to Max.
-const ultra = { ...fresh, "resume-polish": { provider: "codex-cli", selectedModel: "gpt-6.1-sol", cliReasoningEffort: "ultra" } };
+const ultra = { ...fresh, "resume-polish": { provider: "codex-cli", selectedModel: "gpt-6.2-sol", cliReasoningEffort: "ultra" } };
 const onApi = switchVendorTransport(ultra, "openai", "api");
-assert.deepEqual(onApi.stages["resume-polish"], { provider: "openai", selectedModel: "gpt-6.1-sol", cliReasoningEffort: "max" });
+assert.deepEqual(onApi.stages["resume-polish"], { provider: "openai", selectedModel: "gpt-6.2-sol", cliReasoningEffort: "max" });
 assert.equal(onApi.adjusted, 1, "the stepped-down effort is reported");
 assert.deepEqual(onApi.stages["cover-polish"], { ...fresh["cover-polish"], provider: "openai" });
 for (const stage of AI_STAGE_IDS) {

@@ -511,12 +511,12 @@ but the Plan and transport controls include it.
 
 | Stage | Hybrid (recommended) | Claude only | OpenAI only |
 | --- | --- | --- | --- |
-| Job analysis + Fit Assessment | Claude Sonnet 5.5 · Low | Claude Sonnet 5.5 · Low | OpenAI GPT-6.1 Sol · Low |
-| Resume Polish | OpenAI GPT-6.1 Sol · Medium | Claude Opus 5.5 · High | OpenAI GPT-6.1 Sol · Medium |
-| Cover letter | OpenAI GPT-6.1 Sol · Medium | Claude Opus 5.5 · High | OpenAI GPT-6.1 Sol · Medium |
-| Application questions | Claude Opus 5.5 · High | Claude Opus 5.5 · High | OpenAI GPT-6.1 Sol · Medium |
-| Final application review | Claude Sonnet 5.5 · Low | Claude Sonnet 5.5 · Low | OpenAI GPT-6.1 Sol · Low |
-| Resume import | Claude Sonnet 5.5 · Low | Claude Sonnet 5.5 · Low | OpenAI GPT-6.1 Sol · Low |
+| Job analysis + Fit Assessment | Claude Sonnet 5.5 · Low | Claude Sonnet 5.5 · Low | OpenAI GPT-6.2 Sol · Low |
+| Resume Polish | OpenAI GPT-6.2 Sol · Medium | Claude Opus 5.5 · High | OpenAI GPT-6.2 Sol · Medium |
+| Cover letter | OpenAI GPT-6.2 Sol · Medium | Claude Opus 5.5 · High | OpenAI GPT-6.2 Sol · Medium |
+| Application questions | Claude Opus 5.5 · High | Claude Opus 5.5 · High | OpenAI GPT-6.2 Sol · Medium |
+| Final application review | Claude Sonnet 5.5 · Low | Claude Sonnet 5.5 · Low | OpenAI GPT-6.2 Sol · Low |
+| Resume import | Claude Sonnet 5.5 · Low | Claude Sonnet 5.5 · Low | OpenAI GPT-6.2 Sol · Low |
 
 Hybrid takes each stage's benchmark winner. The single-vendor plans take the
 best tested setting from that vendor where a benchmark exists; Final review has
@@ -568,10 +568,11 @@ preferences stay readable, and the companion drops Antigravity from its provider
 list while keeping your API keys and other providers.
 
 **Models.** A vendor's CLI and API offer the same current models: Claude Fable
-5.1, Opus 5.5, Sonnet 5.5, and Haiku 5.5; OpenAI GPT-6 Astra, GPT-6.1 Sol, and
-GPT-6 Luna. A saved choice of a removed model (Claude Fable 5, Opus 5 and 4.x,
-Sonnet 5 and 4.6, Haiku 4.5; OpenAI GPT-6 Sol and GPT-5.x) moves to its
-same-tier successor, keeping its effort where supported.
+5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5; OpenAI GPT-6.2 Astra, GPT-6.2 Sol,
+GPT-6.1 Terra, and GPT-6 Luna. A saved choice of a removed model (Claude Fable
+5.1 and 5, Opus 5 and 4.x, Sonnet 5 and 4.6, Haiku 4.5; OpenAI GPT-6 Astra,
+GPT-6.1 Sol, GPT-6 Sol, and GPT-5.x) moves to its same-tier successor, keeping
+its effort where supported; GPT-5.6 Terra moves to GPT-6.2 Sol, not GPT-6.1 Terra.
 
 **Effort.** Both transports take the same effort, Low through Max, with no
 off setting: the CLI's `--effort` or Codex reasoning level, and on the APIs
@@ -581,9 +582,11 @@ equivalent; switching such a stage to the API steps it down to Max. API
 thinking shares a 32,000-token output budget with the reply, and API requests
 time out after 240 seconds like the CLIs. Higher effort costs more API tokens.
 
-Use a current provider CLI. **Claude Opus 5.5 requires Claude Code 2.1.280 or
-newer**, Sonnet 5.5 2.1.284+, and Fable 5.1 2.1.257+; Claude Code 2.1.285 runs
-Haiku 5.5 but labels it unrecognized. GPT-6.1 Sol needs Codex 0.159+. Run
+Use a current provider CLI. **Claude Fable 5.2 requires Claude Code 2.1.321 or
+newer**, Opus 5.5 2.1.280+, Sonnet 5.5 2.1.284+; Claude Code 2.1.285 runs
+Haiku 5.5 but labels it unrecognized. GPT-6.2 Astra and Sol
+were not listed by Codex 0.159.2 and were by 0.170.0; GPT-6.1 Terra's minimum
+Codex version is unverified. Run
 `claude update` to upgrade Claude Code. For Codex, follow the
 [official installation/update guidance](https://learn.chatgpt.com/docs/cli).
 RoleFit does not upgrade CLIs automatically or guarantee account model access.
@@ -645,7 +648,8 @@ detail**; reopening a saved answer lists them under **Your facts** and uses them
 again when you refine it. Unsaved conversation is session-only.
 
 The opt-in synthetic writing benchmark uses nine settings: Opus 5.5,
-Sonnet 5.5 and GPT-6.1 Sol, each at low, medium and high effort.
+Sonnet 5.5 and GPT-6.2 Sol (GPT-6.1 Sol before 2026-11-18), each at low, medium
+and high effort.
 
 ```bash
 npm run eval:live:application-answers --workspace apps/role-fit-ai -- --dry-run

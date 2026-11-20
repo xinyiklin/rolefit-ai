@@ -26,7 +26,7 @@ const requests = [];
 let args = {
   conversationId: "preparation-a", applicationId: "application-a", resumeText: "Built a clinic app.", resumeReady: true, jobDescription: "Build reliable services.", jobReady: true, rawJobText: "Original posting.", jobUrl: "https://example.test/job",
   candidateContext: "Clinic software project.", profileLimitMessage: null, customInstructions: "", sourceWarnings: [],
-  aiRequest: { provider: "codex-cli", selectedModel: "gpt-6.1-sol", cliReasoningEffort: "low" }, providerReady: true, providerMessage: "", savedAnswers: [],
+  aiRequest: { provider: "codex-cli", selectedModel: "gpt-6.2-sol", cliReasoningEffort: "low" }, providerReady: true, providerMessage: "", savedAnswers: [],
   onSaveAnswer: (answer) => new Promise((resolve, reject) => saves.push({ answer, resolve, reject }))
 };
 const originalFetch = globalThis.fetch;

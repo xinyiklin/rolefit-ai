@@ -58,7 +58,7 @@ const saves = [];
 let args = {
   conversationId: "preparation-0-prepare-1", resumeText: "Built a clinic app.", resumeReady: true, jobDescription: "Build accessible apps.", jobReady: true, rawJobText: "Original accessible app role.",
   jobUrl: "https://example.test/job", candidateContext: "Clinic software project.", profileLimitMessage: null, customInstructions: "", sourceWarnings: [],
-  aiRequest: { provider: "codex-cli", selectedModel: "gpt-6.1-sol", cliReasoningEffort: "low" }, providerReady: true, providerMessage: "", savedAnswers: [],
+  aiRequest: { provider: "codex-cli", selectedModel: "gpt-6.2-sol", cliReasoningEffort: "low" }, providerReady: true, providerMessage: "", savedAnswers: [],
   onSaveAnswer: async (answer) => { saves.push(answer); return { id: "application-a" }; }
 };
 const hook = () => render(() => useApplicationAnswers(args));

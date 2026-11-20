@@ -50,8 +50,8 @@ try {
     Object.values(modelOptionsByProvider).flat().every(({ value }) => value !== "custom"),
     "unverified custom model ids stay out of every provider menu"
   );
-  const claudeModels = [["claude-fable-5-1", "Fable 5.1"], ["claude-opus-5-5", "Opus 5.5"], ["claude-sonnet-5-5", "Sonnet 5.5"], ["claude-haiku-5-5", "Haiku 5.5"]];
-  const openAiModels = [["gpt-6-astra", "GPT-6 Astra"], ["gpt-6.1-sol", "GPT-6.1 Sol"], ["gpt-6-luna", "GPT-6 Luna"]];
+  const claudeModels = [["claude-fable-5-2", "Fable 5.2"], ["claude-opus-5-5", "Opus 5.5"], ["claude-sonnet-5-5", "Sonnet 5.5"], ["claude-haiku-5-5", "Haiku 5.5"]];
+  const openAiModels = [["gpt-6.2-astra", "GPT-6.2 Astra"], ["gpt-6.2-sol", "GPT-6.2 Sol"], ["gpt-6.1-terra", "GPT-6.1 Terra"], ["gpt-6-luna", "GPT-6 Luna"]];
   for (const [provider, expected] of [["claude-cli", claudeModels], ["anthropic", claudeModels], ["codex-cli", openAiModels], ["openai", openAiModels]]) {
     assert.deepEqual(
       modelOptionsByProvider[provider].map(({ value, label }) => [value, label]),
@@ -66,12 +66,12 @@ try {
 
   const levels = (provider, model) => cliReasoningEffortOptionsFor(provider, model)?.map(({ value }) => value);
   const FULL = ["low", "medium", "high", "xhigh", "max"];
-  for (const model of ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]) {
+  for (const model of ["claude-fable-5-2", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]) {
     assert.deepEqual(levels("claude-cli", model), FULL, `${model} CLI effort`);
     assert.deepEqual(levels("anthropic", model), FULL, `${model} API effort matches the CLI`);
     assert.equal(resolveProviderRequest({ provider: "claude-cli", model, reasoningEffort: "max" }).reasoningEffort, "max");
   }
-  for (const model of ["gpt-6-astra", "gpt-6.1-sol"]) {
+  for (const model of ["gpt-6.2-astra", "gpt-6.2-sol", "gpt-6.1-terra"]) {
     assert.deepEqual(levels("codex-cli", model), [...FULL, "ultra"], `${model} CLI effort includes Codex's ultra mode`);
     assert.deepEqual(levels("openai", model), FULL, `${model} API effort is the CLI scale without ultra`);
     assert.equal(resolveProviderRequest({ provider: "codex-cli", model, reasoningEffort: "ultra" }).reasoningEffort, "ultra");
@@ -80,10 +80,10 @@ try {
   assert.deepEqual(levels("openai", "gpt-6-luna"), FULL);
   assert.deepEqual(levels("codex-cli", "gpt-unlisted"), ["low", "medium", "high", "xhigh"], "an unlisted OpenAI model gets the conservative effort range");
   assert.deepEqual(levels("openai", "gpt-unlisted"), ["low", "medium", "high", "xhigh"]);
-  assert.equal(resolveProviderRequest({ provider: "codex-cli" }).model, "gpt-6.1-sol");
+  assert.equal(resolveProviderRequest({ provider: "codex-cli" }).model, "gpt-6.2-sol");
   for (const [provider, model, effort] of [
     ["codex-cli", "gpt-6-luna", "ultra"],
-    ["openai", "gpt-6.1-sol", "ultra"],
+    ["openai", "gpt-6.2-sol", "ultra"],
     ["anthropic", "claude-sonnet-5-5", "off"]
   ]) {
     assert(!cliReasoningEffortOptionsFor(provider, model).some(({ value }) => value === effort));
@@ -94,7 +94,7 @@ try {
     delete process.env.ANTHROPIC_API_KEY;
   }
   assert(buildClaudeCliArgs({ model: "claude-haiku-5-5", reasoningEffort: "high" }).includes("--effort"), "Haiku 5.5 takes an effort");
-  for (const model of ["gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna"]) {
+  for (const model of ["gpt-6.2-astra", "gpt-6.2-sol", "gpt-6.1-terra", "gpt-6-luna"]) {
     const body = buildOpenAiResponsesBody({ model, reasoningEffort: "high", systemPrompt: "Return JSON", userPrompt: "Synthetic input" });
     assert.equal(body.model, model);
     assert.equal(body.store, false);
@@ -103,7 +103,7 @@ try {
     assert.equal(body.max_output_tokens, 32_000, "reasoning shares a budget large enough for the highest effort");
     for (const key of ["temperature", "top_p", "top_logprobs"]) assert(!(key in body));
   }
-  assert.equal("reasoning" in buildOpenAiResponsesBody({ model: "gpt-6.1-sol", reasoningEffort: "", systemPrompt: "s", userPrompt: "u" }), false);
+  assert.equal("reasoning" in buildOpenAiResponsesBody({ model: "gpt-6.2-sol", reasoningEffort: "", systemPrompt: "s", userPrompt: "u" }), false);
   process.env.OPENAI_API_KEY = "openai-default-effort-key";
   process.env.ANTHROPIC_API_KEY = "anthropic-default-effort-key";
   assert.equal(resolveProviderRequest({ provider: "anthropic" }).reasoningEffort, "low", "a Claude API request without an effort takes the Claude default");
@@ -137,8 +137,8 @@ try {
   delete process.env.OPENAI_API_KEY;
   delete process.env.ANTHROPIC_API_KEY;
   assert.equal(providerOptions.find(({ value }) => value === "anthropic").model, "claude-sonnet-5-5");
-  assert.equal(providerOptions.find(({ value }) => value === "openai").model, "gpt-6.1-sol", "the OpenAI API default matches the CLI");
-  assert.equal(reconcileCliReasoningEffort("codex-cli", "gpt-6.1-sol", "ultra"), "ultra");
+  assert.equal(providerOptions.find(({ value }) => value === "openai").model, "gpt-6.2-sol", "the OpenAI API default matches the CLI");
+  assert.equal(reconcileCliReasoningEffort("codex-cli", "gpt-6.2-sol", "ultra"), "ultra");
   assert.equal(reconcileCliReasoningEffort("codex-cli", "gpt-6-luna", "ultra"), "medium", "an unsupported effort falls back to the provider default");
 
   assert.throws(
@@ -358,7 +358,7 @@ try {
     globalThis.fetch = realFetch;
   }
 
-  for (const model of ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]) {
+  for (const model of ["claude-fable-5-2", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]) {
     for (const effort of FULL) {
       const body = buildAnthropicMessagesBody({ model, reasoningEffort: effort, systemPrompt: "system", userPrompt: "user" });
       assert.deepEqual(body.thinking, { type: "adaptive" }, `${model} thinks adaptively, as Claude Code does`);
@@ -414,9 +414,9 @@ try {
     assert(codex.includes(flag), `Codex invocation carries ${flag}`);
   }
   assert.equal(codex[codex.indexOf("-C") + 1], "/tmp/rolefit-test");
-  const sol61 = buildCodexCliArgs({ model: "gpt-6.1-sol", reasoningEffort: "ultra" }, "/tmp/rolefit-test", "/tmp/rolefit-test/out");
-  assert.equal(sol61[sol61.indexOf("--model") + 1], "gpt-6.1-sol");
-  assert.equal(sol61[sol61.indexOf("-c") + 1], 'model_reasoning_effort="ultra"', "GPT-6.1 Sol passes its catalog-listed Ultra effort");
+  const sol62 = buildCodexCliArgs({ model: "gpt-6.2-sol", reasoningEffort: "ultra" }, "/tmp/rolefit-test", "/tmp/rolefit-test/out");
+  assert.equal(sol62[sol62.indexOf("--model") + 1], "gpt-6.2-sol");
+  assert.equal(sol62[sol62.indexOf("-c") + 1], 'model_reasoning_effort="ultra"', "GPT-6.2 Sol passes its catalog-listed Ultra effort");
   const sonnet55Args = buildClaudeCliArgs({ model: "claude-sonnet-5-5", reasoningEffort: "low" });
   assert.equal(sonnet55Args[sonnet55Args.indexOf("--model") + 1], "claude-sonnet-5-5");
   assert.equal(sonnet55Args[sonnet55Args.indexOf("--effort") + 1], "low", "Sonnet 5.5 keeps RoleFit's bounded CLI default effort");

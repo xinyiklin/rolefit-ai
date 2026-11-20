@@ -36,14 +36,14 @@ try {
   await writeFile(file, JSON.stringify(legacy), "utf8");
   const migrated = await readStoredWorkspacePreferences(workspace);
   assert.equal(migrated.status, "ok", "retired selections remain readable from the canonical workspace");
-  assert.equal(migrated.value.settings.resumePolishSelectedModel, "gpt-6.1-sol");
+  assert.equal(migrated.value.settings.resumePolishSelectedModel, "gpt-6.2-sol");
   assert.equal(migrated.value.settings.profileBackground, "Preserve this synthetic preference.", "pre-rename names are read under their current names");
   assert.equal(JSON.parse(await readFile(file, "utf8")).settings.selectedModel, "gpt-5.4", "reading does not rewrite the file");
   await persistWorkspacePreferences(workspace, {
     settings: migrated.value.settings, lastBaseResume: migrated.value.lastBaseResume
   });
   const saved = JSON.parse(await readFile(file, "utf8")).settings;
-  assert.equal(saved.resumePolishSelectedModel, "gpt-6.1-sol", "the next normal save persists the supported selection");
+  assert.equal(saved.resumePolishSelectedModel, "gpt-6.2-sol", "the next normal save persists the supported selection");
   assert.ok(!("selectedModel" in saved) && !("honestContext" in saved), "the next normal save writes only current names");
 
   await writeFile(file, "{not valid json", "utf8");

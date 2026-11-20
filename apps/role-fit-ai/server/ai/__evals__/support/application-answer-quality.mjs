@@ -6,9 +6,9 @@ export const ANSWER_BENCHMARK_ARMS = [
   { id: "opus-low", provider: "claude-cli", model: "claude-opus-5-5", reasoningEffort: "low" },
   { id: "opus-medium", provider: "claude-cli", model: "claude-opus-5-5", reasoningEffort: "medium" },
   { id: "opus-high", provider: "claude-cli", model: "claude-opus-5-5", reasoningEffort: "high" },
-  { id: "sol-low", provider: "codex-cli", model: "gpt-6.1-sol", reasoningEffort: "low" },
-  { id: "sol-medium", provider: "codex-cli", model: "gpt-6.1-sol", reasoningEffort: "medium" },
-  { id: "sol-high", provider: "codex-cli", model: "gpt-6.1-sol", reasoningEffort: "high" },
+  { id: "sol-low", provider: "codex-cli", model: "gpt-6.2-sol", reasoningEffort: "low" },
+  { id: "sol-medium", provider: "codex-cli", model: "gpt-6.2-sol", reasoningEffort: "medium" },
+  { id: "sol-high", provider: "codex-cli", model: "gpt-6.2-sol", reasoningEffort: "high" },
   { id: "sonnet-low", provider: "claude-cli", model: "claude-sonnet-5-5", reasoningEffort: "low" },
   { id: "sonnet-medium", provider: "claude-cli", model: "claude-sonnet-5-5", reasoningEffort: "medium" },
   { id: "sonnet-high", provider: "claude-cli", model: "claude-sonnet-5-5", reasoningEffort: "high" }
