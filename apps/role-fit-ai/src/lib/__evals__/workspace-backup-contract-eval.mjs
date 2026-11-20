@@ -55,7 +55,7 @@ assert.deepEqual(parsePortableWorkspacePreferences(emptyPortable), emptyPortable
 const knownSettingPortable = {
   settings: {
     resumePolishProvider: "openai",
-    resumePolishSelectedModel: "gpt-6.1-sol",
+    resumePolishSelectedModel: "gpt-6.2-sol",
     resumePolishAuto: true,
     resumePolishAutoThreshold: "REASONABLE",
     citizenshipStatus: "us-citizen",
@@ -412,7 +412,7 @@ assert.equal(isManagedWorkspaceBackupPath("../applications.json"), false, "a tra
 
 // API stages saved before effort parity carry an empty effort and still restore;
 // unknown API models and CLI-only efforts on an API stage still fail closed.
-for (const [provider, model, effort] of [["anthropic", "claude-sonnet-5-5", "low"], ["openai", "gpt-6.1-sol", "medium"]]) {
+for (const [provider, model, effort] of [["anthropic", "claude-sonnet-5-5", "low"], ["openai", "gpt-6.2-sol", "medium"]]) {
   const restored = parsePortableWorkspacePreferences({
     settings: { resumePolishProvider: provider, resumePolishSelectedModel: model, resumePolishCliReasoningEffort: "" },
     lastBaseResume: ""
@@ -421,8 +421,8 @@ for (const [provider, model, effort] of [["anthropic", "claude-sonnet-5-5", "low
 }
 for (const settings of [
   { resumePolishProvider: "openai", resumePolishSelectedModel: "gpt-made-up", resumePolishCliReasoningEffort: "medium" },
-  { resumePolishProvider: "openai", resumePolishSelectedModel: "gpt-6.1-sol", resumePolishCliReasoningEffort: "ultra" },
-  { resumePolishProvider: "anthropic", resumePolishSelectedModel: "gpt-6.1-sol", resumePolishCliReasoningEffort: "low" }
+  { resumePolishProvider: "openai", resumePolishSelectedModel: "gpt-6.2-sol", resumePolishCliReasoningEffort: "ultra" },
+  { resumePolishProvider: "anthropic", resumePolishSelectedModel: "gpt-6.2-sol", resumePolishCliReasoningEffort: "low" }
 ]) {
   assert.throws(() => parsePortableWorkspacePreferences({ settings, lastBaseResume: "" }), /unsupported or invalid/, `strict restore rejects ${JSON.stringify(settings)}`);
 }
@@ -435,7 +435,7 @@ for (const model of ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"
     honestContext: "Preserve this synthetic preference."
   } };
   const current = parseStoredWorkspacePreferences(old);
-  assert.equal(current.settings.resumePolishSelectedModel, "gpt-6.1-sol");
+  assert.equal(current.settings.resumePolishSelectedModel, "gpt-6.2-sol");
   assert.equal(current.settings.resumePolishCliReasoningEffort, "high");
   assert.equal(current.settings.coverPolishSelectedModel, "claude-haiku-5-5", "a retired Claude model repairs to its successor");
   assert.equal(current.settings.coverPolishCliReasoningEffort, "low");

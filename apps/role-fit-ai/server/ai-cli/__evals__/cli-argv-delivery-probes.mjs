@@ -56,7 +56,7 @@ assert.equal(
 
 const codexWorkdir = join(tmpdir(), "rolefit-codex-probe");
 const codexArgs = buildCodexCliArgs(
-  { model: "gpt-6.1-sol", reasoningEffort: "ultra", systemPrompt: SYSTEM_PROMPT, userPrompt: USER_PROMPT },
+  { model: "gpt-6.2-sol", reasoningEffort: "ultra", systemPrompt: SYSTEM_PROMPT, userPrompt: USER_PROMPT },
   codexWorkdir,
   join(codexWorkdir, "last-message.txt")
 );

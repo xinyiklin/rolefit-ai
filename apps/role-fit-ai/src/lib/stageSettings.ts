@@ -14,8 +14,8 @@ export const PROVIDER_PLANS: Readonly<Record<ProviderPlanId, Readonly<Record<Sta
   hybrid: {
     "job-analysis": { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" },
     "fit-assessment": { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" },
-    "resume-polish": { provider: "codex-cli", selectedModel: "gpt-6.1-sol", cliReasoningEffort: "medium" },
-    "cover-polish": { provider: "codex-cli", selectedModel: "gpt-6.1-sol", cliReasoningEffort: "medium" },
+    "resume-polish": { provider: "codex-cli", selectedModel: "gpt-6.2-sol", cliReasoningEffort: "medium" },
+    "cover-polish": { provider: "codex-cli", selectedModel: "gpt-6.2-sol", cliReasoningEffort: "medium" },
     "application-answers": { provider: "claude-cli", selectedModel: "claude-opus-5-5", cliReasoningEffort: "high" },
     "application-review": { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" },
     "resume-import": { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" }
@@ -30,13 +30,13 @@ export const PROVIDER_PLANS: Readonly<Record<ProviderPlanId, Readonly<Record<Sta
     "resume-import": { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" }
   },
   openai: {
-    "job-analysis": { provider: "codex-cli", selectedModel: "gpt-6.1-sol", cliReasoningEffort: "low" },
-    "fit-assessment": { provider: "codex-cli", selectedModel: "gpt-6.1-sol", cliReasoningEffort: "low" },
-    "resume-polish": { provider: "codex-cli", selectedModel: "gpt-6.1-sol", cliReasoningEffort: "medium" },
-    "cover-polish": { provider: "codex-cli", selectedModel: "gpt-6.1-sol", cliReasoningEffort: "medium" },
-    "application-answers": { provider: "codex-cli", selectedModel: "gpt-6.1-sol", cliReasoningEffort: "medium" },
-    "application-review": { provider: "codex-cli", selectedModel: "gpt-6.1-sol", cliReasoningEffort: "low" },
-    "resume-import": { provider: "codex-cli", selectedModel: "gpt-6.1-sol", cliReasoningEffort: "low" }
+    "job-analysis": { provider: "codex-cli", selectedModel: "gpt-6.2-sol", cliReasoningEffort: "low" },
+    "fit-assessment": { provider: "codex-cli", selectedModel: "gpt-6.2-sol", cliReasoningEffort: "low" },
+    "resume-polish": { provider: "codex-cli", selectedModel: "gpt-6.2-sol", cliReasoningEffort: "medium" },
+    "cover-polish": { provider: "codex-cli", selectedModel: "gpt-6.2-sol", cliReasoningEffort: "medium" },
+    "application-answers": { provider: "codex-cli", selectedModel: "gpt-6.2-sol", cliReasoningEffort: "medium" },
+    "application-review": { provider: "codex-cli", selectedModel: "gpt-6.2-sol", cliReasoningEffort: "low" },
+    "resume-import": { provider: "codex-cli", selectedModel: "gpt-6.2-sol", cliReasoningEffort: "low" }
   }
 };
 

@@ -70,7 +70,8 @@ and backup round trips. Run the nearest probe while iterating, then the full
 RoleFit offline suite and app/server build.
 
 The opt-in writing benchmark uses nine settings: Opus 5.5, Sonnet 5.5 and
-GPT-6.1 Sol, each at low/medium/high. `--expanded` selects 57 synthetic cases:
+GPT-6.2 Sol (GPT-6.1 Sol before 2026-11-18; results below are 6.1), each at
+low/medium/high. `--expanded` selects 57 synthetic cases:
 the existing 12-case screen and seven former holdouts, plus 38 new cases across
 13 additional candidate contexts. Regression and fresh results remain separate.
 The new corpus spans technical and nontechnical work, career changes, early

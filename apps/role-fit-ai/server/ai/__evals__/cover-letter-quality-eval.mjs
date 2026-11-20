@@ -7,7 +7,7 @@
 //
 // Usage:
 //   npm run eval:live:cover-letter --workspace apps/role-fit-ai -- [fixture-id|all] [runs]
-//   EVAL_PROVIDER=codex-cli EVAL_MODEL=gpt-6.1-sol EVAL_REASONING_EFFORT=medium npm run eval:live:cover-letter --workspace apps/role-fit-ai
+//   EVAL_PROVIDER=codex-cli EVAL_MODEL=gpt-6.2-sol EVAL_REASONING_EFFORT=medium npm run eval:live:cover-letter --workspace apps/role-fit-ai
 //   EVAL_JUDGE=panel adds the whole-letter judge stage with the recorded Astra + Opus panel;
 //   EVAL_JUDGE='[{"provider":"codex-cli","model":"gpt-6-astra","reasoningEffort":"high"}]' names the judges.
 import { createHash } from "node:crypto";

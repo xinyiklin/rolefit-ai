@@ -242,7 +242,7 @@ assert.equal(
   assert.equal(panelUnsupportedSentenceCount([withList(2), { judgment: parseCoverLetterJudgment({ overall: 7 }) }]), null, "one judgment without a list makes the row unknown");
   assert.equal(panelUnsupportedSentenceCount([{ error: "judge" }]), null, "no successful judge is unknown");
   assert.equal(panelUnsupportedSentenceCount([withList(0), { error: "judge" }]), 0, "a failed judge is excluded, not counted");
-  assert.equal(coverLetterJudgeConfigError({ model: "gpt-6.1-sol" }) !== null, true, "Sol is refused as a judge");
+  assert.equal(coverLetterJudgeConfigError({ model: "gpt-6.2-sol" }) !== null, true, "Sol is refused as a judge");
   assert.equal(coverLetterJudgeConfigError({ model: "gpt-6-astra" }), null);
   assert.equal(judgeMatrix({}).length, 0, "no judge by default");
   assert.deepEqual(judgeMatrix({ EVAL_JUDGE: "panel" }).map((judge) => judge.model), COVER_LETTER_JUDGE_PANEL.map((judge) => judge.model));

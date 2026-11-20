@@ -311,7 +311,7 @@ const body = {
   jobText: "Example builds backend Python services. The role supports testing and API development.",
   rawJobText: "Example original posting: document developer APIs and support engineering teams.",
   candidateContext: "I enjoy writing small, understandable APIs.",
-  provider: "codex-cli", model: "gpt-6.1-sol", reasoningEffort: "low"
+  provider: "codex-cli", model: "gpt-6.2-sol", reasoningEffort: "low"
 };
 const raw = (answer, extra = {}) => ({ questionId: "question-a", questionRevision: 1, answer, clarification: "", warnings: [], ...extra });
 function fake(outputs) {

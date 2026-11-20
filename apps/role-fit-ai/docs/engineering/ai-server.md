@@ -597,14 +597,62 @@ hosted API key (`getDefaultProvider()` in `server/ai/providers.ts`). Setting
 `AI_PROVIDER` supplies that headless fallback. A non-empty, unrecognized
 `AI_PROVIDER` is a fail-fast configuration error; it does not silently select
 OpenAI. When OpenAI is selected explicitly, its model comes from
-`OPENAI_MODEL` (`gpt-6.1-sol` default). The other account-backed CLI (Codex
+`OPENAI_MODEL` (`gpt-6.2-sol` default). The other account-backed CLI (Codex
 CLI) is a similar path for its vendor. Both avoid a separate metered API key in
 RoleFit, but access and usage limits remain governed by the installed CLI and
 signed-in provider account. This default is a standalone/headless request
 fallback, not permission for the browser to show or select an unconfigured
 provider.
 
-### Model catalog receipt — 2026-10-18
+### Default switch — 2026-11-18
+
+GPT-6.2 Sol replaces GPT-6.1 Sol at the same effort in every startup default
+that named it (Hybrid Resume Polish and Cover, every OpenAI-only stage, the
+OpenAI provider options, and the server `OPENAI_MODEL`/`CODEX_CLI_MODEL`
+fallback), on the user's instruction after the paired synthetic screen in
+`benchmarks.md`. GPT-6.1 Sol then left the catalog under the current-models
+rule: saved GPT-6.1 Sol selections, and every retired OpenAI id that repaired
+to it (GPT-6 Sol, GPT-5.x, GPT-5.6 Terra), repair to GPT-6.2 Sol in one step,
+keeping a supported effort. Benchmark judges are unchanged.
+
+### Model catalog receipt — 2026-11-18 (GPT-6.1 Sol retention and the Terra repair target superseded the same day by D107)
+
+Added: Claude Fable 5.2 (`claude-fable-5-2`, 2026-11-09), OpenAI GPT-6.2 Astra
+(`gpt-6.2-astra`) and GPT-6.2 Sol (`gpt-6.2-sol`, both 2026-11-17), and GPT-6.1
+Terra (`gpt-6.1-terra`, first seen in a Codex 0.165.0 catalog cached 2026-10-30;
+its minimum client is unverified). Removed with
+same-tier repair: Fable 5.1 → Fable 5.2 and GPT-6 Astra → GPT-6.2 Astra.
+GPT-6.1 Sol stays offered beside GPT-6.2 Sol because it is the benchmarked
+startup default for Polish, Cover, and the OpenAI-only plan; defaults are
+unchanged until the GPT-6.2 Sol benchmark decides them. GPT-5.6 Terra still
+repairs to GPT-6.1 Sol, not the untested GPT-6.1 Terra. Benchmark judges stay
+pinned to GPT-6 Astra outside the catalog, so as an unlisted model it now
+accepts only Low through Extra high (the judges use High). Neither provider has
+announced a retirement for Fable 5.1, GPT-6 Astra, or GPT-6.1 Sol.
+
+Evidence: Codex catalog 0.170.0 (`codex debug models`, 2026-11-18) lists GPT-6.2
+Sol and Astra as current, calls GPT-6.1 Sol and GPT-6 Astra previous generation,
+and gives every 6.1/6.2 model Low through Ultra (`supported_in_api: true`);
+Codex 0.159.2 on the same day listed neither 6.2 model. The OpenAI models page
+documents Low through Max on the API for both 6.2 models and no `none`.
+Anthropic documents Fable 5.2 at Low through Max with adaptive thinking always
+on, sampling parameters rejected, and Claude Code 2.1.321+. RoleFit's request
+bodies already send adaptive thinking, `output_config.effort`, and no sampling
+parameters. Live: GPT-6.2 Sol answered one synthetic prompt through Codex CLI
+0.170.0; Fable 5.2 was not run (this machine's Claude Pro account has no Fable
+access; Opus 5.5 and Sonnet 5.5 answered through Claude Code 2.1.327).
+Residual: GPT-6.2 appends the Responses API's top-level `instructions` after
+`input`, and RoleFit still sends its system prompt there; the OpenAI API body
+was not run live.
+
+Sources: [OpenAI models](https://developers.openai.com/api/docs/models),
+[OpenAI latest-model guide](https://developers.openai.com/api/docs/guides/latest-model),
+[Codex models](https://learn.chatgpt.com/docs/models),
+[What's new in Fable 5.2](https://platform.claude.com/docs/en/models/fable-5-2/whats-new-fable-5-2),
+[Claude effort](https://platform.claude.com/docs/en/build-with-claude/effort), and
+[Claude Code model config](https://code.claude.com/docs/en/model-config).
+
+### Model catalog receipt — 2026-10-18 (catalog superseded 2026-11-18)
 
 Catalogs now list only current models, the same on each vendor's CLI and API:
 Claude Fable 5.1, Opus 5.5, Sonnet 5.5, and Haiku 5.5 (new); OpenAI GPT-6
@@ -733,16 +781,17 @@ Per-provider rules:
   and API calls time out after 240 seconds, the CLI default. Codex `ultra` is
   CLI-only; an unlisted OpenAI model gets Low through Extra high.
 - **OpenAI API** uses the Responses API with `store:false`, native JSON mode,
-  and `reasoning.effort`. Models: GPT-6 Astra, GPT-6.1 Sol (default), GPT-6
-  Luna. OpenAI documents Low through Max for GPT-6.1 Sol; Astra's and Luna's API
-  levels follow the Codex catalog, which marks them API-supported, and are not
-  yet confirmed by a live API call.
+  and `reasoning.effort`. Models: GPT-6.2 Astra, GPT-6.2 Sol (default),
+  GPT-6.1 Terra, GPT-6 Luna. OpenAI documents Low through Max for both 6.2
+  models; Terra's and Luna's API levels follow the
+  Codex catalog, which marks them API-supported, and are not yet confirmed by a
+  live API call.
 - **Claude API** uses Anthropic Messages with `thinking: {type: "adaptive"}`
   and `output_config.effort`, the request equivalent of Claude Code's
   `--effort`. It sends no `temperature` and no trailing assistant prefill,
   which every offered model rejects. JSON is enforced by the strict-output
-  prompt plus `parseAiJson`. Models: Fable 5.1, Opus 5.5, Sonnet 5.5 (default),
-  Haiku 5.5. Live smoke 2026-10-18 (user-authorized, this branch's companion
+  prompt plus `parseAiJson`. Models: Fable 5.2, Opus 5.5, Sonnet 5.5 (default),
+  Haiku 5.5 (Fable 5.2 has not been run live). Live smoke 2026-10-18 (user-authorized, this branch's companion
   with its vault key, synthetic posting, `/api/job-analysis`): all four models
   at Low and Max returned an AI brief on the first attempt (Low 1.4–6.9 s, Max
   17–46 s; Opus 5.5 Max was slowest). Cost was not reported by the route. The

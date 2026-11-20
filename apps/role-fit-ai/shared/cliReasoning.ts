@@ -17,10 +17,10 @@ export const cliReasoningEffortOptionsByProvider: Partial<Record<string, readonl
   openai: EFFORT_LEVELS
 };
 
-const OPENAI_FULL_RANGE_MODELS: ReadonlySet<string> = new Set(["gpt-6-astra", "gpt-6.1-sol"]);
+const OPENAI_FULL_RANGE_MODELS: ReadonlySet<string> = new Set(["gpt-6.2-astra", "gpt-6.2-sol", "gpt-6.1-terra"]);
 
-// Provider-reported capabilities, verified 2026-10-18 (Claude Code 2.1.285,
-// Codex catalog 0.159.2, Claude and OpenAI API docs); sources live in ai-server.md.
+// Provider-reported capabilities, verified 2026-11-18 (Claude Code 2.1.327,
+// Codex catalog 0.170.0, Claude and OpenAI API docs); sources live in ai-server.md.
 export function cliReasoningEffortOptionsFor(
   provider: string,
   model: string

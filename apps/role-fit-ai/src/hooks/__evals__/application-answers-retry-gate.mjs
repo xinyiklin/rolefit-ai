@@ -68,7 +68,7 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const preparedArgs = (conversationId) => ({
   conversationId, resumeText: "Built a clinic app.", resumeReady: true, jobDescription: JOB_A, jobReady: true, rawJobText: "Original clinic app posting.",
   jobUrl: "https://example.test/job-a", candidateContext: "", profileLimitMessage: null, customInstructions: "", sourceWarnings: [],
-  aiRequest: { provider: "codex-cli", selectedModel: "gpt-6.1-sol", cliReasoningEffort: "low" }, providerReady: true, providerMessage: "", savedAnswers: [],
+  aiRequest: { provider: "codex-cli", selectedModel: "gpt-6.2-sol", cliReasoningEffort: "low" }, providerReady: true, providerMessage: "", savedAnswers: [],
   onSaveAnswer: async () => ({ id: "application-a" })
 });
 let args;

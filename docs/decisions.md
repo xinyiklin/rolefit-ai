@@ -498,7 +498,7 @@ later entry wins.
 
 ### AI providers, defaults, and benchmark outcomes
 
-- 2026-09-30 [USER+CODE+TOOL] D048 AMENDED by D070, D087: GPT-6.1 Sol (`gpt-6.1-sol`) and Claude Sonnet 5.5
+- 2026-09-30 [USER+CODE+TOOL] D048 AMENDED by D070, D087, D107: GPT-6.1 Sol (`gpt-6.1-sol`) and Claude Sonnet 5.5
   (`claude-sonnet-5-5`) are the Codex and Claude defaults for new or unset
   stages and the server fallback; saved selections are not moved; Sonnet 5.5 on
   the API sends `thinking: {type: "between_tools"}`; retired Codex ids repair to
@@ -506,7 +506,7 @@ later entry wins.
   stages. Observed Claude Code 2.1.285 (Sonnet 5.5 needs 2.1.284+) and
   Codex CLI 0.159.2. Receipt: `apps/role-fit-ai/docs/engineering/ai-server.md`.
   UNCONFIRMED: live provider calls.
-- 2026-09-27 [USER+CODE] D049 AMENDED by D076, D087: GPT-6 Astra/Sol/Luna and Claude Fable 5.1 / Opus 5.5
+- 2026-09-27 [USER+CODE] D049 AMENDED by D076, D087, D106: GPT-6 Astra/Sol/Luna and Claude Fable 5.1 / Opus 5.5
   joined the CLI/API catalogs (the user waived the Product Partner flow); Codex
   5.4, 5.4 Mini, and Spark were removed; GPT-5.5 remains until its announced
   2026-10-14 retirement. [CODE+TOOL] Retired Codex selections repair within
@@ -532,7 +532,7 @@ later entry wins.
   other providers; any other unknown id still fails closed. The manual
   ready-to-verify state and the space/parenthesis allowance in model names
   went with it. Historical release notes are unchanged.
-- 2026-10-18 [USER+CODE] D087 ACTIVE: **CLI and API behave the same; plans and
+- 2026-10-18 [USER+CODE] D087 AMENDED by D106, D107: **CLI and API behave the same; plans and
   transport are one-shot rewrites** ("either both get a off option or both
   dont ... keep the reasoning effort level the same for both cli and apis").
   - Effort: no off setting on either transport; a vendor's API takes its CLI's
@@ -557,6 +557,32 @@ later entry wins.
     Haiku 5.5 at Low and Max through this branch's companion (one synthetic
     Job analysis each). UNCONFIRMED: the OpenAI API body live (no credits),
     including `xhigh`/`max` on Astra and Luna.
+- 2026-11-18 [USER+CODE+TOOL] D106 AMENDED by D107: **Catalog refresh for GPT-6.2 and
+  Fable 5.2** ("update model selections, openai and claude introduced new
+  models"). Offered: Claude Fable 5.2, Opus 5.5, Sonnet 5.5, Haiku 5.5; OpenAI
+  GPT-6.2 Astra, GPT-6.2 Sol, GPT-6.1 Sol, GPT-6.1 Terra, GPT-6 Luna. Fable 5.1
+  and GPT-6 Astra repair to their 6.2/5.2 successors; GPT-5.6 Terra still
+  repairs to GPT-6.1 Sol, not the untested GPT-6.1 Terra. [ASSUMPTION] GPT-6.1
+  Sol stays offered and remains every OpenAI startup default (hybrid Polish and
+  Cover, the OpenAI-only plan, the server fallback) until the GPT-6.2 Sol
+  benchmark settles them; benchmark judges stay pinned to GPT-6 Astra (now an
+  unlisted model, so High or lower) and Opus 5.5 for comparability.
+  UNCONFIRMED: the OpenAI API body on GPT-6.2, which places the top-level
+  `instructions` (RoleFit's system prompt) after `input`; moving it is a
+  provider-request change needing its own review. Codex CLI 0.170.0 and
+  Claude Code 2.1.327 were installed on this machine. Receipt:
+  `apps/role-fit-ai/docs/engineering/ai-server.md`.
+- 2026-11-18 [USER+CODE+TOOL] D107 ACTIVE: **GPT-6.2 Sol replaces GPT-6.1 Sol
+  in every default** ("update recommended setting to gpt 6.2 based on your
+  findings"): Hybrid Resume Polish and Cover (Medium), every OpenAI-only stage
+  at its effort, the OpenAI provider options, and the server fallback. GPT-6.1
+  Sol leaves the catalog; it and every retired OpenAI id that repaired to it
+  repair to GPT-6.2 Sol. [TOOL] Evidence (synthetic, one run, in
+  `apps/role-fit-ai/docs/engineering/benchmarks.md`): Resume Polish 38/39 vs
+  37/39 with 0 unsupported edits each, and 11–6 in blind pairwise judging;
+  Answers 28–8 paired with 0 evidence concerns; Prepare within one
+  category miss (2 vs 1); Resume import equally accurate but slower (26.1 s vs
+  18.2 s median); Cover judged better (8–0 paired) with 8 unsupported sentences vs 4.
 
 ### Tracker, storage, and workspace
 
@@ -930,7 +956,7 @@ and lives in the app ledger.
   `UNCHANGED`. [USER] The saved Resume Polish instruction carries a soft
   one-page paragraph (it beat the "must be paid for" paragraph 40–4; private
   data, backed up).
-- 2026-10-05 [USER+CODE] D068 ACTIVE: **Cover Letter Polish benchmark, evidence guard, and base letter**
+- 2026-10-05 [USER+CODE] D068 AMENDED by D107: **Cover Letter Polish benchmark, evidence guard, and base letter**
   (task `cover-polish-benchmark-20261005`; the user asked to improve all three
   the way Resume Polish was proven).
   - The prompt is unchanged: a restraint variant won on Sonnet 5.5 and Opus 5.5
@@ -970,7 +996,7 @@ and lives in the app ledger.
     are Claude CLI / Sonnet 5.5 / low, so Prepare takes the combined path.
   - Deferred: application-level result caching and AI variant selection (measure
     repeat preparations first).
-- 2026-10-07 [USER+CODE] D070 ACTIVE: **Per-stage startup defaults** (`src/lib/stageSettings.ts`):
+- 2026-10-07 [USER+CODE] D070 AMENDED by D107: **Per-stage startup defaults** (`src/lib/stageSettings.ts`):
   Prepare/Fit Claude CLI Sonnet 5.5 low; Resume Polish and Cover Codex CLI
   GPT-6.1 Sol medium; Answers Claude CLI Opus 5.5 high; Final review Sonnet 5.5
   low (retained user choice). Saved choices stay. Answers' setting comes from a
@@ -978,7 +1004,7 @@ and lives in the app ledger.
   alternative; no human calibration; receipts in the app ledger); results and
   costs are in `docs/engineering/testing.md` and
   `docs/engineering/benchmarks.md`.
-- 2026-10-07 [USER+CODE] D071 ACTIVE: **Resume Polish fresh/reset default is Codex CLI / GPT-6.1 Sol /
+- 2026-10-07 [USER+CODE] D071 AMENDED by D107: **Resume Polish fresh/reset default is Codex CLI / GPT-6.1 Sol /
   medium**, superseding Claude CLI / Opus 5.5 / high; saved choices stay and the
   user's own selection was switched (app ledger). [TOOL] On 39 synthetic cases
   Sol medium passed 39/39 with 0 unsupported edits and Opus high 35/39 with 3

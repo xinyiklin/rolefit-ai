@@ -96,11 +96,11 @@ function normalizeCliReasoningEffort(provider: string, model: string, effort: un
 function providerDefaultModel(provider: string): string {
   return (
     {
-      openai: process.env.OPENAI_MODEL ?? "gpt-6.1-sol",
+      openai: process.env.OPENAI_MODEL ?? "gpt-6.2-sol",
       anthropic: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5",
       "claude-cli": process.env.CLAUDE_CLI_MODEL ?? "claude-sonnet-5-5",
-      "codex-cli": process.env.CODEX_CLI_MODEL ?? "gpt-6.1-sol"
-    }[provider] ?? process.env.OPENAI_MODEL ?? "gpt-6.1-sol"
+      "codex-cli": process.env.CODEX_CLI_MODEL ?? "gpt-6.2-sol"
+    }[provider] ?? process.env.OPENAI_MODEL ?? "gpt-6.2-sol"
   );
 }
 

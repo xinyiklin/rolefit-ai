@@ -173,8 +173,8 @@ const laterSkipped = base({
   ...sentArtifacts,
   aiUsage: {
     "job-analysis": { source: "local" },
-    "resume-polish": { source: "ai", provider: "codex-cli", model: "gpt-6.1-sol" },
-    "cover-polish": { source: "ai", provider: "codex-cli", model: "gpt-6.1-sol" }
+    "resume-polish": { source: "ai", provider: "codex-cli", model: "gpt-6.2-sol" },
+    "cover-polish": { source: "ai", provider: "codex-cli", model: "gpt-6.2-sol" }
   }
 });
 const keptHistory = (application) => ({
@@ -286,8 +286,8 @@ assert.match(
 // The opt-in Polish review's receipt follows the Polish run it describes into the
 // record: a reviewed run carries it, an unreviewed run clears an older one, and
 // an excluded resume leaves the stored pair alone.
-const reviewedPolish = { source: "ai", provider: "codex-cli", model: "gpt-6.1-sol", reasoningEffort: "medium", attempts: 1 };
-const reviewReceipt = { source: "ai", provider: "codex-cli", model: "gpt-6.1-sol", reasoningEffort: "medium", attempts: 1 };
+const reviewedPolish = { source: "ai", provider: "codex-cli", model: "gpt-6.2-sol", reasoningEffort: "medium", attempts: 1 };
+const reviewReceipt = { source: "ai", provider: "codex-cli", model: "gpt-6.2-sol", reasoningEffort: "medium", attempts: 1 };
 const applyRecord = (existing, pipelineAiUsage, includeResume = true) => preparedApplicationRecord({
   base: base({ id: existing?.id ?? "fresh-2", status: "applied", createdAt: now, updatedAt: now }),
   existing,

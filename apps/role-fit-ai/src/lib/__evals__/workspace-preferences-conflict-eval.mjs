@@ -345,11 +345,11 @@ try {
   assert.equal(cache.has(PENDING), false);
 
   // Settings that resolve against a sibling are released once saved.
-  saveSettings({ ...loadSettings(), resumePolishProvider: "codex-cli", resumePolishSelectedModel: "gpt-6.1-sol" });
+  saveSettings({ ...loadSettings(), resumePolishProvider: "codex-cli", resumePolishSelectedModel: "gpt-6.2-sol" });
   await flushTimers();
-  saveSettings({ ...loadSettings(), resumePolishSelectedModel: "gpt-6-astra" });
+  saveSettings({ ...loadSettings(), resumePolishSelectedModel: "gpt-6.2-astra" });
   await flushTimers();
-  assert.equal((await readRecord()).settings.resumePolishSelectedModel, "gpt-6-astra");
+  assert.equal((await readRecord()).settings.resumePolishSelectedModel, "gpt-6.2-astra");
   assert.equal(cache.has(PENDING), false, "a saved model-only edit on a non-default provider leaves no pending record");
   saveSettings({ ...loadSettings(), availabilityNotice: "specific-date", availabilityDate: "2026-11-01" });
   await flushTimers();
