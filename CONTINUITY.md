@@ -15,8 +15,9 @@ recorded here; see `docs/git-workflow.md`). Release history:
 ## Next actions
 
 - 2026-11-18 [USER+TOOL] GPT-6.2 Sol is every OpenAI default (D107). Open:
-  Cover's unsupported sentences doubled on the synthetic screen; Fable 5.2 and
-  the GPT-6.2 OpenAI API body (`instructions` after input) were not run live.
+  Fable 5.2 and the GPT-6.2 OpenAI API body (`instructions` after input) were
+  not run live. 2026-11-26 [TOOL]: Cover re-judge, 6.2 Astra 8 vs 5 (Opus 4
+  vs 4); soft claims, mostly from base letters; no default change (benchmarks.md).
 - 2026-10-23 [TOOL] Open for the user: an extension distribution channel.
   Firefox needs a reload after every restart because the unpacked add-on loads
   as temporary; free unlisted AMO signing would end that. Options, costs, and
