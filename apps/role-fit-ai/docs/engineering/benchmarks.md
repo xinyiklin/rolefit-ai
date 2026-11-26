@@ -149,8 +149,10 @@ Prepare arms produced no non-adjacent verdict pairs and no invalid responses
 (theme overlap 0.97). GPT-6.2 Sol read PDFs about 44% slower on release day.
 On Answers, GPT-6.2 Sol scored higher in 28 of 57 paired cases, tied 21, and
 lost 8 (mean +1.96), with both judges preferring it on fresh and regression
-cases. On Cover, GPT-6.2 Sol's letter scored higher in 8 of 13 pairs and lower in none,
-with both judges agreeing, but carried twice the unsupported sentences, and
+cases. On Cover, GPT-6.2 Sol's letter scored higher on the judge mean in 8 of 13
+pairs and lower in none. The judges differed: Opus favored it 10–0 with 3 ties,
+GPT-6 Astra only 4–3 with 5 ties over the 12 letters it scored, and both
+favored it in 4 of those 12. It also carried twice the unsupported sentences, and
 Astra's own support mean fell (7.50 from 8.15, over the 12 letters it
 scored) while Opus's held (8.54 vs 8.38). **Decision (user, 2026-11-18):
 GPT-6.2 Sol replaces GPT-6.1 Sol in every default** (D107). Limits: one sample
@@ -158,6 +160,29 @@ per fixture, synthetic corpora, a same-vendor fact-check judge, release-day
 latency. Receipts are ignored, under `workspace/resume-proposal-eval/`,
 `workspace/fit-assessment-eval/`, `workspace/resume-import-eval/`,
 `workspace/cover-letter-eval/`, and `workspace/application-answer-eval/` (2026-11-18/19).
+
+**Cover re-judge, 2026-11-26.** GPT-6.2 Astra High re-judged the same 26
+saved letters through Codex, using the same judge prompt (the judge,
+preflight and corpus hashes matched the manifests; the eval harness changed
+only a usage comment), with no regeneration and no judge errors. It flagged 8
+unsupported sentences for GPT-6.2 Sol and 5 for 6.1 Sol, against GPT-6 Astra's
+own 8 and 3 (Astra scored 12 of the GPT-6.2 Sol letters). Opus had flagged 4
+in each arm. GPT-6.2 Astra's three-flag excess is in three letters
+(`authored-strong-light-tailor`, `backend-platform-lead-choice`,
+`named-hiring-manager`). In both arms every flag was a soft characterization:
+work style, disposition, or the "recent" framing of supported work. None was
+an invented employer, date, metric or tool. 12 of the 13 flags restate claims
+from the candidate's own base letter, which the judge scores against the
+evidence list only. The one model-written flag is on
+`backend-platform-lead-choice`, which has no base letter. Overall, GPT-6.2
+Astra preferred GPT-6.2 Sol 5–2 with 6 ties (means 7.62 vs 7.31; support 7.69
+vs 8.62). GPT-6 Astra alone had it 4–3 with 5 ties over 12 pairs, and the
+original panel-mean result was 8–0. Reading: GPT-6.2 Sol keeps more of the
+base letter's own unsupported self-description, both OpenAI judges count that,
+and Opus does not. No default change. Limits: one sample per letter and per
+judge, no human labels, judge test-retest variance unmeasured, and the Codex
+version not recorded in the receipts. Receipts are under
+`workspace/cover-letter-eval/2026-11-26-rejudge-gpt-6.2-astra/`.
 
 Resume/Cover use private application corpora; only aggregate findings belong
 here. Their experiment history is retained in the root
